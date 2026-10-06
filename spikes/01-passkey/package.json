@@ -10,7 +10,8 @@
   },
   "dependencies": {
     "ox": "1.8.5",
-    "viem": "2.57.3"
+    "viem": "2.57.3",
+    "zod": "4.6.5"
   },
   "devDependencies": {
     "tsx": "4.23.15"
