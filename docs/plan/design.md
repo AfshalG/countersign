@@ -1,6 +1,6 @@
 # Countersign app design
 
-**Status: DRAFT for Afshal's review, 6 Oct 2026.** Written by Claude while Sophie is busy; she can change anything when she is free. No screen is built until this is approved. Covers the web app (phone first, works on a laptop) and the demo supplier portal. Architecture: `slices/00-architecture.md` (research workspace) v3, decision D20.
+**Status: DRAFT for Afshal's review, 6 Oct 2026.** Written by Claude while Sophie is busy; she can change anything when she is free. No screen is built until this is approved. Covers the web app (phone first, works on a laptop) and the demo supplier portal. Architecture: [`00-architecture.md`](00-architecture.md) v3, decision D20.
 
 ## What the app is for
 
