@@ -135,7 +135,7 @@ Before writing code for any agent-facing flow, its slice file has a mermaid diag
 - **The approval sheet's centrepiece is the difference:** the address on file against the one on the invoice, character by character; the added line; the amount over tolerance.
 - Matched payments ask nothing. Show people only what needs them.
 - Never mention gas, MON or seed phrases in the interface.
-- Use the frontend-design skill for app work. Sophie sets the visual direction in Slice 11.
+- Use the frontend-design skill for app work. The visual direction is in `docs/plan/design.md`; follow it.
 - No `window.alert`, `confirm` or `prompt`; use in-page sheets and toasts.
 
 ## Stated Limits (say them, don't hide them)

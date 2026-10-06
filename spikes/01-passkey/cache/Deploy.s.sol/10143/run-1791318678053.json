@@ -1,0 +1,8 @@
+{
+  "transactions": [
+    {
+      "rpc": "https://testnet-rpc.monad.xyz"
+    }
+  ],
+  "recovery_generation": "0xf177fb201b48d4f829b18ff6888b1db699131c61de3964103f03f71368197fcd"
+}
