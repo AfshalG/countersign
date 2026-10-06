@@ -47,6 +47,23 @@ jobs:
       - run: forge build
       - run: forge test -vvv
 
+  # Kept separate from `contracts` so main's required check names never change.
+  spike-01-passkey:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: spikes/01-passkey
+    env:
+      FOUNDRY_PROFILE: ci
+    steps:
+      - uses: actions/checkout@v7
+      - uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: v1.8.5
+      - run: forge soldeer install
+      - run: forge fmt --check
+      - run: forge test -vv
+
   secrets:
     runs-on: ubuntu-latest
     steps:

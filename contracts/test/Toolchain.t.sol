@@ -17,6 +17,15 @@ contract ToolchainTest is Test {
     }
 
     function testFuzz_RandomSignatureDoesNotVerify(bytes32 hash, bytes32 r, bytes32 s) public view {
+        // A zero hash is excluded on purpose: with h = 0, r = s = Qx is a valid ECDSA
+        // signature for any key Q (u1 = 0, u2 = 1, so R = Q). CI's fuzzer found it.
+        // Product code never passes a caller-chosen hash; WebAuthn.verify always hashes.
+        vm.assume(hash != bytes32(0));
         assertFalse(P256.verify(hash, r, s, QX, QY));
+    }
+
+    function test_ZeroHashIsForgeableForAnyKey() public view {
+        // Documents the property above, so nobody relies on P256.verify with a raw hash.
+        assertTrue(P256.verify(bytes32(0), QX, QX, QX, QY));
     }
 }

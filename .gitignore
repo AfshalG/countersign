@@ -27,3 +27,13 @@ test-results/
 .vscode/*
 !.vscode/extensions.json
 .idea/
+
+# Spikes (Foundry)
+spikes/*/out/
+spikes/*/cache/
+spikes/*/dependencies/
+spikes/*/broadcast/*/31337/
+
+# Vercel project links
+.vercel/
+spikes/*/broadcast/**/*.lock

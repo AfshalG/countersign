@@ -4,6 +4,6 @@ import { defineConfig } from 'vitest/config';
 // merge this file: in Vitest 5 a config that defines `projects` nests them.
 export default defineConfig({
   test: {
-    projects: ['packages/*', 'services/*', 'apps/*'],
+    projects: ['packages/*', 'services/*', 'apps/*', 'spikes/*'],
   },
 });

@@ -1,0 +1,39 @@
+{
+  "qx": "0x837023647eb93d75b1c80c811515059d4da7cc3ae1c3b7ace508e84521a4f766",
+  "qy": "0x6525d913f7a567fc8ec2c76946a0c5c43f6ac538dd59a8980bf081cfa9a2d861",
+  "otherQx": "0x4b65324b43531f2767f679427c652c28ae8bb47871d2b3a0df03c77930724a6c",
+  "otherQy": "0xe23ce0fd13daf7382daf8f58510402ec45870099585adeda503d543d0ff1a4cd",
+  "challenge": "0x3084335f2e94078399bbc2b77f9af4e2fb763c64f20e0be69fd4f8ae574c3b1f",
+  "valid": {
+    "r": "0x422d0a9eb4a0455b1af8b024a029cc057f9ad0b8423d5dd48b3636700ff0a288",
+    "s": "0x4e69652cde46a1b76e007236cae5abd3961df8b454c1308abb0e173d4deb659a",
+    "challengeIndex": 23,
+    "typeIndex": 1,
+    "authenticatorData": "0xa088cad631659b7d64bb0741869ea4de5afd1fd7a01c9e879b25ac4698b099290500000000",
+    "clientDataJSON": "{\"type\":\"webauthn.get\",\"challenge\":\"MIQzXy6UB4OZu8K3f5r04vt2PGTyDgvmn9T4rldMOx8\",\"origin\":\"https://countersign.example\",\"crossOrigin\":false}"
+  },
+  "noUV": {
+    "r": "0x30fb44b8dad66f5b56a8dc92aab03a3d4a227358e0141155c17c11f23232bdb0",
+    "s": "0x7ea4cbdc926567aad0e824b23f3d78842030b303774eb32f6f5c1e089f872608",
+    "challengeIndex": 23,
+    "typeIndex": 1,
+    "authenticatorData": "0xa088cad631659b7d64bb0741869ea4de5afd1fd7a01c9e879b25ac4698b099290100000000",
+    "clientDataJSON": "{\"type\":\"webauthn.get\",\"challenge\":\"MIQzXy6UB4OZu8K3f5r04vt2PGTyDgvmn9T4rldMOx8\",\"origin\":\"https://countersign.example\",\"crossOrigin\":false}"
+  },
+  "createType": {
+    "r": "0x1cc8780f377ebb7851ff98ccb023f353e44ac94527cf882fd9855b6d03e3d78f",
+    "s": "0x3cc38c2681ef5b68131c580b6ae5ecd5b7831ba289da1b64bfdfce3e9dbd061e",
+    "challengeIndex": 26,
+    "typeIndex": 1,
+    "authenticatorData": "0xa088cad631659b7d64bb0741869ea4de5afd1fd7a01c9e879b25ac4698b099290500000000",
+    "clientDataJSON": "{\"type\":\"webauthn.create\",\"challenge\":\"MIQzXy6UB4OZu8K3f5r04vt2PGTyDgvmn9T4rldMOx8\",\"origin\":\"https://countersign.example\",\"crossOrigin\":false}"
+  },
+  "highS": {
+    "r": "0x422d0a9eb4a0455b1af8b024a029cc057f9ad0b8423d5dd48b3636700ff0a288",
+    "s": "0xb1969ad221b95e4991ff8dc9351a542c26c901f952566dfa38abb385ae77bfb7",
+    "challengeIndex": 23,
+    "typeIndex": 1,
+    "authenticatorData": "0xa088cad631659b7d64bb0741869ea4de5afd1fd7a01c9e879b25ac4698b099290500000000",
+    "clientDataJSON": "{\"type\":\"webauthn.get\",\"challenge\":\"MIQzXy6UB4OZu8K3f5r04vt2PGTyDgvmn9T4rldMOx8\",\"origin\":\"https://countersign.example\",\"crossOrigin\":false}"
+  }
+}

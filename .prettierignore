@@ -4,3 +4,5 @@ docs/
 CLAUDE.md
 coverage/
 dist/
+spikes/*/test/fixtures/
+spikes/*/broadcast/
