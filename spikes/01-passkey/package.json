@@ -6,7 +6,8 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "fixtures": "tsx ts/make-fixtures.ts",
-    "send": "tsx ts/send.ts"
+    "send": "tsx ts/send.ts",
+    "dev": "tsx ts/dev-server.ts"
   },
   "dependencies": {
     "ox": "1.8.5",

@@ -1,0 +1,301 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Passkey on Monad</title>
+    <style>
+      :root {
+        --bg: #f6f5f2;
+        --card: #ffffff;
+        --text: #1b1b1a;
+        --muted: #6b6a66;
+        --line: #e3e1db;
+        --accent: #3b2fd6;
+        --ok: #137a3a;
+        --bad: #b42318;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #121211;
+          --card: #1c1c1a;
+          --text: #f1f0ec;
+          --muted: #a3a29c;
+          --line: #2e2e2b;
+          --accent: #8f86ff;
+          --ok: #4ccb7a;
+          --bad: #ff7a6b;
+        }
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font:
+          16px/1.45 -apple-system,
+          BlinkMacSystemFont,
+          'Segoe UI',
+          Roboto,
+          sans-serif;
+        padding: max(16px, env(safe-area-inset-top)) 16px max(24px, env(safe-area-inset-bottom));
+      }
+      main {
+        max-width: 480px;
+        margin: 0 auto;
+        display: grid;
+        gap: 14px;
+      }
+      h1 {
+        font-size: 22px;
+        margin: 4px 0 0;
+      }
+      p {
+        margin: 0;
+        color: var(--muted);
+      }
+      .card {
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        padding: 16px;
+        display: grid;
+        gap: 10px;
+      }
+      button {
+        appearance: none;
+        border: 0;
+        border-radius: 12px;
+        min-height: 50px;
+        font: inherit;
+        font-weight: 600;
+        background: var(--accent);
+        color: #fff;
+        width: 100%;
+      }
+      button.secondary {
+        background: transparent;
+        color: var(--accent);
+        border: 1px solid var(--line);
+      }
+      button:disabled {
+        opacity: 0.45;
+      }
+      .status {
+        font-size: 14px;
+        color: var(--muted);
+        word-break: break-word;
+      }
+      .result {
+        border-top: 1px solid var(--line);
+        padding-top: 10px;
+        font-size: 14px;
+        display: grid;
+        gap: 2px;
+      }
+      .ok {
+        color: var(--ok);
+        font-weight: 600;
+      }
+      .bad {
+        color: var(--bad);
+        font-weight: 600;
+      }
+      a {
+        color: var(--accent);
+      }
+      code {
+        font-size: 12px;
+        word-break: break-all;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Passkey on Monad</h1>
+      <p>
+        Countersign spike 1. Approves a test payment with this device's screen lock and checks the
+        signature on Monad testnet. No wallet needed, no money moves.
+      </p>
+
+      <section class="card">
+        <strong>1. Create a passkey</strong>
+        <p id="keyStatus">No passkey on this device yet.</p>
+        <button id="create">Create passkey</button>
+      </section>
+
+      <section class="card">
+        <strong>2. Approve a test payment</strong>
+        <button id="approve" disabled>Approve with screen lock</button>
+        <button id="tamper" class="secondary" disabled>Send a tampered approval</button>
+        <div id="status" class="status" aria-live="polite"></div>
+      </section>
+
+      <section class="card" id="results" hidden>
+        <strong>Results</strong>
+      </section>
+    </main>
+
+    <script type="module">
+      import { Hex, WebAuthn } from 'https://esm.sh/ox@1.8.5';
+      import { createPublicClient, http, parseAbi } from 'https://esm.sh/viem@2.57.3';
+      import { monadTestnet } from 'https://esm.sh/viem@2.57.3/chains';
+
+      const abi = parseAbi([
+        'struct WebAuthnAuth { bytes32 r; bytes32 s; uint256 challengeIndex; uint256 typeIndex; bytes authenticatorData; string clientDataJSON; }',
+        'function verify(bytes challenge, WebAuthnAuth auth, bytes32 qx, bytes32 qy) view returns (bool)',
+      ]);
+      const N = 0xffffffff00000000ffffffffffffffffbce6faada7179e84f3b9cac2fc632551n;
+      const client = createPublicClient({ chain: monadTestnet, transport: http() });
+      const $ = (id) => document.getElementById(id);
+      const say = (text) => ($('status').textContent = text);
+
+      const device = (() => {
+        const ua = navigator.userAgent;
+        if (/iPhone/.test(ua)) return 'iPhone';
+        if (/iPad/.test(ua)) return 'iPad';
+        if (/Android/.test(ua)) return 'Android';
+        if (/Macintosh/.test(ua)) return 'Mac';
+        if (/Windows/.test(ua)) return 'Windows';
+        return 'Other';
+      })();
+
+      // localStorage can be unavailable (private mode); the page still works for one session.
+      const store = {
+        get() {
+          try {
+            return JSON.parse(localStorage.getItem('passkey') ?? 'null');
+          } catch {
+            return null;
+          }
+        },
+        set(v) {
+          try {
+            localStorage.setItem('passkey', JSON.stringify(v));
+          } catch {}
+        },
+      };
+      let key = store.get();
+      let probe = null;
+
+      function showKey() {
+        $('keyStatus').textContent = key
+          ? `Passkey ready on this ${device}.`
+          : 'No passkey on this device yet.';
+        $('approve').disabled = $('tamper').disabled = !key || !probe;
+      }
+
+      // Same rules as ts/encode.ts: OpenZeppelin rejects high-s, so refuse it here.
+      function toAuth(metadata, signature) {
+        if (Hex.toBigInt(signature.s) > N / 2n) throw new Error('high-s signature');
+        if (!(metadata.challengeIndex >= 0) || !(metadata.typeIndex >= 0))
+          throw new Error('missing indexes');
+        return {
+          r: Hex.padLeft(signature.r, 32),
+          s: Hex.padLeft(signature.s, 32),
+          challengeIndex: metadata.challengeIndex,
+          typeIndex: metadata.typeIndex,
+          authenticatorData: metadata.authenticatorData,
+          clientDataJSON: metadata.clientDataJSON,
+        };
+      }
+
+      function addResult(r) {
+        $('results').hidden = false;
+        const div = document.createElement('div');
+        div.className = 'result';
+        const verdict = r.ok
+          ? '<span class="ok">Accepted</span>'
+          : '<span class="bad">Rejected</span>';
+        div.innerHTML = `
+          <div>${verdict} · ${device}${r.tampered ? ' · tampered' : ''}</div>
+          <div>Read-only check on Monad: ${r.readOnly ? 'valid' : 'invalid'}</div>
+          <div>Check gas: ${r.checkGas} · transaction gas: ${r.txGas}</div>
+          <div>In a block after ${r.msToReceipt} ms · finalized after ${r.msToFinalized ?? 'not yet'} ms</div>
+          <a href="${r.explorer}" target="_blank" rel="noopener">View transaction</a>`;
+        $('results').append(div);
+      }
+
+      async function run(tampered) {
+        $('approve').disabled = $('tamper').disabled = true;
+        try {
+          const challenge = Hex.random(32);
+          say('Waiting for your screen lock…');
+          const { metadata, signature } = await WebAuthn.sign({
+            challenge,
+            credentialId: key.id,
+          });
+          const auth = toAuth(metadata, signature);
+          // Tampering flips the last byte: the signature no longer matches the payment.
+          const sent = tampered
+            ? `${challenge.slice(0, -2)}${challenge.endsWith('00') ? '01' : '00'}`
+            : challenge;
+
+          say('Checking on Monad (read-only)…');
+          const readOnly = await client.readContract({
+            address: probe,
+            abi,
+            functionName: 'verify',
+            args: [
+              sent,
+              {
+                ...auth,
+                challengeIndex: BigInt(auth.challengeIndex),
+                typeIndex: BigInt(auth.typeIndex),
+              },
+              key.qx,
+              key.qy,
+            ],
+          });
+
+          say('Recording on Monad and waiting for finality…');
+          const res = await fetch('/api/record', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ challenge: sent, auth, qx: key.qx, qy: key.qy, mode: 'full' }),
+          });
+          const body = await res.json();
+          if (!res.ok) throw new Error(body.error ?? `HTTP ${res.status}`);
+          addResult({ ...body, readOnly, tampered });
+          say('');
+        } catch (error) {
+          say(`Stopped: ${error?.message ?? error}`);
+        } finally {
+          showKey();
+        }
+      }
+
+      $('create').addEventListener('click', async () => {
+        try {
+          say('Waiting for your screen lock…');
+          const credential = await WebAuthn.createCredential({
+            name: `Countersign test (${device})`,
+          });
+          key = {
+            id: credential.id,
+            qx: Hex.padLeft(credential.publicKey.x, 32),
+            qy: Hex.padLeft(credential.publicKey.y, 32),
+          };
+          store.set(key);
+          say('');
+        } catch (error) {
+          say(`Could not create a passkey: ${error?.message ?? error}`);
+        }
+        showKey();
+      });
+      $('approve').addEventListener('click', () => run(false));
+      $('tamper').addEventListener('click', () => run(true));
+
+      try {
+        const config = await (await fetch('/api/record')).json();
+        probe = config.probe;
+        if (!probe) say('The test contract is not deployed yet.');
+      } catch {
+        say('Could not reach the test server.');
+      }
+      showKey();
+    </script>
+  </body>
+</html>
