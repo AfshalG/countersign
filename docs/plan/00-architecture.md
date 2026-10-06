@@ -307,7 +307,7 @@ Each slice file lists what was re-checked before it was written.
 
 ```
 FOUNDATION:
-  Slice 0:   Repo, CLAUDE.md, tooling, CI, environment                TODO
+  Slice 0:   Repo, CLAUDE.md, tooling, CI, environment                DONE
 
 SPIKES (throwaway code, real answers):
   Slice 1:   Passkey signature verified on Monad testnet              TODO
