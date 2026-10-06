@@ -32,9 +32,13 @@ jobs:
 
   contracts:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        dir: [contracts, spikes/01-passkey]
+    name: contracts (${{ matrix.dir }})
     defaults:
       run:
-        working-directory: contracts
+        working-directory: ${{ matrix.dir }}
     env:
       FOUNDRY_PROFILE: ci
     steps:
