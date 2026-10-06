@@ -4,12 +4,12 @@ Throwaway code. Never imported by product code. Plan and full results: Slice 1 i
 
 **Result (6 Oct 2026): it works.** Real passkeys from an iPhone (Face ID), an Android phone (screen lock) and a Mac (Touch ID) were accepted by OpenZeppelin's `WebAuthn.verify` on Monad testnet, through the P256 precompile at `0x0100`. Tampered approvals were rejected.
 
-| Check | Gas for the check | Transaction |
-|---|---|---|
-| Full check (user verification required) | 13,659 to 13,693 | about 67,700 |
-| Signature step, precompile only | 9,002 | 61,644 |
-| Signature step, pure Solidity | 357,431 | 484,492 |
-| Tampered approval (rejected) | 4,757 | 56,511 |
+| Check                                   | Gas for the check | Transaction  |
+| --------------------------------------- | ----------------- | ------------ |
+| Full check (user verification required) | 13,659 to 13,693  | about 67,700 |
+| Signature step, precompile only         | 9,002             | 61,644       |
+| Signature step, pure Solidity           | 357,431           | 484,492      |
+| Tampered approval (rejected)            | 4,757             | 56,511       |
 
 Time from sending to finalized: 1.0 to 1.4 s.
 
