@@ -1,1 +1,5 @@
-{ "chainId": 10143, "probe": null, "deployTx": null }
+{
+  "chainId": 10143,
+  "probe": "0xa0b9d0408af2fd0d2b164fdd97757dc6029b7e97",
+  "deployTx": "0x4e3b46c3fb1a14f0af86d7a87eaff73290f8fd32090aa8479ab91fe9346db68a"
+}

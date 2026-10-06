@@ -33,3 +33,6 @@ spikes/*/out/
 spikes/*/cache/
 spikes/*/dependencies/
 spikes/*/broadcast/*/31337/
+
+# Vercel project links
+.vercel/
