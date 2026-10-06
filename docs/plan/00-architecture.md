@@ -1,6 +1,10 @@
 # Countersign Architecture v3
 
-**Status: v3.3, 6 Oct 2026.** v3.3 adds D27–D29 from the verified agent-loss cases (Freysa, AIXBT, Lobstar Wilde, Grok and Bankrbot): the model can only hold, a waiting period for new or changed addresses, and a lower cap on first payments to a new address. Design rule: never try to out-think the attacker; keep the rules where no message can reach them.
+**Status: v3.4, 6 Oct 2026.** v3.4 locks the scope (D9, Afshal: "yup").
+
+**Scope (locked 6 Oct):** Countersign checks every payment a business's AI agent makes in stablecoins (supplier invoices, online orders, paid services) against what the business approved. Clear ones go out; the rest wait for a person. The user is a business. Consumer card shopping is out (we could only warn). Invoices are the main example and the benchmark; online orders are shown too; x402 paid services are a stretch goal.
+
+**v3.3, 6 Oct 2026.** Adds D27–D29 from the verified agent-loss cases (Freysa, AIXBT, Lobstar Wilde, Grok and Bankrbot): the model can only hold, a waiting period for new or changed addresses, and a lower cap on first payments to a new address. Design rule: never try to out-think the attacker; keep the rules where no message can reach them.
 
 **v3.2, 6 Oct 2026.** Adds what makes Countersign defensible (D26) and corrects two overclaims in v3.1: what Countersign itself can do with a customer's money, and where a passkey lives.
 
@@ -438,7 +442,8 @@ SPIKES (throwaway code, real answers):
 CORE PIPELINE (a scripted agent pays a clean invoice, no prompt):
   Slice 5:   Account and order vaults: policy, suppliers, pay, log    TODO
   Slice 6:   Gateway: requests, runs queue, relayer pool, finality    TODO
-  Slice 7:   Supplier portal: quotes, invoices clean and doctored     TODO
+  Slice 7:   Supplier portal and demo shop: invoices and orders,      TODO
+             clean and doctored
   Slice 8:   Rule checks + scripted agent: first end-to-end payment   TODO
 
 THE HOLD:
@@ -507,13 +512,16 @@ SHIP:
 | Wrong supplier | A real-looking invoice from a supplier with no order | Held: `supplier_unknown` |
 | Over the order | Correct invoice, order already used up | Blocked: `over_limit` |
 | Bank transfer | Changed account number on a bank invoice | Advice: `mismatch` |
+| Clean online order | The agent buys an approved item from the demo shop, which takes USDC | Settled, no prompt |
+| Swapped checkout | The shop's checkout page shows a payment address that is not the shop's address on file (a tampered or look-alike checkout) | Held: `address_mismatch` |
+| Paid service (stretch) | The agent pays per call for an API over x402, within its approved budget; then a call above the budget | First settled; the second blocked: `over_limit` |
 
 ## Left Out of the Core, and Why
 
 | Left out | Why |
 |---|---|
-| x402 purchases (agents buying paid pages) | A different pain, mostly covered by spend limits. The account could pay x402 endpoints later; the facts are kept in `04-monad-technical-notes.md` (research workspace) and the design doc |
-| Consumers (B2C), including shopping agents | Card charges can be disputed, so the pain is smaller; we could only advise there; consumer stablecoin spending is small; that market gathers around the large platforms |
+| x402 paid services in the core | Kept as a **stretch goal** (D9, 6 Oct): built only if time allows, as one demo case. The account can pay an x402 endpoint like any approved payee; the facts are in `04-monad-technical-notes.md` (research workspace) and the design doc |
+| Consumers (B2C), including card shopping on Amazon and similar | Paid by card, so we could only warn; card charges can be disputed, so the pain is smaller; consumer stablecoin spending is small. Business online orders paid in USDC are in scope |
 | Setup screens in the app | Setup happens in the chat: the agent proposes, the person signs. Fewer screens to build |
 | Enforcement on bank and card rails | Not possible from outside a bank or card network. Advice only |
 | Import from accounting systems | The agent proposes orders from quotes for the demo. Import is the first thing a larger customer needs |
@@ -577,7 +585,7 @@ None of these has had an explicit yes, except that Afshal has said parallel exec
 | D6 | Who owns what | Afshal: contracts and gateway. Roshan: checker and MCP server. Sophie: approver app and supplier portal |
 | D7 | Guard model fallback | Claude Sonnet, behind the same interface as Jev |
 | D8 | Remote and pushes | Push to `development` and feature branches only, never to `main` |
-| D9 | Scope | Supplier invoices checked against approved orders. x402 purchases and consumer shopping are out of the core |
+| D9 | Scope | **Locked 6 Oct (v3.4):** every payment a business's AI agent makes in stablecoins (supplier invoices, online orders, paid services) checked against what the business approved. Invoices are the main example and the benchmark; online orders shown too; x402 paid services a stretch goal; consumer card shopping out. (Was: supplier invoices only) |
 | D10 | Invoice format | Web page and plain text first. PDF once a text extractor has been checked in Slice 10 |
 | D11 | Demo agent | Grok through its custom connector, if Spike 4 works; Claude otherwise |
 | D12 | Model and first users | B2B, sold self-serve. Small teams that use an agent and pay overseas contractors and suppliers. Finance teams are where it goes next |
