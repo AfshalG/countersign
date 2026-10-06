@@ -1,0 +1,28 @@
+# Secrets live in environment variables, never in git
+.env
+.env.*
+!.env.example
+
+# Dependencies and build output
+node_modules/
+.next/
+dist/
+out/
+coverage/
+.turbo/
+*.tsbuildinfo
+
+# Foundry
+contracts/out/
+contracts/cache/
+contracts/broadcast/*/31337/
+
+# Tests
+playwright-report/
+test-results/
+
+# OS and editors
+.DS_Store
+.vscode/*
+!.vscode/extensions.json
+.idea/
