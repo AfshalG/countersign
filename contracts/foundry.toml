@@ -1,0 +1,36 @@
+[profile.default]
+src = "src"
+out = "out"
+test = "test"
+libs = ["dependencies"]
+solc_version = "0.8.37"
+optimizer = true
+optimizer_runs = 200
+# OpenZeppelin's P256 (the passkey check) hits "stack too deep" without the IR pipeline.
+via_ir = true
+# Monad's Foundry guide asks for no IPFS hash and inlined sources so verification is
+# reproducible. Its `metadata_hash` key is outdated; Foundry 1.8 calls it `bytecode_hash`.
+bytecode_hash = "none"
+use_literal_content = true
+
+[fuzz]
+runs = 256
+
+[profile.ci.fuzz]
+runs = 5000
+
+[rpc_endpoints]
+monad_testnet = "${MONAD_RPC_URL}"
+
+# Soldeer keeps dependencies out of git (no submodules). Version-free prefixes keep
+# imports stable across upgrades: `@openzeppelin-contracts/utils/...`.
+[soldeer]
+remappings_generate = true
+# false keeps the hand-fixed forge-std line (its sources are under src/).
+remappings_regenerate = false
+remappings_version = false
+remappings_location = "txt"
+
+[dependencies]
+"@openzeppelin-contracts" = "5.7.0"
+forge-std = "1.17.0"
