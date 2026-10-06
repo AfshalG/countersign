@@ -2,3 +2,9 @@ packages:
   - packages/*
   - services/*
   - apps/*
+  - spikes/*
+
+# Install scripts run only for packages listed here (pnpm blocks the rest).
+# esbuild's script installs its native binary; tsx needs it.
+allowBuilds:
+  esbuild: true
