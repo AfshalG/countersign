@@ -59,13 +59,14 @@ countersign/
 | Tests | `forge test` (with fuzzing), Vitest, Playwright |
 | Hosting | Vercel (apps), Railway (services, Postgres) |
 
-Versions are pinned in Slice 0 after a Context7 check and recorded here.
+Pinned in Slice 0 (6 Oct 2026, checked with Context7 and npm): Node 24 LTS, pnpm 12.9.1, TypeScript 6.0.3 (not 7: typescript-eslint supports `<6.1`), Vitest 5.0.3, ESLint 10.12.0 with typescript-eslint 8.71.1, Prettier 3.9.9, zod 4.6.5, Foundry 1.8.5, solc 0.8.37 (`via_ir` on), OpenZeppelin 5.7.0 and forge-std 1.17.0 through Soldeer.
 
-## Commands (created in Slice 0)
+## Commands
 
-- `pnpm install`, `pnpm dev`
-- `pnpm test`, `pnpm typecheck`, `pnpm lint`
-- `forge test` inside `contracts/`
+- `pnpm install`
+- `pnpm check` (typecheck, lint, format check, tests), or each: `pnpm typecheck`, `pnpm lint`, `pnpm test`
+- `pnpm test:contracts`, or `forge test` inside `contracts/`
+- Settings: `loadEnv(schema)` from `@countersign/shared`. Never read `process.env` directly
 - Prefer running one test file while working; run everything before a commit.
 
 ## Money Rules (never break these)

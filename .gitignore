@@ -15,6 +15,7 @@ coverage/
 # Foundry
 contracts/out/
 contracts/cache/
+contracts/dependencies/
 contracts/broadcast/*/31337/
 
 # Tests
