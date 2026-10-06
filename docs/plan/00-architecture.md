@@ -1,6 +1,8 @@
 # Countersign Architecture v3
 
-**Status: v3, 6 Oct 2026.** v2 approved on 5 Oct (D1–D13). Slice 0 done; Slice 1 spike built, a Mac passkey verified on testnet, phones next. **v3 adds** (Afshal, 6 Oct): stablecoins explained in plain terms, three ways any agent reaches Countersign, what changes when hundreds of invoices arrive at once, phone-first approvals, and the web app's screens. Decisions D14–D20.
+**Status: v3.1, 6 Oct 2026.** v3.1 adds D21–D25: evidence that expires and is re-checked, cross-account isolation, a stop button, where data goes, and pitch hygiene.
+
+**v3, 6 Oct 2026.** v2 approved on 5 Oct (D1–D13). Slice 0 done; Slice 1 spike built, a Mac passkey verified on testnet, phones next. **v3 adds** (Afshal, 6 Oct): stablecoins explained in plain terms, three ways any agent reaches Countersign, what changes when hundreds of invoices arrive at once, phone-first approvals, and the web app's screens. Decisions D14–D20.
 
 **What changed from v1 (same day):** the scope now starts from a user pain, paying the wrong party. The agent pays supplier invoices, not paid articles. "What the user asked for" is now a document, the approved purchase order. x402 purchases left the core. The reasoning and the market numbers are in `13-pain-and-market-sizing.md` (research workspace).
 
@@ -281,6 +283,10 @@ An advice-only check (a bank-transfer invoice) produces the same `evidence` and 
 | **Checker key** | The checker service | Nothing |
 | **Relayer keys** | The gateway | Pay gas. Cannot move company funds |
 
+**Countersign staff hold no key that can move a customer's money.** The checker's signature only ever releases a payment the contract already allows.
+
+**The stop button (D23).** The owner's passkey can pause the account: every vault refuses to pay until it is unpaused. The checker key can be replaced at any time with `setPolicy`, including while paused. A paused account can still be withdrawn from by the owner.
+
 Agent and checker keys together can pay a supplier on file, at its address on file, within an approved order and the per-payment cap. The most they can ever move is what is already set aside in open orders. They can never withdraw, add a supplier, change an address or approve an order. That holds even if both services are compromised, because the contract enforces it.
 
 **Stated limits**
@@ -292,6 +298,18 @@ Agent and checker keys together can pay a supplier on file, at its address on fi
 - **A compromised supplier website defeats the attestation.** It is one signal on the approval sheet, not a guarantee.
 - **The supplier has to accept USDC.** Otherwise the check is advice only, as for bank and card payments.
 - **Money set aside is locked to its order** until the order is closed or expires. That is the price of parallel payments and of a hard ceiling on what an agent can spend.
+
+### Where your data goes (D24)
+
+| Data | Goes to | Kept |
+|---|---|---|
+| Invoice and order documents | The checker service; the AI model provider for the fixed questions (configured for no training) | In the company's Countersign records; the provider's retention is stated in the README |
+| Supplier's address file | Primus, to produce the proof | The proof is kept with the supplier record |
+| Payments, amounts, supplier addresses | Monad | **Public on chain**, permanently |
+| Order and invoice contents | Nowhere on chain | Only their hashes go on chain |
+| Approver's passkey | Never leaves the device | The public key is on chain |
+
+Published in the README and the stated limits (Slice 21).
 
 ## Contract Surface (draft, fixed in Slice 5)
 
@@ -307,8 +325,11 @@ Agent and checker keys together can pay a supplier on file, at its address on fi
 | `vault.sweep()` | Anyone, after expiry | Returns an expired order's money to the account. It can go nowhere else |
 | `recordDecision(decision, sig)` | Checker or owner passkey | Emits a held, refused or blocked outcome with its evidence hash. Writes no storage and moves no money |
 | `withdraw(to, amount)` | Owner passkey | Returns money not set aside for an order to the company |
+| `pause()` / `unpause()` | Owner passkey | Stops every vault from paying, and starts them again (D23) |
 
 `payment` carries the order, the amount, the invoice hash, the pay-to address and a nonce. The vault requires the pay-to address to equal the one on file, so neither the agent nor the checker can choose where money goes.
+
+**Signatures are bound to one vault on one chain (D22).** Every signed payment is EIP-712 typed data whose domain includes the chain ID and the vault's own address, so a signature for one company's payment can never be replayed on another company's vault, another order or another chain. Slice 5 has a test for each.
 
 Vaults are minimal clones (EIP-1167), so opening an order costs little. OpenZeppelin's `Clones` library is checked in Context7 in Slice 5.
 
@@ -334,6 +355,8 @@ Six tools, all in one list page. `pay_invoice`, `pay_invoices` and `propose_orde
 3. **Jev**, through OpenRouter and pinned to `typesafe/jev-1.13`, answers fixed questions: is this the same supplier as on the order; is every line on the invoice also on the order; does the invoice ask for payment anywhere other than the address on file; does it contain instructions addressed to an automated reader.
 4. Timeout is set to about 1.5 seconds (the SDK default is 10 seconds). **Claude Sonnet** is the fallback behind the same interface.
 5. Any error, timeout or "unsure" is a hold.
+
+**Evidence that expires (D21).** Each supplier and order keeps the evidence it was approved on: the address and the website proof that listed it (with its time), the quote it came from, and the passkey that approved it. Every check records which evidence it relied on. When that evidence changes or expires (the supplier's file changes, the proof is older than its limit, an invoice brings new payment details), the next payment re-checks exactly that item before paying, and the approval sheet says which assumption changed. Stale evidence is shown as stale, never as verified. The payment record (Slice 18) keeps the chain: payment, check, evidence, decision.
 
 Check time and settlement time are published separately. We never claim "checked and settled in under a second"; settlement alone is.
 
@@ -408,6 +431,18 @@ SHIP:
   Slice 22:  Demo script, video, write-up, submission                 TODO
 ```
 
+**v3.1 additions per slice (D21–D25)**
+
+| Slice | Adds |
+|---|---|
+| 5 | `pause`/`unpause`; checker key replaceable while paused; EIP-712 domain with chain ID and vault address, with replay tests across vaults, orders and chains |
+| 6, 12, 13 | Cross-account isolation: one company's agent, session or API key can never read or act on another company's orders, runs or holds; tests for each route, including the sign-in link (no confused deputy) |
+| 7 | The poisoned-memory document |
+| 10, 15 | Evidence records with expiry; re-check on change |
+| 18 | Payment record shows payment, check, evidence and decision as one chain |
+| 21 | "Where your data goes" table |
+| 22 | Pitch labels "live on testnet today" against "next"; the independence argument; a "what if the big players build this" table |
+
 **What is demoable when.** After Slice 8, an invoice is paid on Monad. After Slice 11, the whole story runs with a scripted agent: clean invoice paid, changed address held and refused. After Slice 14, it runs in Grok or Claude, which is the version we demo.
 
 **If time runs short,** cut from the bottom of Depth and Proof upward, except the benchmark and the bank-invoice check: 19, then 18, then 15. Slices 0 to 14, 16, 17 and 20 are the entry. The bank-invoice check stays because it is the answer to "what about the payments that are not in stablecoins".
@@ -432,6 +467,7 @@ SHIP:
 | Padded | An extra line, or a higher total | Held: `items_mismatch` or `amount_mismatch` |
 | Duplicate | An invoice number already paid | Held: `duplicate_invoice` |
 | Hijack | Hidden text telling the agent to pay elsewhere, urgently | Held; the contract would refuse the address in any case |
+| Poisoned memory | The agent "remembers" from an earlier email that the supplier changed wallets, and drafts the payment to the new address. The invoice itself is clean | Held: `address_mismatch`. The agent's memory is not evidence; only the address on file and the supplier's own file are |
 | Wrong supplier | A real-looking invoice from a supplier with no order | Held: `supplier_unknown` |
 | Over the order | Correct invoice, order already used up | Blocked: `over_limit` |
 | Bank transfer | Changed account number on a bank invoice | Advice: `mismatch` |
@@ -522,6 +558,11 @@ None of these has had an explicit yes, except that Afshal has said parallel exec
 | D18 | Holds at volume | Grouped by reason, with "refuse all duplicates". One signature over a reviewed list is a stretch |
 | D19 | Ways in | Connector (MCP), plain web API, and enforcement in the account for any agent. Muse and Grok Bot tested if time allows |
 | D20 | App screens | Payment run board, inbox, approval sheet, payment record, suppliers and orders. Phone first. Visual design deferred; the first draft was shelved |
+| D21 | Evidence that expires | Each supplier and order keeps the evidence it was approved on; changes and expiry trigger a re-check of exactly that item; stale is never shown as verified |
+| D22 | Cross-account isolation | Signatures bound to chain ID and vault address; the gateway, MCP server and sign-in tested so no account can reach another's orders |
+| D23 | Stop button | Owner passkey pauses and unpauses the account; the checker key can be replaced at any time. Countersign staff hold no key that moves money |
+| D24 | Where data goes | A plain table in the README and the stated limits |
+| D25 | Pitch hygiene | Label "live today" against "next"; argue independence (a check by the agent or its vendor is not a second signature); answer "what if the big players build this" |
 | — | Who builds | Sophie and Roshan are busy this week; Claude drafts and builds their slices, Afshal reviews. Ownership in D6 returns when they are free |
 
 ---
