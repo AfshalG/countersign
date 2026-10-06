@@ -32,13 +32,9 @@ jobs:
 
   contracts:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        dir: [contracts, spikes/01-passkey]
-    name: contracts (${{ matrix.dir }})
     defaults:
       run:
-        working-directory: ${{ matrix.dir }}
+        working-directory: contracts
     env:
       FOUNDRY_PROFILE: ci
     steps:
@@ -50,6 +46,23 @@ jobs:
       - run: forge fmt --check
       - run: forge build
       - run: forge test -vvv
+
+  # Kept separate from `contracts` so main's required check names never change.
+  spike-01-passkey:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: spikes/01-passkey
+    env:
+      FOUNDRY_PROFILE: ci
+    steps:
+      - uses: actions/checkout@v7
+      - uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: v1.8.5
+      - run: forge soldeer install
+      - run: forge fmt --check
+      - run: forge test -vv
 
   secrets:
     runs-on: ubuntu-latest
