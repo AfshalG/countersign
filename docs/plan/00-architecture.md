@@ -1,6 +1,8 @@
 # Countersign Architecture v3
 
-**Status: v3.2, 6 Oct 2026.** v3.2 adds what makes Countersign defensible (D26) and corrects two overclaims in v3.1: what Countersign itself can do with a customer's money, and where a passkey lives.
+**Status: v3.3, 6 Oct 2026.** v3.3 adds D27–D29 from the verified agent-loss cases (Freysa, AIXBT, Lobstar Wilde, Grok and Bankrbot): the model can only hold, a waiting period for new or changed addresses, and a lower cap on first payments to a new address. Design rule: never try to out-think the attacker; keep the rules where no message can reach them.
+
+**v3.2, 6 Oct 2026.** Adds what makes Countersign defensible (D26) and corrects two overclaims in v3.1: what Countersign itself can do with a customer's money, and where a passkey lives.
 
 **v3.1, 6 Oct 2026.** Adds D21–D25: evidence that expires and is re-checked, cross-account isolation, a stop button, where data goes, and pitch hygiene.
 
@@ -318,6 +320,8 @@ Agent and checker keys together can pay a supplier on file, at its address on fi
 - **Hosted mode.** Countersign holds both the agent key and the checker key, in separate services. The two-signature rule then guards against a hijacked agent, not against a compromised Countersign. The contract's limits bound that case.
 - **A proposal is only as good as its approval.** A hijacked agent can propose a bad supplier or order. The sheet shows the website check, but a person who taps through without reading can still approve it.
 - **The checker reads the same invoice the agent read.** A clever invoice could mislead both. Exact comparisons and the contract's limits bound what that can cost.
+- **A real change of payment address waits.** A supplier who genuinely changes wallets is paid after the waiting period, not at once.
+- **A real supplier overbilling within tolerance is not fully stoppable.** The most it can cost is what is left in that one order.
 - **Whoever controls the approver's Apple or Google account controls their approvals.** Synced passkeys follow that account. A second approver for large amounts, or a device-bound key, narrows this later.
 - **A public chain shows payees and amounts.** Order and invoice contents stay off chain; only their hashes are written.
 - **A compromised supplier website defeats the attestation.** It is one signal on the approval sheet, not a guarantee.
@@ -354,6 +358,8 @@ Published in the README and the stated limits (Slice 21).
 
 `payment` carries the order, the amount, the invoice hash, the pay-to address and a nonce. The vault requires the pay-to address to equal the one on file, so neither the agent nor the checker can choose where money goes.
 
+**Waiting period and first-payment cap (D28, D29).** A new supplier or a changed address can receive money only after a waiting period set by the owner (48 hours by default), and the owner is notified when the change is made. Until a set number of payments have gone to a new address, each is capped lower than usual. Real address changes are rarely urgent; fraud nearly always is. The waiting period cannot be skipped from the app, because a person tricked into approving a change is the case it exists for.
+
 **Signatures are bound to one vault on one chain (D22).** Every signed payment is EIP-712 typed data whose domain includes the chain ID and the vault's own address, so a signature for one company's payment can never be replayed on another company's vault, another order or another chain. Slice 5 has a test for each.
 
 Vaults are minimal clones (EIP-1167), so opening an order costs little. OpenZeppelin's `Clones` library is checked in Context7 in Slice 5.
@@ -380,6 +386,8 @@ Six tools, all in one list page. `pay_invoice`, `pay_invoices` and `propose_orde
 3. **Jev**, through OpenRouter and pinned to `typesafe/jev-1.13`, answers fixed questions: is this the same supplier as on the order; is every line on the invoice also on the order; does the invoice ask for payment anywhere other than the address on file; does it contain instructions addressed to an automated reader.
 4. Timeout is set to about 1.5 seconds (the SDK default is 10 seconds). **Claude Sonnet** is the fallback behind the same interface.
 5. Any error, timeout or "unsure" is a hold.
+
+**The model can only hold, never release (D27).** "Clear" is decided by code against owner-signed records: approved supplier, address on file, amount within the order, invoice not paid before, evidence still fresh. The model's answers can only add a hold. A "looks fine" from the model never releases a payment that failed a code check, and the checker's signature is produced only when every code check passes. So fooling the model gains an attacker nothing. Slice 10 tests this directly: every code failure stays held whatever the model returns.
 
 **Evidence that expires (D21).** Each supplier and order keeps the evidence it was approved on: the address and the website proof that listed it (with its time), the quote it came from, and the passkey that approved it. Every check records which evidence it relied on. When that evidence changes or expires (the supplier's file changes, the proof is older than its limit, an invoice brings new payment details), the next payment re-checks exactly that item before paying, and the approval sheet says which assumption changed. Stale evidence is shown as stale, never as verified. The payment record (Slice 18) keeps the chain: payment, check, evidence, decision.
 
@@ -464,6 +472,9 @@ SHIP:
 | 6, 12, 13 | Cross-account isolation: one company's agent, session or API key can never read or act on another company's orders, runs or holds; tests for each route, including the sign-in link (no confused deputy) |
 | 7 | The poisoned-memory document |
 | 10, 15 | Evidence records with expiry; re-check on change |
+| 5 (v3.3) | Waiting period per supplier address (`activeAfter`), first-payment cap for new addresses; tests that neither can be skipped |
+| 10 (v3.3) | The model can only hold: tests that no model answer releases a payment that failed a code check |
+| 11 (v3.3) | Risk signals on the approval sheet (new supplier, first payment, address changed recently); notification when an address changes |
 | 18 | Payment record shows payment, check, evidence and decision as one chain |
 | 21 | "Where your data goes" table |
 | 22 | Pitch labels "live on testnet today" against "next"; the independence argument; a "what if the big players build this" table |
@@ -589,6 +600,9 @@ None of these has had an explicit yes, except that Afshal has said parallel exec
 | D24 | Where data goes | A plain table in the README and the stated limits |
 | D25 | Pitch hygiene | Label "live today" against "next"; argue independence (a check by the agent or its vendor is not a second signature); answer "what if the big players build this" |
 | D26 | Defensibility | Claim only what compounds: independence from agent vendors, enforcement in the account, the verified-supplier network and the record of decisions. The checking rules are copyable and are not claimed as a moat. Hackathon shows the mechanisms, not the network |
+| D27 | The model can only hold | Code decides "clear" against owner-signed records; the model's answers can only add a hold; the checker signs only when every code check passes |
+| D28 | Waiting period | New suppliers and changed addresses receive money only after an owner-set wait (48 hours by default), with a notification; it cannot be skipped from the app |
+| D29 | First-payment cap | The first few payments to a new address are capped lower than usual |
 | — | Who builds | Sophie and Roshan are busy this week; Claude drafts and builds their slices, Afshal reviews. Ownership in D6 returns when they are free |
 
 ---
