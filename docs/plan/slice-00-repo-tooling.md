@@ -227,4 +227,3 @@ Slice 1: a passkey signature verified on Monad testnet through the P256 precompi
 
 ---
 
-Map: CONTEXT-MAP
