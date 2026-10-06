@@ -8,7 +8,18 @@ Built for Monad Metropolis 2026, Track 04.
 
 ## Status
 
-Planning. The architecture is in [`docs/plan/00-architecture.md`](docs/plan/00-architecture.md). Code arrives slice by slice, starting with Slice 0 (tooling, CI, environment).
+Planning. The architecture is in [`docs/plan/00-architecture.md`](docs/plan/00-architecture.md). Slice 0 (tooling, CI, environment) is done. Code arrives slice by slice.
+
+## Getting started
+
+You need Node 24 (`nvm install 24`), pnpm through Corepack (`corepack enable`) and Foundry (`curl -L https://foundry.paradigm.xyz | bash`, then `foundryup`).
+
+```bash
+pnpm install
+pnpm check            # typecheck, lint, format check, tests
+pnpm test:contracts   # installs OpenZeppelin through Soldeer, then forge test
+cp .env.example .env  # fill in values when a slice needs them
+```
 
 ## Team
 
