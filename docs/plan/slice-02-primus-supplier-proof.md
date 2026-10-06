@@ -169,4 +169,3 @@ Slice 3: 200 payments, order vaults against one account, several agents at once,
 
 ---
 
-Map: CONTEXT-MAP

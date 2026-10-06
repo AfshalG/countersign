@@ -188,4 +188,3 @@ Slice 2: a Primus proof of a supplier's address file, on testnet.
 
 ---
 
-Map: CONTEXT-MAP
