@@ -1,6 +1,8 @@
 # Countersign Architecture v3
 
-**Status: v3.1, 6 Oct 2026.** v3.1 adds D21–D25: evidence that expires and is re-checked, cross-account isolation, a stop button, where data goes, and pitch hygiene.
+**Status: v3.2, 6 Oct 2026.** v3.2 adds what makes Countersign defensible (D26) and corrects two overclaims in v3.1: what Countersign itself can do with a customer's money, and where a passkey lives.
+
+**v3.1, 6 Oct 2026.** Adds D21–D25: evidence that expires and is re-checked, cross-account isolation, a stop button, where data goes, and pitch hygiene.
 
 **v3, 6 Oct 2026.** v2 approved on 5 Oct (D1–D13). Slice 0 done; Slice 1 spike built, a Mac passkey verified on testnet, phones next. **v3 adds** (Afshal, 6 Oct): stablecoins explained in plain terms, three ways any agent reaches Countersign, what changes when hundreds of invoices arrive at once, phone-first approvals, and the web app's screens. Decisions D14–D20.
 
@@ -167,6 +169,28 @@ A company's inbox gets dozens of invoices at once, several agents may work on it
 
 **Numbers to publish, measured, not promised:** time from intake to final for a run of 200 invoices; how many were held; how many doctored invoices were caught; how many clean ones were wrongly held.
 
+## What Makes It Defensible
+
+**Copyable, so not a moat:** the checking rules (compare supplier, address, items, amount, duplicates), passkey approvals on Monad (the precompile is public) and the MCP connector. Anyone can build these.
+
+**What compounds:**
+
+| Moat | Why it holds | What the hackathon shows |
+|---|---|---|
+| **Independence** | A check made by the agent, or by the company that makes the agent, is not a second signature. Auditors expect the party that prepares a payment not to be the only one that approves it. Agent vendors cannot be neutral across Grok, Claude, Muse and the rest; Countersign works with all of them | The same account checked whichever agent prepared the payment |
+| **Enforcement in the account** | The rule lives in the contract that holds the money. A check that only warns (a payee-verification service, a feature inside an agent) can be ignored or bypassed; this one cannot. Moving a company's paying account is also a bigger step than switching a tool | A held payment the contract refuses even when the agent signs it |
+| **A network of verified suppliers** | When a supplier publishes its address file and is verified (Slice 2), every Countersign customer that pays it benefits. Each new customer brings its suppliers; each verified supplier makes the product better for the next customer. Suppliers gain too: once verified, fewer of their invoices are held | The mechanism only (a verified supplier record any account can rely on); the network is a claim for later |
+| **The record of decisions** | Every approval, refusal and exception, with the evidence it relied on (D21), builds each company's payment history: its usual suppliers, amounts and timing. That history makes later checks more accurate and is the audit trail. It stays with the company's Countersign account, not with whichever agent it uses this year | The payment record and audit export (Slice 18) |
+
+**"What if the big players build this?"**
+
+| If | What changes | Our answer |
+|---|---|---|
+| Agents become far more accurate | Fewer honest mistakes | Attackers adapt, and OpenAI and the UK's NCSC say prompt injection may never be fully solved. Stablecoin payments cannot be reversed. Auditors still require a second party |
+| Agent vendors add payment checks | Each agent checks its own payments | That covers one agent each, and a check by the agent's own vendor is not a second signature. Their checks become one more input; Countersign enforces at the account across every agent |
+| Wallet and stablecoin providers add checks | Checks at the wallet | The most likely competitor. Our edge is matching against approved orders and the verified-supplier network. Partnering is likely: Countersign as the check inside their wallet |
+| Payee-verification incumbents add stablecoins | Their checks on stablecoin payees | They warn from outside the account; enforcement needs the account contract. They are not built for agents |
+
 ## The Pieces
 
 | Piece | What it is | Where it runs |
@@ -283,7 +307,7 @@ An advice-only check (a bank-transfer invoice) produces the same `evidence` and 
 | **Checker key** | The checker service | Nothing |
 | **Relayer keys** | The gateway | Pay gas. Cannot move company funds |
 
-**Countersign staff hold no key that can move a customer's money.** The checker's signature only ever releases a payment the contract already allows.
+**What Countersign itself can do with a customer's money.** In hosted mode Countersign runs both the agent key and the checker key, so together they can pay. But only to that company's approved suppliers, at their addresses on file, within orders the company approved with its passkey. Countersign can never withdraw, add a supplier, change an address or approve an order. The checker's signature only ever releases a payment the contract already allows.
 
 **The stop button (D23).** The owner's passkey can pause the account: every vault refuses to pay until it is unpaused. The checker key can be replaced at any time with `setPolicy`, including while paused. A paused account can still be withdrawn from by the owner.
 
@@ -294,6 +318,7 @@ Agent and checker keys together can pay a supplier on file, at its address on fi
 - **Hosted mode.** Countersign holds both the agent key and the checker key, in separate services. The two-signature rule then guards against a hijacked agent, not against a compromised Countersign. The contract's limits bound that case.
 - **A proposal is only as good as its approval.** A hijacked agent can propose a bad supplier or order. The sheet shows the website check, but a person who taps through without reading can still approve it.
 - **The checker reads the same invoice the agent read.** A clever invoice could mislead both. Exact comparisons and the contract's limits bound what that can cost.
+- **Whoever controls the approver's Apple or Google account controls their approvals.** Synced passkeys follow that account. A second approver for large amounts, or a device-bound key, narrows this later.
 - **A public chain shows payees and amounts.** Order and invoice contents stay off chain; only their hashes are written.
 - **A compromised supplier website defeats the attestation.** It is one signal on the approval sheet, not a guarantee.
 - **The supplier has to accept USDC.** Otherwise the check is advice only, as for bank and card payments.
@@ -303,11 +328,11 @@ Agent and checker keys together can pay a supplier on file, at its address on fi
 
 | Data | Goes to | Kept |
 |---|---|---|
-| Invoice and order documents | The checker service; the AI model provider for the fixed questions (configured for no training) | In the company's Countersign records; the provider's retention is stated in the README |
+| Invoice and order documents | The checker service; the AI model provider for the fixed questions (no-training terms to be confirmed in Slice 10) | In the company's Countersign records; the provider's retention is stated in the README |
 | Supplier's address file | Primus, to produce the proof | The proof is kept with the supplier record |
 | Payments, amounts, supplier addresses | Monad | **Public on chain**, permanently |
 | Order and invoice contents | Nowhere on chain | Only their hashes go on chain |
-| Approver's passkey | Never leaves the device | The public key is on chain |
+| Approver's passkey | Never reaches Countersign. It stays on the person's device or in their password manager (iCloud Keychain, Google Password Manager), which may sync it, end-to-end encrypted, across their own devices | The public key is on chain |
 
 Published in the README and the stated limits (Slice 21).
 
@@ -560,9 +585,10 @@ None of these has had an explicit yes, except that Afshal has said parallel exec
 | D20 | App screens | Payment run board, inbox, approval sheet, payment record, suppliers and orders. Phone first. Visual design deferred; the first draft was shelved |
 | D21 | Evidence that expires | Each supplier and order keeps the evidence it was approved on; changes and expiry trigger a re-check of exactly that item; stale is never shown as verified |
 | D22 | Cross-account isolation | Signatures bound to chain ID and vault address; the gateway, MCP server and sign-in tested so no account can reach another's orders |
-| D23 | Stop button | Owner passkey pauses and unpauses the account; the checker key can be replaced at any time. Countersign staff hold no key that moves money |
+| D23 | Stop button | Owner passkey pauses and unpauses the account; the checker key can be replaced at any time; a paused account can still be withdrawn from by the owner. Countersign can only pay approved suppliers, at addresses on file, within approved orders |
 | D24 | Where data goes | A plain table in the README and the stated limits |
 | D25 | Pitch hygiene | Label "live today" against "next"; argue independence (a check by the agent or its vendor is not a second signature); answer "what if the big players build this" |
+| D26 | Defensibility | Claim only what compounds: independence from agent vendors, enforcement in the account, the verified-supplier network and the record of decisions. The checking rules are copyable and are not claimed as a moat. Hackathon shows the mechanisms, not the network |
 | — | Who builds | Sophie and Roshan are busy this week; Claude drafts and builds their slices, Afshal reviews. Ownership in D6 returns when they are free |
 
 ---
