@@ -1,0 +1,146 @@
+
+# Countersign: a second signature on payments AI agents prepare
+
+## What This Is
+
+An AI agent reads a supplier invoice and drafts the payment. Countersign's checker compares the invoice with the purchase order the company approved. A match is paid from that order's vault on Monad and is final about 0.6 seconds later. Anything that differs (a changed address, a padded amount, a duplicate, a hijacked agent) is held, and a person decides with Face ID. The rule lives in the contract, so it holds whichever agent prepared the payment.
+
+**Pitch line:** "Your agent can prepare the payment. It should not be the only one who signs it."
+**Tagline:** "Check any payment. Enforce it on Monad."
+
+- **Event:** Monad Metropolis 2026, Track 04 (Trust, Identity & AI Infrastructure). Deadline 13 Oct 2026, 20:59 PDT.
+- **Users:** B2B, sold self-serve. First users are small teams that use an agent and pay overseas contractors and suppliers.
+- **What they need, in order:** speed, no mistakes, ease of use. A change should help at least one and hurt none.
+
+## The Plan Is the Source of Truth
+
+- `docs/plan/00-architecture.md`: pieces, decision model, payment state, keys, contract and MCP surfaces, slice list, decisions D1–D13.
+- `docs/plan/slice-NN-*.md`: one file per slice. Read the current slice file before writing its code.
+- One slice at a time. A slice file is written and reviewed before its code.
+- If the code has to differ from the slice file, record it under "Adapted from spec" in the same commit.
+
+## Layout
+
+```
+countersign/
+├── CLAUDE.md, README.md, .env.example
+├── contracts/           Foundry: Account, OrderVault, factory; unit and fuzz tests
+├── services/
+│   ├── gateway/         Hono: payment requests, states, relayer pool, finality stream
+│   ├── checker/         Hono: reads invoices, compares, asks Jev, signs releases. Own key
+│   └── mcp/             MCP server: five tools, sign-in
+├── apps/
+│   ├── approver/        Next.js PWA: proposals, holds, live feed, the diff
+│   └── supplier-portal/ Next.js demo supplier: quotes, invoices, payment arriving
+├── packages/
+│   ├── shared/          Payment state, reason codes, EIP-712 types, zod schemas
+│   ├── chain/           viem clients, ABIs, Monad config
+│   └── db/              Drizzle schema and migrations
+├── bench/               The invoice set and the four benchmark arms
+├── spikes/              Throwaway code from Slices 1–4. Never imported by product code
+└── docs/plan/           Architecture and slice files
+```
+
+## Stack (MANDATORY: no changes without Afshal's yes)
+
+| Area | Choice |
+|---|---|
+| Language | TypeScript, strict mode, everywhere except contracts |
+| Monorepo | pnpm workspaces |
+| Contracts | Solidity with Foundry; OpenZeppelin Contracts 5.x (`WebAuthn`, `P256`, `EIP712`, `Clones`) |
+| Chain client | viem |
+| Services | Hono on Node |
+| Agent door | Official MCP TypeScript SDK |
+| Apps | Next.js; the approver app installs as a PWA |
+| Data | Postgres with Drizzle |
+| Validation | zod at every boundary |
+| Guard model | Jev through OpenRouter, pinned `typesafe/jev-1.13`, via `@typesafe-ai/sdk`. Fallback: Claude Sonnet behind the same interface |
+| Attestation | Primus zkTLS |
+| Tests | `forge test` (with fuzzing), Vitest, Playwright |
+| Hosting | Vercel (apps), Railway (services, Postgres) |
+
+Versions are pinned in Slice 0 after a Context7 check and recorded here.
+
+## Commands (created in Slice 0)
+
+- `pnpm install`, `pnpm dev`
+- `pnpm test`, `pnpm typecheck`, `pnpm lint`
+- `forge test` inside `contracts/`
+- Prefer running one test file while working; run everything before a commit.
+
+## Money Rules (never break these)
+
+1. **Fail closed.** Any error, timeout or "unsure" from the checker is a hold. No code path pays without the checker's signature or the owner's passkey.
+2. **The pay-to address comes from the supplier record on chain.** Never from the invoice, the agent's input or a model's output.
+3. **Addresses and amounts are compared by code.** A model only answers the checker's fixed yes-or-no questions.
+4. **Final means Finalized.** `latest` on Monad is speculative. Show proposed, voted, finalized; release nothing before finalized.
+5. **One final status per request,** including after a crash or a cancel. Pay tools are idempotent: same order and invoice, same request id, same result.
+6. **Typed outcomes only.** `status`, `reason` and `decidedBy` are defined in `packages/shared`. Change them there first.
+7. **A person's refusal ends the agent's run.**
+8. **Setup is never automatic.** The agent proposes suppliers and orders; only the owner passkey makes them real.
+
+## Monad Rules
+
+- **Network:** testnet, chain ID 10143. Mainnet (143) only after an explicit decision (D5).
+- **USDC:** testnet `0x534b2f3A21130d7a60830c2Df862319e593943A3`, mainnet `0x754704Bc059F8C67012fEd69BC8A327a5aafb603`.
+- **Passkeys:** the P256 precompile is at `0x0100` (EIP-7951).
+- **Parallel execution:** one vault per order. Payments must not write shared storage (no shared counters or registries); emit events instead.
+- **Fees are charged on the gas limit.** Set tight limits and simulate every payment before sending. A failed transaction still pays its fee.
+- **Relayers:** a pool of wallets. Track nonces ourselves; "submitted" is unconfirmed until a block contains it. Keep each wallet above the 10 MON reserve. Never give a relayer EIP-7702 delegation.
+- **Live stages:** `monadNewHeads` and `monadLogs` websocket subscriptions.
+- Chain behaviour comes from docs.monad.xyz, not memory.
+
+## Contract Rules
+
+- The owner is a passkey, verified through the precompile. Every signed payment is EIP-712 typed data.
+- Vaults are `Clones` (EIP-1167), deployed and initialised by the account in the same transaction. OpenZeppelin warns that a clone left uninitialised can be initialised by someone else.
+- Every revert is a named error with a test. Every external function has a fuzz test.
+
+## Checker and Model Rules
+
+- Set Jev's `timeout` explicitly, about 1,500 ms. The SDK default is 10,000 ms.
+- Tests run against deterministic mock model responses first. Real model calls only after those pass.
+- The model never sees a key, and its output never chooses an address or an amount.
+- The checker key lives only in the checker service.
+
+## Agent-Facing Features
+
+Before writing code for any agent-facing flow, its slice file has a mermaid diagram (nodes, edges, decision points) and an explicit state schema. The payment request's diagram and state are in `docs/plan/00-architecture.md`.
+
+## Secrets and Private Material
+
+- Every secret and setting comes from environment variables. `.env.example` lists names only. Never commit `.env`.
+- No key, token or private key in code, tests, docs, commit messages or this file.
+- CI runs a secret scan on every push.
+- Nothing from the private research workspace enters this repo. Plan files are checked before they are copied in.
+
+## Workflow
+
+- **Context7 before any library API.** Do not guess signatures. Record what was checked in the slice file's "Cross-checked" section.
+- **TDD:** failing test, then code, then refactor. Run tests after every significant change. Never commit broken code.
+- **Git:** never commit to `main`. Branch from `development` as `feature/…`, `fix/…` or `chore/…`. Conventional commits (`feat:`, `fix:`, `chore:`, `docs:`). Merge into `development` when the slice is done and tested, then delete the branch. `development` goes to `main` only at a stable milestone.
+- **Pushes:** push to `development` and feature branches only, never to `main`. No AI co-author or attribution lines in commits or PRs.
+- **Error handling everywhere.** No happy-path-only code. Comment the non-obvious decisions.
+
+## Who Owns What (D6)
+
+- **Afshal:** contracts, gateway
+- **Roshan:** checker, MCP server
+- **Sophie:** approver app, supplier portal
+
+## Design Guidelines
+
+- Mobile-first; works on a laptop.
+- **The approval sheet's centrepiece is the difference:** the address on file against the one on the invoice, character by character; the added line; the amount over tolerance.
+- Matched payments ask nothing. Show people only what needs them.
+- Never mention gas, MON or seed phrases in the interface.
+- Use the frontend-design skill for app work. Sophie sets the visual direction in Slice 11.
+- No `window.alert`, `confirm` or `prompt`; use in-page sheets and toasts.
+
+## Stated Limits (say them, don't hide them)
+
+- In hosted mode we hold both the agent key and the checker key, in separate services. The contract's limits bound that case.
+- The checker reads the same invoice the agent read.
+- Enforcement needs the supplier to accept USDC; otherwise the check is advice only.
+- A proposal is only as good as the person who approves it.
+- Payees and amounts are public on chain; documents stay off chain as hashes.

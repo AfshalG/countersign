@@ -1,0 +1,451 @@
+# Countersign Architecture v2
+
+**Status: DRAFT, for Afshal's review (2 Oct 2026). Nothing is built. Each slice gets its own file, written and reviewed one at a time.**
+
+**What changed from v1 (same day):** the scope now starts from a user pain, paying the wrong party. The agent pays supplier invoices, not paid articles. "What the user asked for" is now a document, the approved purchase order. x402 purchases left the core. The reasoning and the market numbers are in `13-pain-and-market-sizing.md` (research workspace).
+
+**Revised later on 2 Oct, to stay agent-native:** the agent also does the setup (it proposes suppliers and orders; the person only signs), the demo is led by an agent people already use (Grok, with Claude as the fallback), and the first users are small teams that already hand their inbox to an agent. A spike now tests the Grok connector before anything else is built.
+
+**Revised again on 2 Oct:** B2B payments, sold self-serve. First users narrowed to small teams that pay overseas contractors and suppliers, where stablecoin invoices already exist. Setup happens only in the chat; the app does approvals and the live feed. The advice-only check for bank invoices is now must-ship.
+
+**Revised once more on 2 Oct:** built around what companies care about at scale: speed, no mistakes, ease of use. Parallel execution is now a requirement. Each approved order gets its own vault, so payments against different orders run side by side. The account-wide daily limit is dropped, because a shared counter would undo that.
+
+## The Pain
+
+The person who pays a company's bills checks each invoice by hand against what was agreed. One changed payment detail or one look-alike address sends the money to a fraudster, and it does not come back.
+
+- Business email compromise, the category that covers altered invoices and redirected payments, cost **$3.05 billion** across 24,768 complaints in the FBI's 2025 report.
+- One stablecoin holder lost **$50 million** by copying a look-alike address.
+- An AI agent that reads emailed invoices and prepares payments is exposed to the same trick, at machine speed, and can be hijacked by text hidden in the invoice.
+
+## Who It Is For First
+
+**The model: B2B payments, sold self-serve.** The payer is a business and the payee is its supplier. A small team adds Countersign to its agent with one link; there is no sales call. Pricing (per payment checked, or per month) is set later.
+
+**First users: small teams that use an agent and pay overseas contractors and suppliers.** Founders, agencies and studios. Cross-border is where stablecoin invoices already exist:
+
+- Paying suppliers across borders is the leading stablecoin use case in EY-Parthenon's 2025 survey (62%).
+- Rise, a payroll company, reports that more than half of its workers' withdrawals are in stablecoins.
+- Deel added USDC payouts in February 2026.
+
+These teams have the pain, already use Grok, Claude or similar agents, and have no finance team to catch a changed invoice.
+
+**Where it goes next:** finance teams at companies with 100 or more staff. That is the market ceiling in `13-pain-and-market-sizing.md` (research workspace): about $1.4 billion a year in the US at incumbent prices.
+
+**Why not consumers (B2C):** consumers mostly pay by card, where a charge can be disputed and where we could only advise. Consumer stablecoin spending is small. And a consumer's intent ("buy me a good laptop") is fuzzy, where a business has a quote, an order and an invoice.
+
+**Honest gaps**
+- **Both sides must use stablecoins** for the check to be enforced. Most small US firms do not plan to: 8 of 148 in a Cleveland Fed survey.
+- **There is no count** of small teams that pay overseas suppliers in stablecoins. The figures above come from search results and a vendor's own report, not yet checked against the original pages.
+- **Instinct's numbers are not a market size for this.** Its 100,000+ users spending about $1,300 a month shows that people let agents spend real money, but that is shopping by card, not invoices.
+- **Later, not checked:** an off-ramp could turn the USDC into a deposit in the supplier's bank account, so the check stays enforced in our account while the supplier never touches stablecoins.
+
+## What Companies Care About
+
+Three things, more so at scale. Each is built for and each gets a published number.
+
+| Need | How Countersign meets it | The number we publish |
+|---|---|---|
+| **Speed** | A matching invoice pays without waiting for a person. The check answers within about 1.5 seconds; the payment is final on Monad about 0.6 seconds later. A run of 200 invoices settles in parallel, because each order is its own vault | Time to final for one payment and for a run of 200 (Slices 3 and 16) |
+| **No mistakes** | Addresses and amounts are compared by code, not judged by a model. The contract refuses any address not on file. Duplicates are caught. Any doubt is a hold, never a silent payment. Every decision is recorded on chain | Share of doctored invoices caught, and share of clean invoices wrongly held (Slice 20) |
+| **Ease of use** | Setup happens in the chat: the agent proposes, the person signs with Face ID. No seed phrase, no gas token. People are asked only when something differs | Taps per supplier, per order and per matched payment. The last one is zero |
+
+**A wrong hold is a mistake too.** If clean invoices are held often, people stop reading the approval sheet and the protection fails. The false-alarm rate is published next to the catch rate.
+
+## The Vision
+
+A second signature on every payment an AI agent prepares. **Check any payment. Enforce it on Monad.**
+
+```
+You add Countersign to your agent (Grok, Claude) with one link. Face ID creates the account
+  → "Pay the invoices in my inbox"
+  → The agent finds the signed quote from an overseas design agency and proposes the
+    supplier and the order:
+    this supplier, this payment address, these items, up to $4,200
+  → Your phone shows the proposal, and whether the supplier's own website lists that address.
+    Face ID. That is the only setup you do
+  → The invoice arrives. The agent drafts the payment
+  → The checker reads the invoice itself and compares it with the order
+  → Same supplier, same address, same items, amount within tolerance: the checker signs
+  → The order's vault pays. Final on Monad about 0.6 seconds later. Nobody was prompted
+  → A second invoice says "we have changed our payment details" and gives an address
+    that differs from the one on file by a few characters
+  → The account will not pay an address that is not on file, whatever the agent signs
+  → The payment is held. Grok's chat and your phone both show the two addresses side by
+    side, and that the supplier's website still lists the old one. You refuse with Face ID
+  → The agent's run stops there
+  → A bank-transfer invoice gets the same check and a verdict. Advice only: we cannot
+    stop a bank transfer
+```
+
+**Pitch line:** "Your agent can prepare the payment. It should not be the only one who signs it."
+
+**What is and is not new.** Checking a payee before paying is an existing business: Trustpair, Eftsure, nsKnox and Trustmi sell it on bank rails for $12,000 to $100,000+ a year, and they can only warn. Agents paying on their own is not new either. What does not exist is this check on the stablecoin rail, placed where it can be enforced: in the account that holds the money. The account pays only with the agent's signature plus the checker's, or the approver's passkey.
+
+**Why the agent cannot simply check itself.** A hijacked agent is the thing being checked. The rule sits in the account contract, outside the agent, so it holds whichever agent or model prepared the payment. The benchmark includes an "agent checks itself" arm to measure the difference.
+
+**What a hijacked agent can still do.** Propose a bad order, which does nothing until a person signs it. Pay a real supplier, at its address on file, up to the approved amount of an open order. Nothing else.
+
+## Which Agents Can Use It
+
+From `research/2026-10-01-how-ai-agents-pay-report.md` (research workspace). One remote MCP server with sign-in is the door for all of them.
+
+| Agent | Status |
+|---|---|
+| Grok (grok.com custom connector, xAI API) | Open. MoonPay's PayBox reached Grok this way with no partnership. Which plan is needed is unknown: **Spike 4 tests it** |
+| Claude | Open, as a remote MCP server. The fallback for the demo |
+| OpenAI Agents API | Open for a developer's own agent. Whether a consumer dot can use it is not documented |
+| Grok Bot custom plugin | Open on paper, needs a paid plan, untested |
+| Muse | Possible through a custom connector, untested; the connector directory is gated |
+| Instinct | Closed. No API or MCP support |
+
+All of these pay by card through Stripe Link by default. On that rail Countersign can only advise. Enforcement applies when the payment is USDC on Monad.
+
+## Why Monad
+
+| Monad property | What it gives the product | Where it shows in the demo |
+|---|---|---|
+| 600 ms finality | A supplier is paid, for good, while still on the call | Supplier portal flips to "paid" under a second after release |
+| Optimistic parallel execution, 10,000 TPS | Each approved order is its own vault, so payments against different orders touch different data and run side by side | A run of 200 invoices against 200 orders: the clean ones final together, the doctored ones held |
+| P256 precompile at `0x0100` | Approvers sign with Face ID. No seed phrase, no wallet app | Every approval, and every supplier or order the agent proposes |
+| Low fees | Every decision, including refusals, can be written on chain | The audit record: who decided, on what evidence |
+| Contracts are exempt from the 10 MON reserve | Users never hold MON or think about gas | The relayer pays; the company account holds only USDC |
+
+**Designing for parallel execution.** Monad runs a block's transactions in parallel and re-runs any that touched the same data. The guidance in our Monad notes is to keep each user's state separate and not have every payment write to one shared counter; emit events instead (`04-monad-technical-notes.md` (research workspace)). So:
+
+- **Each approved order is its own vault,** holding the money set aside for it. A payment touches only its vault, the supplier's balance and its own events. If every payment came out of one account, every payment would touch that account's USDC balance and Monad would re-run them one after another.
+- **No shared counters.** The account-wide daily limit is dropped; spending is bounded by what is already set aside in open orders. Duplicate invoices across orders are caught by the checker off chain, and each vault refuses an invoice it has already paid.
+- **A pool of relayer wallets,** because one wallet's transactions queue behind each other by nonce.
+- **What still conflicts:** two payments to the same supplier in the same block both change that supplier's USDC balance, so one is re-run. Reading the policy does not conflict unless it changes in the same block.
+
+Spike 3 measures a run of 200 through vaults against the same run from one account, so the pitch quotes a measured number, not a promise.
+
+## The Pieces
+
+| Piece | What it is | Where it runs |
+|---|---|---|
+| **Account** | The company's contract: policy, suppliers, and the factory for order vaults. Holds the USDC not yet set aside for an order | Monad |
+| **Order vaults** | One small contract per approved order, holding the money set aside for it. Pays only that order's supplier, at its address on file, with the agent's signature plus the checker's, or the approver's passkey | Monad |
+| **Gateway** | Takes payment requests and proposals, tracks each one to a final state, submits transactions through a pool of relayer wallets, streams finality | Node service |
+| **Checker** | Reads the invoice itself, compares it with the order, decides release or hold. Signs releases. Can refuse; cannot send money anywhere | Separate Node service, separate key |
+| **MCP server** | The door for outside agents: a few tools over one link, with sign-in | Node service |
+| **Approver app** | Face ID on proposals and holds, the live feed, and what changed on a hold. No setup screens: setup happens in the chat | Web app that installs on the phone, and works on a laptop |
+| **Supplier portal** (demo) | A supplier's side: quotes, invoices clean and doctored, and payment arriving | Web app |
+| **Attestation** | Proof that the supplier's own website lists the payment address | Primus, verified on Monad |
+| **Audit record** | Every decision with its evidence hash, on chain. One exportable file per payment | Events on Monad, plus the gateway's database |
+| **Agent identity** | Which agent prepared the payment and who answers for it | ERC-8004 registries on Monad |
+| **Benchmark** | The same set of invoices run four ways: no guard, limits only, agent checks itself, Countersign | Script |
+
+## Where a Proposal or a Hold Reaches the Human
+
+| Channel | Mechanism | When it works |
+|---|---|---|
+| **In the agent chat** | The MCP server pauses the call and asks, with a link to the approval page | The agent app supports pause-and-ask and a person is present |
+| **Approver app** | Notification, then Face ID on the approval sheet | The web app is installed on the home screen |
+| **Approval page** | A plain link, opened anywhere | Always; the other two lead here |
+
+The first answer wins. The others are cancelled. An approval is only real once the passkey has signed; opening the link is not approval.
+
+**What the approval sheet shows.**
+- **For a proposed supplier or order:** what the agent read it from (the quote or contract), the payment address, and whether the supplier's own website lists that address.
+- **For a held payment:** the order and the invoice side by side, with only the differences marked: the address on file against the address on the invoice, character by character; the line that was added; the amount over tolerance.
+
+## The Decision Model
+
+**Setup is never automatic.** The agent can propose a supplier, a changed address or an order. Nothing changes on chain until the passkey signs it.
+
+Payments are checked in this order. A later step can only tighten an earlier one.
+
+| # | Check | Done by | Result |
+|---|---|---|---|
+| 1 | Malformed request, order closed or expired, over what is left in the order's vault, over the per-payment cap | Code, and again by the contract | **Block** |
+| 2 | Supplier not on file, or the pay-to address differs from the one on file | Code, exact comparison, and again by the contract | **Hold** |
+| 3 | The invoice does not match the order: different supplier, a line that is not on the order, amount beyond tolerance, an invoice number already paid | Code for exact fields, the model for fixed yes-or-no questions | **Hold** |
+| 4 | The checker errors, times out or is unsure | Checker | **Hold** |
+| 5 | Everything passes | Checker | **Release**: the checker signs and the payment settles |
+
+On a hold the approver has three choices, each signed with the passkey:
+
+- **Pay once.** This payment goes through. Nothing else changes.
+- **Refuse.** The agent's run ends.
+- **Fix the record.** Update the supplier's address or the order. This is a separate, deliberate step, and an address change shows the attestation result first. There is no one-tap "always allow" for a changed address.
+
+Addresses and amounts are never judged by a model. They are compared by code. The model answers a short, fixed list of yes-or-no questions about the invoice text, so hidden instructions in an invoice have little to steer.
+
+```mermaid
+flowchart TD
+    A[Agent drafts a payment from an invoice] --> B{Hard limits ok?}
+    B -- no --> X[BLOCKED]
+    B -- yes --> C{Supplier and address on file?}
+    C -- no --> H[HELD]
+    C -- yes --> D[Checker reads the invoice itself]
+    D --> E{Matches the order?}
+    E -- error or timeout --> H
+    E -- no --> H
+    E -- yes --> F[Checker signs]
+    F --> G[Contract verifies signatures, supplier, order and limits]
+    G --> S[SETTLED]
+    H --> I{Approver decides}
+    I -- pay once, passkey --> G
+    I -- refuse --> R[REFUSED, run stops]
+    I -- no answer --> T[EXPIRED]
+```
+
+### State of one payment request
+
+| Field | Meaning |
+|---|---|
+| `id` | Derived from account, order, invoice hash and nonce; the same request always maps to the same id |
+| `status` | `requested`, `checking`, `held`, `released`, `settling`, `settled`, `blocked`, `refused`, `expired`, `failed` |
+| `reason` | A typed code for every status other than `settled`: `over_limit`, `order_closed`, `malformed`, `supplier_unknown`, `address_mismatch`, `supplier_mismatch`, `items_mismatch`, `amount_mismatch`, `duplicate_invoice`, `checker_unavailable`, `checker_unsure`, `user_refused`, `expired` |
+| `decidedBy` | `rule`, `checker`, `user_once`, `user_refused` |
+| `request` | Order and its vault, supplier, pay-to address, amount, invoice number, invoice hash |
+| `evidence` | The fields the checker read from the invoice, the comparison line by line, and its verdict |
+| `tx` | Transaction hash and finality stage: proposed, voted, finalized |
+| `timings` | Check time, human wait and settlement time, recorded separately |
+
+Every request reaches exactly one final status, including after a crash or a cancel.
+
+A proposal has a smaller state of its own: `proposed`, then `approved`, `rejected` or `expired`, with the source document's hash and the attestation result.
+
+An advice-only check (a bank-transfer invoice) produces the same `evidence` and a verdict of `match`, `mismatch` or `unsure`. It creates no payment request and moves no money.
+
+## Keys and Trust
+
+| Key | Held by | What it can do alone |
+|---|---|---|
+| **Owner passkey** | The approver's phone or laptop | Everything: set the policy, add suppliers, approve orders, pay a held payment, withdraw |
+| **Agent key** | The MCP gateway on the company's behalf, or the agent itself in SDK mode | Nothing. Proposals need no key; they are requests to the owner |
+| **Checker key** | The checker service | Nothing |
+| **Relayer keys** | The gateway | Pay gas. Cannot move company funds |
+
+Agent and checker keys together can pay a supplier on file, at its address on file, within an approved order and the per-payment cap. The most they can ever move is what is already set aside in open orders. They can never withdraw, add a supplier, change an address or approve an order. That holds even if both services are compromised, because the contract enforces it.
+
+**Stated limits**
+
+- **Hosted mode.** Countersign holds both the agent key and the checker key, in separate services. The two-signature rule then guards against a hijacked agent, not against a compromised Countersign. The contract's limits bound that case.
+- **A proposal is only as good as its approval.** A hijacked agent can propose a bad supplier or order. The sheet shows the website check, but a person who taps through without reading can still approve it.
+- **The checker reads the same invoice the agent read.** A clever invoice could mislead both. Exact comparisons and the contract's limits bound what that can cost.
+- **A public chain shows payees and amounts.** Order and invoice contents stay off chain; only their hashes are written.
+- **A compromised supplier website defeats the attestation.** It is one signal on the approval sheet, not a guarantee.
+- **The supplier has to accept USDC.** Otherwise the check is advice only, as for bank and card payments.
+- **Money set aside is locked to its order** until the order is closed or expires. That is the price of parallel payments and of a hard ceiling on what an agent can spend.
+
+## Contract Surface (draft, fixed in Slice 5)
+
+| Function | Who authorises | What it does |
+|---|---|---|
+| `createAccount(ownerKey, salt)` | Anyone, via the factory | Deploys an account bound to a passkey |
+| `setPolicy(policy)` | Owner passkey | Agent key, checker key, per-payment cap, expiry |
+| `setSupplier(supplierId, payTo, active)` | Owner passkey | Adds a supplier, changes its address, or turns it off |
+| `approveOrder(orderId, supplierId, amount, expiry, orderHash)` | Owner passkey | Deploys the order's vault and moves the amount into it |
+| `closeOrder(orderId)` | Owner passkey | Returns what is left in the vault to the account |
+| `vault.pay(payment, agentSig, checkerSig)` | Agent and checker | Pays the order's supplier at its address on file, within the vault's balance and the cap |
+| `vault.payWithOwner(payment, ownerSig)` | Owner passkey | Pays a held payment once |
+| `vault.sweep()` | Anyone, after expiry | Returns an expired order's money to the account. It can go nowhere else |
+| `recordDecision(decision, sig)` | Checker or owner passkey | Emits a held, refused or blocked outcome with its evidence hash. Writes no storage and moves no money |
+| `withdraw(to, amount)` | Owner passkey | Returns money not set aside for an order to the company |
+
+`payment` carries the order, the amount, the invoice hash, the pay-to address and a nonce. The vault requires the pay-to address to equal the one on file, so neither the agent nor the checker can choose where money goes.
+
+Vaults are minimal clones (EIP-1167), so opening an order costs little. OpenZeppelin's `Clones` library is checked in Context7 in Slice 5.
+
+Events: `PaymentExecuted`, `DecisionRecorded`, `PolicySet`, `SupplierSet`, `OrderApproved`, `OrderClosed`. The feed, the audit export and the benchmark read these.
+
+## MCP Tools (draft, fixed in Slice 12)
+
+| Tool | Purpose |
+|---|---|
+| `propose_order` | Propose a supplier and an order from a quote or contract the agent read. Returns a link for approval. Nothing changes until the passkey signs |
+| `list_open_orders` | Open orders with supplier and remaining amount, so the agent can match an invoice to an order |
+| `pay_invoice` | Submit an invoice and a drafted payment. Returns settled, held or blocked, with a reason |
+| `check_invoice` | The same check with no payment. For bank-transfer invoices, or a dry run |
+| `payment_status` | Look up a request or a proposal by id |
+
+Five tools, all in one list page. `pay_invoice` and `propose_order` are safe to call twice: the same document returns the first result.
+
+## The Check, Concretely (draft, fixed in Slice 10)
+
+1. The checker gets the invoice from its source where there is one, otherwise the file the agent passed. It hashes it.
+2. **Code** pulls every address and amount out of the text and compares them exactly with the order and the supplier record.
+3. **Jev**, through OpenRouter and pinned to `typesafe/jev-1.13`, answers fixed questions: is this the same supplier as on the order; is every line on the invoice also on the order; does the invoice ask for payment anywhere other than the address on file; does it contain instructions addressed to an automated reader.
+4. Timeout is set to about 1.5 seconds (the SDK default is 10 seconds). **Claude Sonnet** is the fallback behind the same interface.
+5. Any error, timeout or "unsure" is a hold.
+
+Check time and settlement time are published separately. We never claim "checked and settled in under a second"; settlement alone is.
+
+## Key References (cross-checked)
+
+Each slice file lists what was re-checked before it was written.
+
+**Monad docs** (docs.monad.xyz)
+- 300 ms blocks, 600 ms finality, 10,000 TPS; `latest` is speculative. Read 1 Oct.
+- P256 signature verification is a precompile at `0x0100` (EIP-7951). Read 1 Oct.
+- Fees are charged on the gas limit. Ordinary wallets keep a 10 MON reserve; contracts do not. One wallet's transactions queue by nonce, so the relayer is a pool of wallets. `04-monad-technical-notes.md` (research workspace).
+- Optimistic parallel execution: transactions that touch the same data are re-run in order. The guidance: separate state per user, no shared counters, events instead. Same note.
+- USDC testnet `0x534b2f3A21130d7a60830c2Df862319e593943A3`, mainnet `0x754704Bc059F8C67012fEd69BC8A327a5aafb603`; testnet chain 10143, mainnet 143. Read 1 Oct.
+- ERC-8004 guide: mainnet Identity `0x8004A169FB4a3325136EB29fA0ceB6D2e539a432`, Reputation `0x8004BAa17C55a88189AE136b182e5fdA19dE9b63`; Validation Registry "coming soon". Read 2 Oct. **The guide lists no testnet addresses.** The testnet addresses in the design doc came from other research and must be confirmed on chain in Slice 19.
+
+**Context7**
+- `/websites/openzeppelin_contracts_5_x`: `WebAuthn.verify`, `P256.verify`, `SignerWebAuthn`. Checked 26 Sep.
+- `/wevm/viem`: `createWebAuthnCredential`, `toWebAuthnAccount`, `watchContractEvent`. Checked 27 Sep.
+- `/modelcontextprotocol/typescript-sdk`: `createMcpHandler`, `McpServer.registerTool`, `requireBearerAuth`; pause-and-ask through `ctx.mcpReq.elicitInput` in form and URL modes, with `createElicitationCompletionNotifier`; default wait 60 seconds, extendable. Checked 1–2 Oct.
+- `/websites/typesafe_ai_sdk_javascript`: `TypeSafeClient`, `systemOne({ state, questions })`, explicit `timeout`. Checked 27 Sep.
+- `/websites/primuslabs_xyz`, `/websites/hono_dev`. Checked 27 Sep.
+- Not yet checked: OpenZeppelin `Clones`, Playwright, Foundry fuzz settings, Drizzle, the Next.js PWA setup, the MCP OAuth server pieces, a PDF text extractor, xAI's connector and remote MCP docs. Each is checked in the slice that first uses it.
+
+**How agent harnesses gate actions** (public Claude Code and MCP docs; private notes stay in `private/`)
+- Rule order is deny, then ask, then allow; an allowance cannot override a deny.
+- An automated approval can skip the prompt and cannot override the user's rules.
+- A stalled check must not be counted on as a gate, so ours holds on any failure.
+- A human's refusal ends the run.
+- Clients re-send a tool call after a dropped connection, so pay tools are idempotent.
+
+**Market and pain:** `13-pain-and-market-sizing.md` (research workspace). In short: all-rail US market about $1.4 billion a year at incumbent prices, crowded and advice-only; stablecoin business payments $226 billion in 2025, up 733%, with no incumbent doing this check and the only rail where it can be enforced.
+
+## Slice Plan
+
+```
+FOUNDATION:
+  Slice 0:   Repo, CLAUDE.md, tooling, CI, environment                TODO
+
+SPIKES (throwaway code, real answers):
+  Slice 1:   Passkey signature verified on Monad testnet              TODO
+  Slice 2:   Primus proof of a supplier's address file, on testnet    TODO
+  Slice 3:   200 payments: order vaults vs one account, relayers      TODO
+  Slice 4:   Grok's custom connector reaches a test MCP server        TODO
+
+CORE PIPELINE (a scripted agent pays a clean invoice, no prompt):
+  Slice 5:   Account and order vaults: policy, suppliers, pay, log    TODO
+  Slice 6:   Gateway: requests, states, relayer pool, finality stream TODO
+  Slice 7:   Supplier portal: quotes, invoices clean and doctored     TODO
+  Slice 8:   Rule checks + scripted agent: first end-to-end payment   TODO
+
+THE HOLD:
+  Slice 9:   Passkey owner: factory, suppliers, orders, pay once      TODO
+  Slice 10:  Invoice check: own read, exact compare, guard model      TODO
+  Slice 11:  Approver app: proposals, holds, feed, the diff           TODO
+
+AGENT DOOR:
+  Slice 12:  MCP server: five tools, idempotent, structured           TODO
+  Slice 13:  Sign-in from the agent app with one link                 TODO
+  Slice 14:  Proposals and holds in the chat; Grok, then Claude       TODO
+
+DEPTH AND PROOF:
+  Slice 15:  Supplier address attestation wired in, or the fallback   TODO
+  Slice 16:  Payment run: 200 invoices in parallel, a few doctored    TODO
+  Slice 17:  Advice-only check for bank-transfer invoices             TODO
+  Slice 18:  Audit record export                                      TODO
+  Slice 19:  ERC-8004 agent identity                                  TODO
+  Slice 20:  Benchmark: four arms and the false-alarm rate            TODO
+
+SHIP:
+  Slice 21:  Evidence pack: README, status, limits, deployed list     TODO
+  Slice 22:  Demo script, video, write-up, submission                 TODO
+```
+
+**What is demoable when.** After Slice 8, an invoice is paid on Monad. After Slice 11, the whole story runs with a scripted agent: clean invoice paid, changed address held and refused. After Slice 14, it runs in Grok or Claude, which is the version we demo.
+
+**If time runs short,** cut from the bottom of Depth and Proof upward, except the benchmark and the bank-invoice check: 19, then 18, then 15. Slices 0 to 14, 16, 17 and 20 are the entry. The bank-invoice check stays because it is the answer to "what about the payments that are not in stablecoins".
+
+**What each spike decides.**
+
+| Spike | If it works | If it fails |
+|---|---|---|
+| 1. Passkey on chain | The owner is a passkey, checked by the precompile | OpenZeppelin's pure-Solidity check, which costs more gas |
+| 2. Primus on testnet | Adding a supplier shows proof that its own website lists the address | The approver confirms the address by hand; the sheet says "not verified" |
+| 3. Payment run | Vaults clearly beat one account: the contract uses per-order vaults, we size the relayer pool, and we publish the measured time for 200 | We find out what still conflicts before Slice 5 is written, and publish only what we measured |
+| 4. Grok connector | The demo runs in Grok, and we note which plan it needs | The demo runs in Claude; Grok is mentioned as next, not shown |
+
+**The demo documents** (built in Slice 7, reused by the benchmark)
+
+| Case | What is wrong | Expected |
+|---|---|---|
+| Quote | Nothing | Agent proposes supplier and order; website check passes; approved with Face ID |
+| Poisoned quote | The quote lists an address the supplier's website does not | Proposal shows "not listed on the supplier's website" |
+| Clean invoice | Nothing | Settled, no prompt |
+| Changed address | "New payment details", a look-alike address | Held: `address_mismatch` |
+| Padded | An extra line, or a higher total | Held: `items_mismatch` or `amount_mismatch` |
+| Duplicate | An invoice number already paid | Held: `duplicate_invoice` |
+| Hijack | Hidden text telling the agent to pay elsewhere, urgently | Held; the contract would refuse the address in any case |
+| Wrong supplier | A real-looking invoice from a supplier with no order | Held: `supplier_unknown` |
+| Over the order | Correct invoice, order already used up | Blocked: `over_limit` |
+| Bank transfer | Changed account number on a bank invoice | Advice: `mismatch` |
+
+## Left Out of the Core, and Why
+
+| Left out | Why |
+|---|---|
+| x402 purchases (agents buying paid pages) | A different pain, mostly covered by spend limits. The account could pay x402 endpoints later; the facts are kept in `04-monad-technical-notes.md` (research workspace) and the design doc |
+| Consumers (B2C), including shopping agents | Card charges can be disputed, so the pain is smaller; we could only advise there; consumer stablecoin spending is small; that market gathers around the large platforms |
+| Setup screens in the app | Setup happens in the chat: the agent proposes, the person signs. Fewer screens to build |
+| Enforcement on bank and card rails | Not possible from outside a bank or card network. Advice only |
+| Import from accounting systems | The agent proposes orders from quotes for the demo. Import is the first thing a larger customer needs |
+| Third-party risk feeds | Adds a dependency and no new idea |
+| Training a model on approvals | Each approve or refuse is logged as a labelled example. Training on them is later work |
+
+## How Each Slice File Is Written
+
+Same shape as the AgentDesk slices.
+
+1. **Status**
+2. **Goal**
+3. **Prerequisites**
+4. **Cross-checked**: Context7 IDs, Monad pages and other docs read for this slice, with dates
+5. **Design considerations**: the choices, the alternatives and why
+6. **What gets built**: files, functions, types
+7. **Tests first**: the failing tests written before the code
+8. **Git workflow**: `feature/...` off `development`
+9. **Manual testing**: numbered steps with expected results
+10. **Commit**
+11. **Next**
+
+After a slice is built, two sections are added: **What was built** and **Adapted from spec**.
+
+## External Dependencies
+
+| Service | Used by | Purpose |
+|---|---|---|
+| Monad testnet RPC | Gateway, contracts | Chain access; a private endpoint from the QuickNode perk for the relayers |
+| Circle testnet USDC | Account, supplier portal | The money |
+| OpenRouter | Checker | Jev, and the fallback model |
+| Primus | Attestation | Proof of a supplier's address file |
+| ERC-8004 registries | Agent identity | Who the paying agent is |
+| Grok (grok.com) and Claude | The demo | The agents people already use, connected through the MCP server |
+| Vercel | Approver app, supplier portal | Hosting |
+| Railway | Gateway, checker, MCP server, Postgres | Hosting |
+
+## What Already Exists
+
+| Asset | Where | Reuse |
+|---|---|---|
+| Pain, rails and market sizing | `13-pain-and-market-sizing.md` (research workspace) | The pitch, and the write-up in Slice 22 |
+| Threat model and security properties | `design/2026-09-26-countersign-design.md` (research workspace) §3, §5.4 | Carried into Slices 5 and 10 |
+| Monad build facts | `04-monad-technical-notes.md` (research workspace) | Relayer and finality rules in Slices 3 and 6 |
+| How today's agents pay, and the open doors | `research/2026-10-01-how-ai-agents-pay-report.md` (research workspace) | Slices 4 and 12–14 |
+| Context7 check log | Design doc §18 | Starting point for each slice's cross-check |
+
+No code exists.
+
+## Decisions for Afshal Before Slice 0
+
+None of these has had an explicit yes, except that Afshal has said parallel execution is needed (D13). D9 to D13 are new in v2; D2 and D3 changed.
+
+| # | Decision | Recommendation |
+|---|---|---|
+| D1 | Platform | A web app, mobile-first, that installs on the phone and also works on a laptop |
+| D2 | Stack | TypeScript monorepo; Foundry and OpenZeppelin; viem; Next.js; Hono; Postgres with Drizzle; MCP TypeScript SDK; Jev through OpenRouter. The x402 packages are no longer needed |
+| D3 | Flow | Connect from the agent app with one link. The agent proposes suppliers and orders and drafts payments. The person signs with Face ID, in the chat's approval link or on the phone |
+| D4 | Where the code lives | A new public repo named `countersign`. The research and planning notes stay in a separate workspace |
+| D5 | Network | Testnet throughout; mainnet with real cents for the demo only if everything is stable |
+| D6 | Who owns what | Afshal: contracts and gateway. Roshan: checker and MCP server. Sophie: approver app and supplier portal |
+| D7 | Guard model fallback | Claude Sonnet, behind the same interface as Jev |
+| D8 | Remote and pushes | Push to `development` and feature branches only, never to `main` |
+| D9 | Scope | Supplier invoices checked against approved orders. x402 purchases and consumer shopping are out of the core |
+| D10 | Invoice format | Web page and plain text first. PDF once a text extractor has been checked in Slice 10 |
+| D11 | Demo agent | Grok through its custom connector, if Spike 4 works; Claude otherwise |
+| D12 | Model and first users | B2B, sold self-serve. Small teams that use an agent and pay overseas contractors and suppliers. Finance teams are where it goes next |
+| D13 | Parallel payments | One vault per approved order; the account-wide daily limit is dropped. Afshal: "parallel execution is needed" |
+
+---
+
