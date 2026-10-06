@@ -162,6 +162,31 @@
         return 'Other';
       })();
 
+      // Plain-language reasons for the common passkey failures. ox wraps the
+      // browser's error, so check the wrapped cause and the message too.
+      const inAppBrowser = /FBAN|FBAV|Instagram|Line\/|WhatsApp|Telegram|wv\)/.test(
+        navigator.userAgent,
+      );
+      function explain(error, action) {
+        const name = error?.cause?.name ?? error?.name ?? '';
+        const text = String(error?.message ?? error);
+        if (name === 'NotAllowedError' || /not allowed/i.test(text)) {
+          return [
+            `Your ${device} didn't ${action}. Nothing was sent.`,
+            inAppBrowser
+              ? 'This page is open inside another app. Open it in Safari or Chrome instead.'
+              : 'If you opened this link from WhatsApp, Telegram or another app, open it in Safari or Chrome instead.',
+            device === 'iPhone' || device === 'iPad'
+              ? 'Also check Settings, your name, iCloud, Passwords and Keychain is on, and that the phone has a passcode.'
+              : 'Also check the device has a screen lock set.',
+            'If you cancelled the prompt, just try again.',
+          ].join(' ');
+        }
+        if (name === 'InvalidStateError')
+          return 'A passkey for this page already exists on this device. Tap Approve to use it.';
+        return `Stopped: ${text}`;
+      }
+
       // localStorage can be unavailable (private mode); the page still works for one session.
       const store = {
         get() {
@@ -261,7 +286,7 @@
           addResult({ ...body, readOnly, tampered });
           say('');
         } catch (error) {
-          say(`Stopped: ${error?.message ?? error}`);
+          say(explain(error, 'confirm the approval'));
         } finally {
           showKey();
         }
@@ -281,7 +306,7 @@
           store.set(key);
           say('');
         } catch (error) {
-          say(`Could not create a passkey: ${error?.message ?? error}`);
+          say(explain(error, 'create a passkey'));
         }
         showKey();
       });
