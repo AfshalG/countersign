@@ -310,7 +310,7 @@ FOUNDATION:
   Slice 0:   Repo, CLAUDE.md, tooling, CI, environment                DONE
 
 SPIKES (throwaway code, real answers):
-  Slice 1:   Passkey signature verified on Monad testnet              TODO
+  Slice 1:   Passkey signature verified on Monad testnet              DONE
   Slice 2:   Primus proof of a supplier's address file, on testnet    TODO
   Slice 3:   200 payments: order vaults vs one account, relayers      TODO
   Slice 4:   Grok's custom connector reaches a test MCP server        TODO
