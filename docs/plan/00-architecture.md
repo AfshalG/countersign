@@ -294,7 +294,7 @@ Each slice file lists what was re-checked before it was written.
 - `/websites/primuslabs_xyz`, `/websites/hono_dev`. Checked 27 Sep.
 - Not yet checked: OpenZeppelin `Clones`, Playwright, Foundry fuzz settings, Drizzle, the Next.js PWA setup, the MCP OAuth server pieces, a PDF text extractor, xAI's connector and remote MCP docs. Each is checked in the slice that first uses it.
 
-**How agent harnesses gate actions** (public Claude Code and MCP docs; private notes stay in `private/`)
+**How agent harnesses gate actions** (public Claude Code and MCP docs)
 - Rule order is deny, then ask, then allow; an allowance cannot override a deny.
 - An automated approval can skip the prompt and cannot override the user's rules.
 - A stalled check must not be counted on as a gate, so ours holds on any failure.
