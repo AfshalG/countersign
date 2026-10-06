@@ -1,6 +1,8 @@
 # Countersign Architecture v3
 
-**Status: v3.4, 6 Oct 2026.** v3.4 locks the scope (D9, Afshal: "yup").
+**Status: v3.5, 6 Oct 2026.** v3.5: nothing is cut for time; all 23 slices are in the entry.
+
+**v3.4, 6 Oct 2026.** Locks the scope (D9, Afshal: "yup").
 
 **Scope (locked 6 Oct):** Countersign checks every payment a business's AI agent makes in stablecoins (supplier invoices, online orders, paid services) against what the business approved. Clear ones go out; the rest wait for a person. The user is a business. Consumer card shopping is out (we could only warn). Invoices are the main example and the benchmark; online orders are shown too; x402 paid services are a stretch goal.
 
@@ -486,7 +488,7 @@ SHIP:
 
 **What is demoable when.** After Slice 8, an invoice is paid on Monad. After Slice 11, the whole story runs with a scripted agent: clean invoice paid, changed address held and refused. After Slice 14, it runs in Grok or Claude, which is the version we demo.
 
-**If time runs short,** cut from the bottom of Depth and Proof upward, except the benchmark and the bank-invoice check: 19, then 18, then 15. Slices 0 to 14, 16, 17 and 20 are the entry. The bank-invoice check stays because it is the answer to "what about the payments that are not in stablecoins".
+**Nothing is cut for time (Afshal, 6 Oct): "Don't cut out any of the technicalities or technical depth from our initial plan even if you think that the time is not enough."** All 23 slices, 0 to 22, are in the entry, including attestation (15), the payment run (16), the bank-invoice check (17), the audit record (18), agent identity (19) and the benchmark (20). Only x402 paid services are a stretch goal, by Afshal's choice.
 
 **What each spike decides.**
 
