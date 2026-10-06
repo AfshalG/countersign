@@ -199,7 +199,7 @@ The first answer wins. The others are cancelled. An approval is only real once t
 
 ## The Web App's Screens
 
-Setup happens in the chat; the app is where people see the checks and decide. Phone first. Designed in `design.md` before any screen is built.
+Setup happens in the chat; the app is where people see the checks and decide. Phone first. **Visual design is deferred** (Afshal, 6 Oct): the first design draft was rejected, and the current plain look stays until design is picked up again.
 
 | Screen | What it shows | Slice |
 |---|---|---|
@@ -521,7 +521,7 @@ None of these has had an explicit yes, except that Afshal has said parallel exec
 | D17 | Chain access | A private RPC endpoint for sending and the finality stream; the public endpoint only as a fallback |
 | D18 | Holds at volume | Grouped by reason, with "refuse all duplicates". One signature over a reviewed list is a stretch |
 | D19 | Ways in | Connector (MCP), plain web API, and enforcement in the account for any agent. Muse and Grok Bot tested if time allows |
-| D20 | App screens | Payment run board, inbox, approval sheet, payment record, suppliers and orders. Phone first. A design doc before any screen |
+| D20 | App screens | Payment run board, inbox, approval sheet, payment record, suppliers and orders. Phone first. Visual design deferred; the first draft was shelved |
 | — | Who builds | Sophie and Roshan are busy this week; Claude drafts and builds their slices, Afshal reviews. Ownership in D6 returns when they are free |
 
 ---
