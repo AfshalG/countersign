@@ -8,3 +8,6 @@ spikes/*/test/fixtures/
 spikes/*/broadcast/
 **/dependencies/
 **/.next/
+
+# Generated from the Foundry build; CI checks it byte for byte against the generator.
+packages/chain/src/abis.ts
