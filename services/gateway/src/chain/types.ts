@@ -25,4 +25,9 @@ export interface Chain {
     payment: Payment,
     call: PaymentCall,
   ): Promise<DecodedRefusal | undefined>;
+  /** Whether the owner's passkey signed this decision for this vault (an eth_call of recordDecisionByOwner). */
+  verifyOwnerDecision(vault: Address, decision: Decision, auth: WebAuthnAuth): Promise<boolean>;
 }
+
+/** A held, refused or blocked outcome (contracts/src/CountersignTypes.sol). */
+export type Decision = { invoiceHash: Hex; outcome: number; reasonHash: Hex; evidenceHash: Hex };

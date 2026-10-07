@@ -50,15 +50,43 @@ export class TransitionNotAllowed extends Error {
   }
 }
 
+export type StatusChange = {
+  requestId: string;
+  runId: string | null;
+  from: PaymentStatus | null;
+  to: PaymentStatus;
+  reason: Reason | null;
+};
+
 export class Store {
+  private readonly listeners = new Set<(change: StatusChange) => void>();
+
   constructor(private readonly db: Db) {}
+
+  /** Calls `listener` after every committed status change (the live feed). Returns an unsubscribe function. */
+  onChange(listener: (change: StatusChange) => void): () => void {
+    this.listeners.add(listener);
+    return () => {
+      this.listeners.delete(listener);
+    };
+  }
+
+  private emit(change: StatusChange): void {
+    for (const listener of this.listeners) {
+      try {
+        listener(change);
+      } catch (e) {
+        console.error(`status listener: ${e instanceof Error ? e.message : String(e)}`);
+      }
+    }
+  }
 
   /**
    * Creates the request, or returns the one already there for the same id (a retry, or a
    * second agent with the same invoice). The first status and its event are one transaction.
    */
   async createRequest(r: NewRequest): Promise<{ request: PaymentRequestRow; created: boolean }> {
-    return this.db.transaction(async (tx) => {
+    const result = await this.db.transaction(async (tx) => {
       const inserted = await tx
         .insert(paymentRequests)
         .values({
@@ -90,6 +118,21 @@ export class Store {
       if (!existing) throw new Error(`request ${r.id} vanished during creation`);
       return { request: existing, created: false };
     });
+    if (result.created) {
+      this.emit({
+        requestId: result.request.id,
+        runId: result.request.runId,
+        from: null,
+        to: 'requested',
+        reason: null,
+      });
+    }
+    return result;
+  }
+
+  /** Throws if the database cannot be reached (health check). */
+  async ping(): Promise<void> {
+    await this.db.execute(sql`select 1`);
   }
 
   async get(id: string): Promise<PaymentRequestRow | undefined> {
@@ -119,7 +162,7 @@ export class Store {
   ): Promise<boolean> {
     if (!canTransition(from, to)) throw new TransitionNotAllowed(from, to);
     const { reason, decidedBy, detail, ...fields } = patch;
-    return this.db.transaction(async (tx) => {
+    const moved = await this.db.transaction(async (tx) => {
       const updated = await tx
         .update(paymentRequests)
         .set({
@@ -131,8 +174,9 @@ export class Store {
           updatedAt: new Date(),
         })
         .where(and(eq(paymentRequests.id, id), eq(paymentRequests.status, from)))
-        .returning({ id: paymentRequests.id });
-      if (updated.length === 0) return false;
+        .returning({ id: paymentRequests.id, runId: paymentRequests.runId });
+      const row = updated[0];
+      if (!row) return undefined;
       await tx.insert(paymentEvents).values({
         requestId: id,
         fromStatus: from,
@@ -140,8 +184,11 @@ export class Store {
         reason: reason ?? null,
         detail: detail ?? null,
       });
-      return true;
+      return { runId: row.runId };
     });
+    if (moved === undefined) return false;
+    this.emit({ requestId: id, runId: moved.runId, from, to, reason: reason ?? null });
+    return true;
   }
 
   /** Sets fields without changing the status (for example the transaction hash while settling). */

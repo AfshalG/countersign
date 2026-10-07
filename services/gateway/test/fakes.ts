@@ -12,6 +12,12 @@ import { decodeRefusal, type DecodedRefusal } from '../src/chain/refusals.js';
 export class FakeChain implements Chain {
   rule: ((payment: Payment, call: PaymentCall) => string | undefined) | undefined;
   simulations = 0;
+  /** False: the owner's passkey signatures are not the account owner's. */
+  ownerKeyValid = true;
+
+  verifyOwnerDecision(): Promise<boolean> {
+    return Promise.resolve(this.ownerKeyValid);
+  }
 
   simulate(
     _vault: Address,
@@ -19,6 +25,13 @@ export class FakeChain implements Chain {
     call: PaymentCall,
   ): Promise<DecodedRefusal | undefined> {
     this.simulations++;
+    if (call.kind === 'payWithOwner' && !this.ownerKeyValid) {
+      return Promise.resolve(
+        decodeRefusal(
+          encodeErrorResult({ abi: orderVaultAbi, errorName: 'InvalidOwnerSignature' }),
+        ),
+      );
+    }
     const error =
       this.rule?.(payment, call) ??
       (call.kind === 'pay' && call.checkerSig === '0x' ? 'InvalidCheckerSignature' : undefined);
