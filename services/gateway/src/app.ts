@@ -5,7 +5,7 @@ import { except } from 'hono/combine';
 import { cors } from 'hono/cors';
 import { HTTPException } from 'hono/http-exception';
 import { streamSSE } from 'hono/streaming';
-import type { Hex } from 'viem';
+import type { Address, Hex } from 'viem';
 import { PAYMENT_STATUSES } from '@countersign/shared';
 import type { Chain, WebAuthnAuth } from './chain/types.js';
 import type { Checker } from './checker.js';
@@ -19,6 +19,8 @@ import type { DemoDeps } from './demo/accounts.js';
 import type { ProposalDeps } from './owner/proposals.js';
 import type { PauseDeps } from './owner/pause.js';
 import { registerOwnerRoutes } from './api/owner.js';
+import { recoverAgent, type AgentDirectory } from './agents/identity.js';
+import { registerAgentRoutes } from './api/agents.js';
 import type { PaymentRequestRow } from './db/schema.js';
 import type { StatusChange, Store } from './db/store.js';
 import { requestId, runId } from './ids.js';
@@ -57,6 +59,8 @@ export type AppDeps = {
   proposals?: ProposalDeps;
   /** The stop button (Slice 9 part 3); without it its routes do not exist. */
   pause?: PauseDeps;
+  /** ERC-8004 agents named on payments (Slice 19); without it, agents show by address only. */
+  agents?: AgentDirectory;
 };
 
 // ---------- views ----------
@@ -67,6 +71,7 @@ const iso = (d: Date | null) => (d ? d.toISOString() : null);
 export function viewOf(
   row: PaymentRequestRow,
   publicUrl = 'http://localhost:8787',
+  agents?: AgentDirectory,
 ): z.infer<typeof paymentView> {
   return {
     id: row.id,
@@ -96,6 +101,11 @@ export function viewOf(
       personMs: ms(row.checkedAt, row.decidedAt),
       settleMs: ms(row.sentAt, row.finalizedAt),
     },
+    agent: agents
+      ? agents.viewOf(row.agentAddress)
+      : row.agentAddress === null
+        ? null
+        : { address: row.agentAddress, agentId: null, registry: null },
     statusUrl: `${publicUrl}/p/${row.id}`,
   };
 }
@@ -262,7 +272,24 @@ const health = createRoute({
 export function createApp(deps: AppDeps) {
   const { store, chain } = deps;
   const publicUrl = (deps.publicUrl ?? 'http://localhost:8787').replace(/\/$/, '');
-  const view = (row: PaymentRequestRow) => viewOf(row, publicUrl);
+  const view = (row: PaymentRequestRow) => viewOf(row, publicUrl, deps.agents);
+  // The agent behind a payment, recovered once when it arrives (Slice 19).
+  const agentOf = (
+    vault: Address,
+    p: { amount: string; invoiceHash: string; payTo: string; deadline: number },
+    sig: string,
+  ) =>
+    recoverAgent(
+      deps.chainId,
+      vault,
+      {
+        amount: BigInt(p.amount),
+        invoiceHash: p.invoiceHash as Hex,
+        payTo: p.payTo as Address,
+        deadline: BigInt(p.deadline),
+      },
+      sig as Hex,
+    );
   const app = new OpenAPIHono({
     // One error shape for every validation failure: typed, naming each field, never a stack trace.
     defaultHook: (result, c) => {
@@ -327,6 +354,7 @@ export function createApp(deps: AppDeps) {
       amount: BigInt(body.payment.amount),
       deadline: body.payment.deadline,
       agentSig: body.agentSig as Hex,
+      agentAddress: await agentOf(body.vault, body.payment, body.agentSig),
       document: body.document,
     });
     const result = { created: isNew, request: view(request) };
@@ -350,6 +378,7 @@ export function createApp(deps: AppDeps) {
         amount: BigInt(p.payment.amount),
         deadline: p.payment.deadline,
         agentSig: p.agentSig as Hex,
+        agentAddress: await agentOf(p.vault, p.payment, p.agentSig),
         document: p.document,
       });
       requests.push({ id: request.id, status: request.status });
@@ -371,6 +400,7 @@ export function createApp(deps: AppDeps) {
       amount: body.payment.amount,
       deadline: body.payment.deadline,
       agentSig: body.agentSig,
+      agentAddress: null,
       document: body.document ?? null,
       status: 'checking',
       reason: null,
@@ -537,12 +567,22 @@ export function createApp(deps: AppDeps) {
   });
   if (deps.demo) registerDemoRoutes(app, deps.demo, { token: deps.token, publicUrl });
   if (deps.pause) registerOwnerRoutes(app, deps.pause);
+  if (deps.agents) registerAgentRoutes(app, { store, agents: deps.agents });
 
   // A page a person can open from an agent's message; public, like the link in the message.
   app.get('/p/:id', async (c) => {
     const id = c.req.param('id');
     const request = await store.get(id);
-    if (request) return c.html(paymentPage(request));
+    if (request)
+      return c.html(
+        paymentPage(
+          request,
+          deps.agents?.viewOf(request.agentAddress) ??
+            (request.agentAddress === null
+              ? null
+              : { address: request.agentAddress, agentId: null }),
+        ),
+      );
     const proposal = await store.getProposal(id);
     if (proposal) return c.html(proposalPage(proposal));
     return c.html('<!doctype html><title>Not found</title><p>Nothing with that id.</p>', 404);

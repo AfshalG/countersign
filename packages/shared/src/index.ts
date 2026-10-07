@@ -30,3 +30,11 @@ export {
 } from './payment-state.js';
 export { USDC_DECIMALS, formatUsdc, usdc } from './amounts.js';
 export { invoiceHash, normalizeInvoiceNumber, supplierId, supplierSlug } from './invoice.js';
+export {
+  AGENT_WALLET_SET_TYPES,
+  agentRegistryId,
+  IDENTITY_REGISTRY_TESTNET,
+  identityDomain,
+  registrationFile,
+  REPUTATION_REGISTRY_TESTNET,
+} from './erc8004.js';

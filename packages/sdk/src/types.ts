@@ -43,6 +43,11 @@ export type PaymentRequest = {
   timings: { checkMs: number | null; personMs: number | null; settleMs: number | null };
   /** A page a person can open: the status, the reason, both addresses on a mismatch. */
   statusUrl: string;
+  /**
+   * Which agent signed it: the address its signature recovers to, and its ERC-8004 agent id when
+   * that address is a registered agent's wallet. Absent from gateways before Slice 19.
+   */
+  agent?: { address: Address; agentId: string | null; registry: string | null } | null;
 };
 
 /** An open order: the only supplier, address and amount the agent can pay against it. */
