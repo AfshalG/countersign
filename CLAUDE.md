@@ -57,7 +57,7 @@ countersign/
 | Apps | Next.js; the approver app installs as a PWA |
 | Data | Postgres with Drizzle |
 | Validation | zod at every boundary |
-| Guard model | Jev through OpenRouter, pinned `typesafe/jev-1.13`, via `@typesafe-ai/sdk`. Fallback: Claude Sonnet behind the same interface |
+| Guard model | Jev 1.13 through OpenRouter's System One API: `@typesafe-ai/sdk` with base URL `https://openrouter.ai/api`, model `jev-1.13`, never the moving `jev-latest`. One OpenRouter key covers Jev, the fallback and the test agent; TypeSafe's own API is a drop-in second route. Fallback: Claude Sonnet behind the same interface |
 | Attestation | Primus zkTLS |
 | Tests | `forge test` (with fuzzing), Vitest, Playwright |
 | Hosting | Vercel (apps, MCP server); Railway (gateway, checker and Postgres: always-running processes) |
@@ -103,7 +103,7 @@ Pinned in Slice 0 (6 Oct 2026, checked with Context7 and npm): Node 24 LTS, pnpm
 
 ## Checker and Model Rules
 
-- Set Jev's `timeout` explicitly, about 1,500 ms. The SDK default is 10,000 ms.
+- Cap Jev's **total** time at about 1,500 ms with an `AbortSignal`. The SDK's `timeout` is per attempt (default 10,000 ms), it retries twice by default and honours Retry-After for up to 60 s: allow at most one retry and ignore Retry-After. Log the model version each answer reports.
 - Tests run against deterministic mock model responses first. Real model calls only after those pass.
 - The model never sees a key, and its output never chooses an address or an amount.
 - The checker key lives only in the checker service.
