@@ -1,4 +1,5 @@
 import type { Hex } from 'viem';
+import type { RawLog } from './indexer.js';
 import type { Store } from '../db/store.js';
 import type { RelayerPool } from '../relay/pool.js';
 import { StageTracker } from './stages.js';
@@ -6,7 +7,12 @@ import { StageTracker } from './stages.js';
 /** One monadNewHeads message: a block reaching a stage (Proposed, Voted, Finalized, Verified). */
 export type Head = { number: number; blockId: string; commitState: string; at: number };
 
-export type BlockReceipt = { transactionHash: Hex; status: 'success' | 'reverted' };
+export type BlockReceipt = {
+  transactionHash: Hex;
+  status: 'success' | 'reverted';
+  /** The receipt's logs (the order indexer reads them); absent where a source does not give them. */
+  logs?: RawLog[];
+};
 
 /** Reading results, as the tracker needs it. The real one is src/chain/monad.ts. */
 export interface Receipts {
@@ -21,6 +27,8 @@ export type FinalityDeps = {
   pool: Pick<RelayerPool, 'included'>;
   /** Told about every request that settled or failed, for the live feed. */
   onChange?: (requestId: string) => void;
+  /** Every finalized block's logs, in order, empty blocks included (the order indexer). */
+  onFinalizedBlock?: (blockNumber: number, logs: RawLog[]) => Promise<void>;
 };
 
 const sleep = (ms: number) =>
@@ -95,6 +103,18 @@ export class FinalityTracker {
     }
     if (receipts === null)
       throw new Error(`no receipts for finalized block ${String(blockNumber)}`);
+    if (this.deps.onFinalizedBlock) {
+      // Indexing never holds up settling payments: on an error the account falls behind and the
+      // indexer's catch-up reads that block again.
+      await this.deps
+        .onFinalizedBlock(
+          blockNumber,
+          receipts.flatMap((r) => r.logs ?? []),
+        )
+        .catch((e: unknown) => {
+          console.error(`indexer: ${e instanceof Error ? e.message : String(e)}`);
+        });
+    }
     if (receipts.length === 0) return;
 
     const byHash = new Map(receipts.map((r) => [r.transactionHash.toLowerCase(), r]));
