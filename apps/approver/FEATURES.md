@@ -6,12 +6,13 @@ This file is kept in step with the code: when a feature lands or an API changes,
 
 ## What changed
 
-| Date  | Change                                                                                                                                                                     |
-| ----- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 7 Oct | First version. Approvals API live; sample approvals below; sign-in for agent apps built (WorkOS, waiting on the account)                                                   |
-| 7 Oct | A hold for an address that is not on file offers only **refuse** (`summary.payOnce: "address_not_on_file"`): the contract never pays a new address, not even for the owner |
-| 7 Oct | Sign-in for agent apps is live: claude.ai, Grok and ChatGPT can connect to the MCP server by signing in (feature 6)                                                        |
-| 7 Oct | **Judge mode is live (feature 7):** any phone's new passkey gets its own testnet account, so your own Face ID works end to end. The "Coming next" list is renumbered       |
+| Date  | Change                                                                                                                                                                             |
+| ----- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 7 Oct | First version. Approvals API live; sample approvals below; sign-in for agent apps built (WorkOS, waiting on the account)                                                           |
+| 7 Oct | A hold for an address that is not on file offers only **refuse** (`summary.payOnce: "address_not_on_file"`): the contract never pays a new address, not even for the owner         |
+| 7 Oct | Sign-in for agent apps is live: claude.ai, Grok and ChatGPT can connect to the MCP server by signing in (feature 6)                                                                |
+| 7 Oct | **Judge mode is live (feature 7):** any phone's new passkey gets its own testnet account, so your own Face ID works end to end. The "Coming next" list is renumbered               |
+| 7 Oct | **Demo invoices are live (feature 7, step 6):** the demo agent pays a clean, a changed-address or an amount-hold invoice into your own account; your Face ID decides the held ones |
 
 ## What the product is, in one paragraph
 
@@ -88,7 +89,12 @@ Anyone, a judge or you, gets their own testnet account from their phone's passke
 
 - Errors: `400 invalid_public_key` or `malformed_assertion`, `404`, `409 not_created` or `contract_refuses`, `422 challenge_mismatch` (signed in the wrong order) or `invalid_passkey`, `429 demo_limit` (10 new accounts a day).
 - Say on screen that demo accounts have **no waiting period** for new suppliers, so they can pay at once; real accounts wait 48 hours.
-- Next (lands here soon): buttons that have the demo agent pay an invoice into _your_ account (a clean one, a changed address, an amount over the order), so your own Face ID decides the holds.
+
+6. **Have the demo agent pay an invoice into your account**: `POST /v1/demo/accounts/{account}/invoices` (no token) with `{ "kind": "clean" }`, `"changed_address"` or `"amount_mismatch"`. 0.001 USDC each, from your 0.005 order (so up to five paid). The answer has `status`, `reasonText`, `txHash`, `statusUrl`, and `approvalUrl` when it is held.
+   - `clean`: settles in about 1.7 s. Show the transaction.
+   - `changed_address`: held, the invoice's address is a look-alike (same first six and last four characters as Kalibre's). Only **refuse** is offered: show both addresses in full so the difference is visible.
+   - `amount_mismatch`: held; **pay once** or **refuse** with your own Face ID (feature 1's screen, on `approvalUrl`). Paid once, it settles about 1.4 s later. (Held by the stand-in checker until the real checker reads invoices, Slice 10.)
+   - `409 order_used_up` once the order has nothing left; `409 not_ready` before setup.
 
 ## Coming next: design now, the API lands here
 

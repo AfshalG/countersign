@@ -87,9 +87,20 @@ Testnet (manual): a held payment on the hosted gateway paid once with the owner'
 | `POST /v1/demo/accounts` with the new public key | account `0x32252f5B45D36F26909cc7E06B7E98c663f30339` created, funded with 0.01 USDC and registered, in 2.9 s; three actions to sign, each with a plain summary |
 | `POST /v1/demo/accounts/{account}/setup` with the three assertions | ready in 3.4 s: policy, Kalibre Studio, a 0.005 USDC order, each final before the next |
 | The order in the gateway's index | 0.17 s later, 5,000 base units left |
+| Again after the crash-safety fix (`418e7f4`, deployed by itself 60 s after CI) | account `0x327214283b068414216EAD53489528E83BFD6276` ready in 3.2 s; health OK, no starved relayer; the order indexed after 8.9 s (right after a fresh start, picked up by the 15 s catch-up rather than the block feed: watched in the demo-invoice work) |
 | Tests | 315 TypeScript tests, including 16 for judge mode's flows, 5 for its routes, 3 for its settings, 2 for the funding wallet, and a restart test for transactions that are not payments |
 
 Provisioned: a separate funding wallet (`0x99c1…16Bb`, 0.5 MON and 2 USDC, about 200 accounts), a demo agent key (`0xEB6F…5Df3`), relayers topped up to 0.25 MON each (1.92 MON in one Multicall3 transaction), a daily limit of 10.
+
+**Demo invoices (part 4, second half), 7 Oct**, `judge-smoke` against the hosted gateway (`efc2020`, deployed by itself after CI), a fresh passkey:
+
+| Step | Result |
+|---|---|
+| Account created; set up with three signatures; order indexed | 2.6 s; 6.2 s; 1.3 s |
+| Clean invoice (0.001 USDC to the address on file) | settled in 1.65 s (tx `0xbedba932976e1de31cc06ae13600a303e73fd7754e46ee7db4d6c5935a952c07`) |
+| Changed address (a look-alike, same first six and last four characters) | held, "not the supplier's address on file", refuse only; refused with the judge's passkey (200) |
+| Amount hold (the stand-in checker, until Slice 10) | held, pay once or refuse; paid once with the judge's passkey, settled 1.35 s later through `payWithOwner` (tx `0x591d9ec41ce81bff7450a31ce3ae513756c0dd47d0552aa28ac3d27a93985527`) |
+| Tests | 322, including the real demo agent (our SDK in-process) paying through the full gateway on the fake chain |
 
 ### Findings, carried forward
 
@@ -102,5 +113,5 @@ Provisioned: a separate funding wallet (`0x99c1…16Bb`, 0.5 MON and 2 USDC, abo
 
 ## Next
 
-Slice 11 (Sophie): the approver app on these routes, briefed in `apps/approver/FEATURES.md`. Next here: demo invoices for a judge's account (the demo agent pays a clean, a changed-address and an over-amount invoice, at most 0.002 USDC each), so their own Face ID decides the holds; then Part 2, Part 3.
+Slice 11 (Sophie): the approver app on these routes, briefed in `apps/approver/FEATURES.md`. Next here: Part 2 (approve a proposed supplier and order with the passkey), then Part 3 (pause and unpause).
 
