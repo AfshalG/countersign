@@ -16,9 +16,9 @@ pnpm --filter @countersign/approver dev
 **The API**
 
 - Reference: https://gateway-production-e17a.up.railway.app/docs (generated from the gateway's code).
-- Today: `GET /v1/payments/{id}` (status, reason, `evidence.payTo.onFile` and `.invoice` for the diff) and `POST /v1/payments/{id}/approve` and `/refuse` (the passkey assertion's `r`, `s`, `authenticatorData`, `clientDataJSON`, `challengeIndex`, `typeIndex`).
-- Next: `GET /v1/approvals/{id}` returns the summary, `differences[]` and the exact typed data to sign for each action, and `POST /v1/approvals/{id}` takes the assertion as the browser gives it; the gateway works out the indexes and low-s. Build the page against this.
-- The `/v1` routes need the gateway's service token: never ship it to the browser. Call the gateway from this app's server (route handlers), or use the approvals routes, which the owner's passkey authorizes.
+- **What to build, feature by feature, with sample approvals: [`FEATURES.md`](FEATURES.md).** Kept in step with the code; check its "What changed" first.
+- The owner's routes: `GET /v1/approvals/{id}` returns the summary, `differences[]` and the exact challenge to sign for each action, and `POST /v1/approvals/{id}` takes the assertion as the browser gives it; the gateway works out the indexes and low-s. Live on testnet.
+- The other `/v1` routes need the gateway's service token: never ship it to the browser. Call them from this app's server (route handlers, `GATEWAY_TOKEN` from the environment). The approvals routes need no token: the owner's passkey authorizes them.
 
 **What the passkey signs**
 
