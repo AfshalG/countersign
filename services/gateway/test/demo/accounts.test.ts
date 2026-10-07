@@ -1,15 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import {
-  concat,
-  decodeFunctionData,
-  getAddress,
-  keccak256,
-  slice,
-  toHex,
-  type Address,
-  type Hex,
-} from 'viem';
-import { accountFactoryAbi, countersignAccountAbi } from '@countersign/chain';
+import { decodeFunctionData, type Address, type Hex } from 'viem';
+import { countersignAccountAbi } from '@countersign/chain';
 import { Store } from '../../src/db/store.js';
 import type { Database } from '../../src/db/client.js';
 import {
@@ -17,47 +8,12 @@ import {
   DemoError,
   publicKeyOf,
   setUpDemoAccount,
-  type DemoChain,
   type DemoDeps,
 } from '../../src/demo/accounts.js';
 import { DEMO_FUNDING, demoPlan, setupAction } from '../../src/demo/plan.js';
 import { SoftPasskey } from '../../scripts/passkey.js';
 import { freshDatabase, truncate } from '../db/helpers.js';
-
-const CHAIN_ID = 10143;
-const FACTORY: Address = '0x094250cCC1dDBd8530e4FC9A1C900db3D0D9EB5f';
-const AGENT: Address = '0x2222222222222222222222222222222222222222';
-const CHECKER: Address = '0x3333333333333333333333333333333333333333';
-
-/** Monad as judge mode sees it: accounts, owner nonces and USDC balances, changed by what is sent. */
-class FakeDemoChain implements DemoChain {
-  code = new Set<string>();
-  nonces = new Map<string, bigint>();
-  usdc = new Map<string, bigint>();
-  invalidKey = false;
-  ownerKeyValid = true;
-  dryRuns = 0;
-  predictAccount(qx: Hex, qy: Hex): Promise<Address> {
-    return Promise.resolve(getAddress(slice(keccak256(concat([qx, qy])), 12)));
-  }
-  hasCode(a: Address) {
-    return Promise.resolve(this.code.has(a.toLowerCase()));
-  }
-  ownerNonce(a: Address) {
-    return Promise.resolve(this.nonces.get(a.toLowerCase()) ?? 0n);
-  }
-  usdcBalance(a: Address) {
-    return Promise.resolve(this.usdc.get(a.toLowerCase()) ?? 0n);
-  }
-  latestFinalized() {
-    return Promise.resolve(1_000);
-  }
-  dryRun(to: Address): Promise<string | undefined> {
-    this.dryRuns++;
-    if (to === FACTORY) return Promise.resolve(this.invalidKey ? 'InvalidOwnerKey' : undefined);
-    return Promise.resolve(this.ownerKeyValid ? undefined : 'InvalidOwnerSignature');
-  }
-}
+import { AGENT, CHAIN_ID, CHECKER, demoDeps, FACTORY, type FakeDemoChain } from './fakes.js';
 
 let database: Database;
 let store: Store;
@@ -75,56 +31,7 @@ afterAll(async () => {
 });
 beforeEach(async () => {
   await truncate(database);
-  chain = new FakeDemoChain();
-  sent = [];
-  funded = [];
-  let n = 0;
-  deps = {
-    store,
-    chain,
-    pool: {
-      sign: () => {
-        n++;
-        return Promise.resolve({
-          relayer: AGENT,
-          nonce: n,
-          raw: '0x02',
-          hash: keccak256(toHex(`tx ${String(n)}`)),
-        });
-      },
-      // What the chain does once the transaction is in: the account exists, or the nonce moves.
-      enqueue: () => undefined,
-    },
-    finality: {
-      waitFinal: () => Promise.resolve({ status: 'success', blockNumber: 1_001 }),
-    },
-    funder: {
-      sendUsdc: (to, amount) => {
-        funded.push({ to, amount });
-        chain.usdc.set(to.toLowerCase(), (chain.usdc.get(to.toLowerCase()) ?? 0n) + amount);
-        return Promise.resolve(keccak256(toHex(`usdc ${to}`)));
-      },
-    },
-    chainId: CHAIN_ID,
-    factory: FACTORY,
-    agentKey: AGENT,
-    checkerKey: CHECKER,
-    perDay: 20,
-  };
-  // The fake pool records each transaction and applies its effect, as Monad would.
-  const sign = deps.pool.sign.bind(deps.pool);
-  deps.pool.sign = async (tx) => {
-    sent.push(tx);
-    if (tx.to === FACTORY) {
-      const { args } = decodeFunctionData({ abi: accountFactoryAbi, data: tx.data });
-      const [qx, qy] = args as unknown as [Hex, Hex];
-      chain.code.add((await chain.predictAccount(qx, qy)).toLowerCase());
-    } else {
-      const key = tx.to.toLowerCase();
-      chain.nonces.set(key, (chain.nonces.get(key) ?? 0n) + 1n);
-    }
-    return sign(tx);
-  };
+  ({ deps, chain, sent, funded } = demoDeps(store));
 });
 
 const judge = SoftPasskey.fromScalar(`0x${'44'.repeat(32)}`);
@@ -211,6 +118,16 @@ describe('judge mode: an account for a new passkey', () => {
     });
     expect(sent).toHaveLength(0);
     expect(await store.getDemoAccount(await chain.predictAccount(key.qx, key.qy))).toBeUndefined();
+  });
+
+  it('never reports a transaction that landed as lost: a timed-out wait asks the chain', async () => {
+    deps.finality = {
+      waitFinal: (hash) => {
+        chain.final.set(hash, { status: 'success', blockNumber: 1_002 });
+        return Promise.reject(new Error('not final after 60000 ms'));
+      },
+    };
+    expect((await createDemoAccount(deps, key)).status).toBe('awaiting_passkey');
   });
 
   it('stops at the daily limit (each account costs MON)', async () => {

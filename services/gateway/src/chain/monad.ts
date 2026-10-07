@@ -1,5 +1,7 @@
 import {
+  decodeErrorResult,
   decodeFunctionResult,
+  erc20Abi,
   encodeEventTopics,
   encodeFunctionData,
   getAddress,
@@ -7,7 +9,13 @@ import {
   type Address,
   type Hex,
 } from 'viem';
-import { countersignAccountAbi, orderVaultAbi } from '@countersign/chain';
+import {
+  accountFactoryAbi,
+  countersignAccountAbi,
+  deployments,
+  orderVaultAbi,
+  USDC,
+} from '@countersign/chain';
 import { decodeRefusal, type DecodedRefusal } from './refusals.js';
 import { rpc, RpcError } from './rpc.js';
 import type { Chain, Decision, PaymentCall, WebAuthnAuth } from './types.js';
@@ -16,6 +24,7 @@ import type { LogSource, RawLog } from './indexer.js';
 import type { Sender, SendOutcome } from '../relay/pool.js';
 import { Pacer } from '../relay/pace.js';
 import type { Payment } from '../payment.js';
+import type { DemoChain } from '../demo/accounts.js';
 
 type Endpoint = { url: string; sendsPerSecond: number; readsPerSecond: number };
 
@@ -38,7 +47,7 @@ const ORDER_EVENTS: Hex[] = (['OrderApproved', 'OrderClosed'] as const).map(
  * 20/s; Spike 3), and retried on rate limits and network errors. Contract refusals come back as
  * JSON-RPC error code 3 with the named error's selector as data, which decodeRefusal reads.
  */
-export class MonadClient implements Chain, Sender, Receipts, LogSource {
+export class MonadClient implements Chain, Sender, Receipts, LogSource, DemoChain {
   private readonly reads: Pacer;
   private readonly started = Date.now();
   private socketOpen = false;
@@ -99,6 +108,65 @@ export class MonadClient implements Chain, Sender, Receipts, LogSource {
 
   private async call(to: Address, data: Hex): Promise<Hex> {
     return this.read<Hex>('eth_call', [{ from: this.simulator, to, data }, 'latest']);
+  }
+
+  // ---------- judge mode (DemoChain) ----------
+
+  async predictAccount(qx: Hex, qy: Hex, waitingPeriod: bigint, salt: Hex): Promise<Address> {
+    const args = [qx, qy, waitingPeriod, salt] as const;
+    const out = await this.call(
+      deployments.accountFactory,
+      encodeFunctionData({ abi: accountFactoryAbi, functionName: 'predictAccount', args }),
+    );
+    return decodeFunctionResult({
+      abi: accountFactoryAbi,
+      functionName: 'predictAccount',
+      data: out,
+    });
+  }
+
+  async hasCode(address: Address): Promise<boolean> {
+    const code = await this.read<Hex>('eth_getCode', [address, 'latest']);
+    return code.length > 2;
+  }
+
+  async ownerNonce(account: Address): Promise<bigint> {
+    const out = await this.call(
+      account,
+      encodeFunctionData({ abi: countersignAccountAbi, functionName: 'ownerNonce' }),
+    );
+    return decodeFunctionResult({
+      abi: countersignAccountAbi,
+      functionName: 'ownerNonce',
+      data: out,
+    });
+  }
+
+  async usdcBalance(address: Address): Promise<bigint> {
+    const out = await this.call(
+      USDC,
+      encodeFunctionData({ abi: erc20Abi, functionName: 'balanceOf', args: [address] }),
+    );
+    return decodeFunctionResult({ abi: erc20Abi, functionName: 'balanceOf', data: out });
+  }
+
+  /** A factory or account call as an eth_call: undefined if it would succeed, else the error name. */
+  async dryRun(to: Address, data: Hex): Promise<string | undefined> {
+    try {
+      await this.call(to, data);
+      return undefined;
+    } catch (e) {
+      if (!(e instanceof RpcError) || e.kind !== 'rpc') throw e;
+      if (e.data === undefined) return 'unknown';
+      try {
+        return decodeErrorResult({
+          abi: [...accountFactoryAbi, ...countersignAccountAbi],
+          data: e.data,
+        }).errorName;
+      } catch {
+        return 'unknown';
+      }
+    }
   }
 
   async addressOnFile(account: Address, vault: Address): Promise<Address> {

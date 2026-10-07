@@ -26,6 +26,10 @@ export interface DemoChain {
   latestFinalized(): Promise<number>;
   /** The call as an eth_call: undefined if it would succeed, otherwise the contract's error name. */
   dryRun(to: Address, data: Hex): Promise<string | undefined>;
+  /** A transaction's receipt once it is in a finalized block; null if it is not (yet). */
+  finalizedReceipt(
+    hash: Hex,
+  ): Promise<{ status: 'success' | 'reverted'; blockNumber: number } | null>;
 }
 
 /** Sends test USDC from the demo funding wallet (not a relayer: relayers never hold money). */
@@ -72,7 +76,11 @@ const INDEXES: readonly SetupIndex[] = [0, 1, 2];
  * the browser's `response.getPublicKey()` returns (base64url; for P-256 its last 65 bytes are
  * 0x04 ‖ x ‖ y). Whether the point is on the curve is the contract's check (InvalidOwnerKey).
  */
-export function publicKeyOf(input: { x?: string; y?: string; spki?: string }): {
+export function publicKeyOf(input: {
+  x?: string | undefined;
+  y?: string | undefined;
+  spki?: string | undefined;
+}): {
   qx: Hex;
   qy: Hex;
 } {
@@ -137,13 +145,34 @@ function serially<T>(key: string, work: () => Promise<T>): Promise<T> {
   return next;
 }
 
+/**
+ * Waits until the transaction is final. The wait is registered before the transaction is sent
+ * where possible; if it times out (or the block was processed before anyone waited), the chain is
+ * asked directly, so a transaction that did land is never reported as lost.
+ */
+async function finalOf(
+  deps: DemoDeps,
+  hash: Hex,
+  waiting: Promise<{ status: 'success' | 'reverted'; blockNumber: number }>,
+  what: string,
+) {
+  let receipt;
+  try {
+    receipt = await waiting;
+  } catch (e) {
+    receipt = await deps.chain.finalizedReceipt(hash);
+    if (!receipt) throw e;
+  }
+  if (receipt.status !== 'success')
+    throw new DemoError(409, 'reverted', `${what} reverted on chain`, { tx: hash });
+  return hash;
+}
+
 async function sendAndWait(deps: DemoDeps, to: Address, data: Hex, gas: bigint, what: string) {
   const signed = await deps.pool.sign({ to, data, gas });
+  const waiting = deps.finality.waitFinal(signed.hash, deps.finalTimeoutMs ?? 60_000);
   deps.pool.enqueue(signed);
-  const receipt = await deps.finality.waitFinal(signed.hash, deps.finalTimeoutMs ?? 60_000);
-  if (receipt.status !== 'success')
-    throw new DemoError(409, 'reverted', `${what} reverted on chain`, { tx: signed.hash });
-  return signed.hash;
+  return finalOf(deps, signed.hash, waiting, what);
 }
 
 /**
@@ -191,9 +220,8 @@ export function createDemoAccount(deps: DemoDeps, key: { qx: Hex; qy: Hex }) {
     const balance = await deps.chain.usdcBalance(account);
     if (balance < DEMO_FUNDING) {
       const hash = await deps.funder.sendUsdc(account, DEMO_FUNDING - balance);
-      const receipt = await deps.finality.waitFinal(hash, deps.finalTimeoutMs ?? 60_000);
-      if (receipt.status !== 'success')
-        throw new DemoError(409, 'reverted', 'the USDC transfer reverted', { tx: hash });
+      const waiting = deps.finality.waitFinal(hash, deps.finalTimeoutMs ?? 60_000);
+      await finalOf(deps, hash, waiting, 'the USDC transfer');
     }
     await deps.store.registerAccount(account, await deps.chain.latestFinalized(), 'demo');
     const ready = await deps.store.setDemoStatus(account, 'awaiting_passkey');

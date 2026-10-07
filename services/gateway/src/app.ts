@@ -14,6 +14,8 @@ import { registerOrderRoutes, type Indexing } from './api/orders.js';
 import { paymentPage, proposalPage } from './api/status-page.js';
 import { llmsFullTxt, llmsTxt } from './api/llms.js';
 import { payOnce, refuseHeld, registerApprovalRoutes } from './api/approvals.js';
+import { registerDemoRoutes } from './api/demo.js';
+import type { DemoDeps } from './demo/accounts.js';
 import type { PaymentRequestRow } from './db/schema.js';
 import type { StatusChange, Store } from './db/store.js';
 import { requestId, runId } from './ids.js';
@@ -46,6 +48,8 @@ export type AppDeps = {
   token: string;
   /** Extra health details: relayer balances, the finality socket. */
   health: () => Promise<Record<string, unknown>>;
+  /** Judge mode (Slice 9 part 4); without it its routes do not exist. Testnet only. */
+  demo?: DemoDeps;
 };
 
 // ---------- views ----------
@@ -289,17 +293,20 @@ export function createApp(deps: AppDeps) {
 
   // The approver app calls the approvals routes from the phone's browser, on another origin.
   // No cookies, no token: the owner's passkey is the authorisation.
-  app.use(
-    '/v1/approvals/*',
-    cors({ origin: '*', allowMethods: ['GET', 'POST', 'OPTIONS'], allowHeaders: ['content-type'] }),
-  );
+  const browserCors = cors({
+    origin: '*',
+    allowMethods: ['GET', 'POST', 'OPTIONS'],
+    allowHeaders: ['content-type'],
+  });
+  app.use('/v1/approvals/*', browserCors);
+  if (deps.demo) app.use('/v1/demo/*', browserCors);
   const requireToken = bearerAuth({
     token: deps.token,
     noAuthenticationHeader: { message: { error: 'unauthorized' } },
     invalidAuthenticationHeader: { message: { error: 'unauthorized' } },
     invalidToken: { message: { error: 'unauthorized' } },
   });
-  app.use('/v1/*', except('/v1/approvals/*', requireToken));
+  app.use('/v1/*', except(['/v1/approvals/*', '/v1/demo/*'], requireToken));
 
   app.openapi(submitPayment, async (c) => {
     const body = c.req.valid('json');
@@ -514,6 +521,7 @@ export function createApp(deps: AppDeps) {
 
   registerOrderRoutes(app, { store, chain, indexing: deps.indexing, publicUrl });
   registerApprovalRoutes(app, { store, chain, chainId: deps.chainId, publicUrl });
+  if (deps.demo) registerDemoRoutes(app, deps.demo);
 
   // A page a person can open from an agent's message; public, like the link in the message.
   app.get('/p/:id', async (c) => {

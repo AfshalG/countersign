@@ -1,7 +1,7 @@
 import { serve } from '@hono/node-server';
 import { formatEther, type Address } from 'viem';
-import { privateKeyToAccount } from 'viem/accounts';
-import { ENDPOINTS } from '@countersign/chain';
+import { privateKeyToAccount, privateKeyToAddress } from 'viem/accounts';
+import { deployments, ENDPOINTS } from '@countersign/chain';
 import { REASONS, type Reason } from '@countersign/shared';
 import { createApp } from './app.js';
 import { TestChecker } from './checker.js';
@@ -11,11 +11,13 @@ import { MonadClient } from './chain/monad.js';
 import { connect } from './db/client.js';
 import { Store } from './db/store.js';
 import { RelayerPool } from './relay/pool.js';
-import { loadSettings } from './settings.js';
+import { WalletFunder } from './demo/funder.js';
+import { judgeMode, loadSettings } from './settings.js';
 import { Workers } from './workers.js';
 
 const settings = loadSettings();
 const chainId = settings.MONAD_CHAIN_ID;
+const judge = judgeMode(settings); // throws at start if only one of its keys is set
 
 /**
  * Until the checker service exists (Slice 10) the stand-in checker releases every payment, except
@@ -92,7 +94,22 @@ const heads = monad.subscribeHeads((head) => {
 });
 tracker.startPolling(1_000);
 
+// Judge mode: an account for a new passkey, set up with that passkey (Slice 9 part 4).
+const demo = judge && {
+  store,
+  chain: monad,
+  pool,
+  finality: tracker,
+  funder: new WalletFunder(judge.funderKey, monad, chainId),
+  chainId,
+  factory: deployments.accountFactory,
+  agentKey: judge.agent,
+  checkerKey: privateKeyToAddress(settings.TEST_CHECKER_PRIVATE_KEY),
+  perDay: judge.perDay,
+};
+
 const app = createApp({
+  ...(demo ? { demo } : {}),
   store,
   chain: monad,
   checker,
@@ -116,7 +133,9 @@ const app = createApp({
   }),
 });
 const server = serve({ fetch: app.fetch, port: settings.PORT }, (info) => {
-  console.log(`gateway listening on ${String(info.port)} with ${String(relayers.length)} relayers`);
+  console.log(
+    `gateway listening on ${String(info.port)} with ${String(relayers.length)} relayers; judge mode ${demo ? `on (${String(demo.perDay)} accounts a day)` : 'off'}`,
+  );
 });
 
 let stopping = false;
