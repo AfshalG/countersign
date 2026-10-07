@@ -1,6 +1,8 @@
 # Countersign Architecture v3
 
-**Status: v3.9, 7 Oct 2026.** v3.9: the MCP server moves to Vercel (`mcp-handler`), and the test agent uses the Vercel AI SDK; Railway keeps the always-running gateway, checker and Postgres.
+**Status: v3.10, 7 Oct 2026.** v3.10 carries Slice 5's design forward: D29 decided by address age (no shared counter), lowering the waiting period is itself delayed, payments carry a deadline and pay each invoice once per vault, vaults are clones with immutable arguments.
+
+**v3.9, 7 Oct 2026.** v3.9: the MCP server moves to Vercel (`mcp-handler`), and the test agent uses the Vercel AI SDK; Railway keeps the always-running gateway, checker and Postgres.
 
 **v3.8, 7 Oct 2026.** v3.8 carries the Slice 3 and 4 research forward: Monad's real gas and pool rules, MCP's new protocol and SDK v2, pause-and-ask only in Claude Code and Codex, WhatsApp's 24-hour rule.
 
@@ -371,9 +373,9 @@ Published in the README and the stated limits (Slice 21).
 | `withdraw(to, amount)` | Owner passkey | Returns money not set aside for an order to the company |
 | `pause()` / `unpause()` | Owner passkey | Stops every vault from paying, and starts them again (D23) |
 
-`payment` carries the order, the amount, the invoice hash, the pay-to address and a nonce. The vault requires the pay-to address to equal the one on file, so neither the agent nor the checker can choose where money goes.
+`payment` carries the amount, the invoice hash, the pay-to address and a deadline; the order is the vault itself, and each invoice hash pays at most once per vault (Slice 5). The vault requires the pay-to address to equal the one on file, so neither the agent nor the checker can choose where money goes. Owner actions are signed over EIP-712 digests in the account's domain with a per-account nonce and a deadline. Vaults are clones whose account, supplier, order hash and expiry are immutable arguments, so opening one writes little storage (each new slot costs about 27,900 gas on Monad).
 
-**Waiting period and first-payment cap (D28, D29).** A new supplier or a changed address can receive money only after a waiting period set by the owner (48 hours by default), and the owner is notified when the change is made. Until a set number of payments have gone to a new address, each is capped lower than usual. Real address changes are rarely urgent; fraud nearly always is. The waiting period cannot be skipped from the app, because a person tricked into approving a change is the case it exists for.
+**Waiting period and first-payment cap (D28, D29).** A new supplier or a changed address can receive money only after a waiting period set by the owner (48 hours by default), and the owner is notified when the change is made. Lowering the waiting period itself takes effect only after the current waiting period has passed (Slice 5). While an address is newer than a set period (for example 7 days after it became active), each payment to it is capped lower than usual; this is decided from the address's activation time, not a payment count, so no counter is shared across vaults (Slice 5). Real address changes are rarely urgent; fraud nearly always is. The waiting period cannot be skipped from the app, because a person tricked into approving a change is the case it exists for.
 
 **Signatures are bound to one vault on one chain (D22).** Every signed payment is EIP-712 typed data whose domain includes the chain ID and the vault's own address, so a signature for one company's payment can never be replayed on another company's vault, another order or another chain. Slice 5 has a test for each.
 
@@ -624,8 +626,8 @@ None of these has had an explicit yes, except that Afshal has said parallel exec
 | D25 | Pitch hygiene | Label "live today" against "next"; argue independence (a check by the agent or its vendor is not a second signature); answer "what if the big players build this" |
 | D26 | Defensibility | Claim only what compounds: independence from agent vendors, enforcement in the account, the verified-supplier network and the record of decisions. The checking rules are copyable and are not claimed as a moat. Hackathon shows the mechanisms, not the network |
 | D27 | The model can only hold | Code decides "clear" against owner-signed records; the model's answers can only add a hold; the checker signs only when every code check passes |
-| D28 | Waiting period | New suppliers and changed addresses receive money only after an owner-set wait (48 hours by default), with a notification; it cannot be skipped from the app |
-| D29 | First-payment cap | The first few payments to a new address are capped lower than usual |
+| D28 | Waiting period | New suppliers and changed addresses receive money only after an owner-set wait (48 hours by default), with a notification; it cannot be skipped from the app, and lowering it takes effect only after the current wait (Slice 5) |
+| D29 | First-payment cap | Payments to an address newer than a set period are capped lower than usual. Decided from the address's activation time, not a payment count, so vaults share no counter (Slice 5, 7 Oct) |
 | D30 | One connector, many agents | Spike 4 tests one Countersign MCP server from Grok, Claude Code, Codex and Muse, and builds an OpenRouter test agent that runs the same scenarios across several models (also used by the benchmark in Slice 20). Instinct cannot take tools and is not connected |
 | D31 | WhatsApp approvals | Held payments and proposals can be sent to the person on WhatsApp as a link-button message (`cta_url`) to the approval page; the passkey still signs on the page. WhatsApp allows free-form messages only within 24 hours of the person's last message, so the person messages Countersign once to connect, and an approved template with a URL button (review up to 24 h, submitted early) covers the rest. Built with Slice 14. iMessage is not offered (Apple requires an approved provider) |
 | — | Who builds | Sophie and Roshan are busy this week; Claude drafts and builds their slices, Afshal reviews. Ownership in D6 returns when they are free |
