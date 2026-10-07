@@ -7,7 +7,8 @@
     "typecheck": "tsc --noEmit",
     "attest": "tsx ts/attest.ts",
     "verify:mainnet": "tsx ts/verify-mainnet.ts",
-    "fixtures": "tsx ts/make-fixtures.ts"
+    "fixtures": "tsx ts/make-fixtures.ts",
+    "verify:testnet": "tsx ts/verify-onchain.ts"
   },
   "dependencies": {
     "@primuslabs/zktls-core-sdk": "0.3.7",
