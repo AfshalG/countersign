@@ -72,6 +72,29 @@ describe('the API reference', () => {
     expect(res.headers.get('location')).toBe('/docs');
   });
 
+  it('serves llms.txt for coding agents: what it is, how to install, where the docs are', async () => {
+    const res = await app.request('/llms.txt');
+    expect(res.status).toBe(200);
+    expect(res.headers.get('content-type')).toMatch(/text\/markdown/);
+    const text = await res.text();
+    expect(text).toMatch(/^# Countersign\n\n> /);
+    expect(text).toContain(
+      'npm i https://github.com/AfshalG/countersign/releases/download/sdk-v0.1.1/countersign-sdk-0.1.1.tgz',
+    );
+    expect(text).toContain('/openapi.json');
+    expect(text).toContain('https://countersign-mcp.vercel.app/api/mcp');
+    expect(text).toContain('/llms-full.txt');
+  });
+
+  it('serves llms-full.txt with the quickstart and the SDK guide in one file', async () => {
+    const res = await app.request('/llms-full.txt');
+    expect(res.status).toBe(200);
+    const text = await res.text();
+    expect(text).toContain('# Developer quickstart');
+    expect(text).toContain('# @countersign/sdk');
+    expect(text).toContain('proposeOrder');
+  });
+
   it('renders the reference page', async () => {
     const res = await app.request('/docs');
     expect(res.status).toBe(200);

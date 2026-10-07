@@ -10,6 +10,7 @@ import type { Checker } from './checker.js';
 import { evaluate, SimulationUnavailable } from './pipeline/check.js';
 import { registerOrderRoutes, type Indexing } from './api/orders.js';
 import { paymentPage, proposalPage } from './api/status-page.js';
+import { llmsFullTxt, llmsTxt } from './api/llms.js';
 import type { PaymentRequestRow } from './db/schema.js';
 import type { StatusChange, Store } from './db/store.js';
 import { requestId, runId } from './ids.js';
@@ -549,6 +550,10 @@ export function createApp(deps: AppDeps) {
     },
   });
   app.get('/docs', Scalar({ url: '/openapi.json', pageTitle: 'Countersign gateway API' }));
+  // For coding agents (llmstxt.org): the index, and the guides in one file.
+  const markdown = { 'content-type': 'text/markdown; charset=utf-8' };
+  app.get('/llms.txt', (c) => c.body(llmsTxt(publicUrl), 200, markdown));
+  app.get('/llms-full.txt', async (c) => c.body(await llmsFullTxt(publicUrl), 200, markdown));
   // The bare address is the reference, not a 404.
   app.get('/', (c) => c.redirect('/docs'));
 
