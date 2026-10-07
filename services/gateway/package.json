@@ -13,7 +13,8 @@
     "sample-approvals": "tsx scripts/sample-approvals.ts",
     "top-up": "tsx scripts/top-up.ts",
     "fund-demo-wallet": "tsx scripts/fund-demo-wallet.ts",
-    "judge-smoke": "tsx scripts/judge-smoke.ts"
+    "judge-smoke": "tsx scripts/judge-smoke.ts",
+    "proposal-smoke": "tsx scripts/proposal-smoke.ts"
   },
   "dependencies": {
     "@countersign/chain": "workspace:*",

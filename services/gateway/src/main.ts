@@ -109,8 +109,19 @@ const demo = judge && {
   agentPrivateKey: judge.agentKey,
 };
 
+// Approving proposed suppliers and orders with the passkey (Slice 9 part 2).
+const proposals = {
+  store,
+  chain: monad,
+  pool,
+  finality: tracker,
+  chainId,
+  publicUrl: settings.PUBLIC_URL,
+};
+
 const app = createApp({
   ...(demo ? { demo } : {}),
+  proposals,
   store,
   chain: monad,
   checker,

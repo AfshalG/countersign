@@ -540,4 +540,17 @@ export class Store {
     const [row] = await this.db.select().from(proposals).where(eq(proposals.id, id));
     return row;
   }
+
+  /** Moves a pending proposal to approved or refused; undefined if it was no longer pending. */
+  async decideProposal(
+    id: string,
+    status: 'approved' | 'refused',
+  ): Promise<ProposalRow | undefined> {
+    const [row] = await this.db
+      .update(proposals)
+      .set({ status, decidedAt: new Date() })
+      .where(and(eq(proposals.id, id), eq(proposals.status, 'pending')))
+      .returning();
+    return row;
+  }
 }

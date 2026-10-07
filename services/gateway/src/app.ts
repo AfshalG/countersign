@@ -16,6 +16,7 @@ import { llmsFullTxt, llmsTxt } from './api/llms.js';
 import { payOnce, refuseHeld, registerApprovalRoutes } from './api/approvals.js';
 import { registerDemoRoutes } from './api/demo.js';
 import type { DemoDeps } from './demo/accounts.js';
+import type { ProposalDeps } from './owner/proposals.js';
 import type { PaymentRequestRow } from './db/schema.js';
 import type { StatusChange, Store } from './db/store.js';
 import { requestId, runId } from './ids.js';
@@ -50,6 +51,8 @@ export type AppDeps = {
   health: () => Promise<Record<string, unknown>>;
   /** Judge mode (Slice 9 part 4); without it its routes do not exist. Testnet only. */
   demo?: DemoDeps;
+  /** Approving proposals with the passkey (Slice 9 part 2); without it they show nothing to sign. */
+  proposals?: ProposalDeps;
 };
 
 // ---------- views ----------
@@ -520,7 +523,13 @@ export function createApp(deps: AppDeps) {
   );
 
   registerOrderRoutes(app, { store, chain, indexing: deps.indexing, publicUrl });
-  registerApprovalRoutes(app, { store, chain, chainId: deps.chainId, publicUrl });
+  registerApprovalRoutes(app, {
+    store,
+    chain,
+    chainId: deps.chainId,
+    publicUrl,
+    ...(deps.proposals ? { proposals: deps.proposals } : {}),
+  });
   if (deps.demo) registerDemoRoutes(app, deps.demo, { token: deps.token, publicUrl });
 
   // A page a person can open from an agent's message; public, like the link in the message.

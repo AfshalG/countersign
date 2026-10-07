@@ -25,6 +25,7 @@ import type { Sender, SendOutcome } from '../relay/pool.js';
 import { Pacer } from '../relay/pace.js';
 import type { Payment } from '../payment.js';
 import type { DemoChain } from '../demo/accounts.js';
+import type { ProposalChain } from '../owner/proposals.js';
 
 type Endpoint = { url: string; sendsPerSecond: number; readsPerSecond: number };
 
@@ -47,7 +48,7 @@ const ORDER_EVENTS: Hex[] = (['OrderApproved', 'OrderClosed'] as const).map(
  * 20/s; Spike 3), and retried on rate limits and network errors. Contract refusals come back as
  * JSON-RPC error code 3 with the named error's selector as data, which decodeRefusal reads.
  */
-export class MonadClient implements Chain, Sender, Receipts, LogSource, DemoChain {
+export class MonadClient implements Chain, Sender, Receipts, LogSource, DemoChain, ProposalChain {
   private readonly reads: Pacer;
   private readonly started = Date.now();
   private socketOpen = false;
@@ -140,6 +141,54 @@ export class MonadClient implements Chain, Sender, Receipts, LogSource, DemoChai
       functionName: 'ownerNonce',
       data: out,
     });
+  }
+
+  async supplierOf(
+    account: Address,
+    supplierId: Hex,
+  ): Promise<{ payTo: Address; active: boolean; activeAfter: number } | null> {
+    const out = await this.call(
+      account,
+      encodeFunctionData({
+        abi: countersignAccountAbi,
+        functionName: 'supplier',
+        args: [supplierId],
+      }),
+    );
+    const s = decodeFunctionResult({
+      abi: countersignAccountAbi,
+      functionName: 'supplier',
+      data: out,
+    });
+    if (/^0x0{40}$/i.test(s.payTo)) return null; // never set
+    return { payTo: getAddress(s.payTo), active: s.active, activeAfter: Number(s.activeAfter) };
+  }
+
+  async effectiveWaitingPeriod(account: Address): Promise<number> {
+    const out = await this.call(
+      account,
+      encodeFunctionData({ abi: countersignAccountAbi, functionName: 'effectiveWaitingPeriod' }),
+    );
+    return Number(
+      decodeFunctionResult({
+        abi: countersignAccountAbi,
+        functionName: 'effectiveWaitingPeriod',
+        data: out,
+      }),
+    );
+  }
+
+  async ownerKey(account: Address): Promise<{ qx: Hex; qy: Hex }> {
+    const out = await this.call(
+      account,
+      encodeFunctionData({ abi: countersignAccountAbi, functionName: 'ownerKey' }),
+    );
+    const [qx, qy] = decodeFunctionResult({
+      abi: countersignAccountAbi,
+      functionName: 'ownerKey',
+      data: out,
+    });
+    return { qx, qy };
   }
 
   async usdcBalance(address: Address): Promise<bigint> {

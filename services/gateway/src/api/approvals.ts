@@ -14,6 +14,13 @@ import type { Store } from '../db/store.js';
 import { paymentOf } from '../payment.js';
 import { HEADLINE } from './status-page.js';
 import { AssertionError, fromBrowser } from './webauthn.js';
+import {
+  approveProposal,
+  proposalApprovalView,
+  refuseProposal,
+  type ProposalDeps,
+} from '../owner/proposals.js';
+import { OwnerActionError } from '../owner/send.js';
 
 /**
  * The owner's decisions on held payments (Slice 9, D35). The same checks back the service-token
@@ -126,6 +133,10 @@ const typedAction = z.object({
   typedData: z.unknown().openapi({
     description: 'The typed data behind the challenge (bigints as strings), to show or re-check',
   }),
+  summary: z
+    .string()
+    .optional()
+    .openapi({ description: 'What signing this does, in plain words (proposals)' }),
 });
 
 export const approvalView = z
@@ -297,7 +308,16 @@ const decide = createRoute({
     body: {
       content: {
         'application/json': {
-          schema: z.object({ action: z.enum(['pay_once', 'refuse']), assertion }),
+          schema: z.object({
+            action: z.enum(['pay_once', 'refuse', 'approve']).openapi({
+              description:
+                'A held payment: pay_once or refuse. A proposal: approve (with `assertions`, one per approve action) or refuse',
+            }),
+            assertion: assertion.optional(),
+            assertions: z.record(z.string(), assertion).optional().openapi({
+              description: 'For approving a proposal: `{ set_supplier, approve_order }` as offered',
+            }),
+          }),
         },
       },
     },
@@ -316,24 +336,58 @@ const decide = createRoute({
 
 export function registerApprovalRoutes(
   app: OpenAPIHono,
-  deps: DecisionDeps & { chainId: number; publicUrl: string },
+  deps: DecisionDeps & { chainId: number; publicUrl: string; proposals?: ProposalDeps },
 ): void {
   const { store, chainId, publicUrl } = deps;
+  const owner = deps.proposals;
 
   app.openapi(getApproval, async (c) => {
     const id = c.req.valid('param').id;
     const row = await store.get(id);
     if (row) return c.json(paymentApproval(row, chainId, publicUrl), 200);
     const proposal = await store.getProposal(id);
-    if (proposal) return c.json(proposalApproval(proposal, publicUrl), 200);
-    return c.json({ error: 'unknown_approval' }, 404);
+    if (!proposal) return c.json({ error: 'unknown_approval' }, 404);
+    if (owner) {
+      try {
+        return c.json(await proposalApprovalView(owner, proposal), 200);
+      } catch (e) {
+        // The chain did not answer: show the proposal, with nothing to sign until it does.
+        console.error(`proposal view: ${e instanceof Error ? e.message : String(e)}`);
+      }
+    }
+    return c.json(proposalApproval(proposal, publicUrl), 200);
   });
 
   app.openapi(decide, async (c) => {
     const id = c.req.valid('param').id;
     const body = c.req.valid('json');
     const row = await store.get(id);
-    if (!row) return c.json({ error: 'unknown_request' }, 404);
+    if (!row) {
+      const proposal = await store.getProposal(id);
+      if (!proposal || !owner) return c.json({ error: 'unknown_request' }, 404);
+      if (body.action === 'pay_once')
+        return c.json({ error: 'not_offered', message: 'A proposal is approved or refused' }, 422);
+      try {
+        if (body.action === 'approve') {
+          if (!body.assertions || Object.keys(body.assertions).length === 0)
+            return c.json({ error: 'malformed', message: 'approve takes `assertions`' }, 400);
+          return c.json(await approveProposal(owner, id, body.assertions), 200);
+        }
+        if (!body.assertion)
+          return c.json({ error: 'malformed', message: 'refuse takes `assertion`' }, 400);
+        return c.json(await refuseProposal(owner, id, body.assertion), 200);
+      } catch (e) {
+        if (!(e instanceof OwnerActionError) || e.status === 429) throw e;
+        return c.json({ error: e.code, message: e.message }, e.status);
+      }
+    }
+    if (body.action === 'approve')
+      return c.json(
+        { error: 'not_offered', message: 'A held payment is paid once or refused' },
+        422,
+      );
+    if (!body.assertion)
+      return c.json({ error: 'malformed', message: `${body.action} takes \`assertion\`` }, 400);
     if (row.status !== 'held') return c.json({ error: 'not_held', status: row.status }, 409);
     const action = paymentApproval(row, chainId, publicUrl).actions[body.action];
     if (!action)

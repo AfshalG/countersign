@@ -13,6 +13,21 @@ export function normalizeInvoiceNumber(invoiceNumber: string): string {
   return normalized;
 }
 
+/**
+ * The slug a supplier is known by on chain, from its name as a quote or a person writes it:
+ * Unicode-normalised (NFKC, so full-width letters count), lower case, and every run of anything
+ * else a single hyphen. "Kalibre Studio", "KALIBRE studio." and "Kalibre-Studio" are one supplier.
+ */
+export function supplierSlug(name: string): string {
+  const slug = name
+    .normalize('NFKC')
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, '-')
+    .replace(/^-+|-+$/g, '');
+  if (slug === '') throw new Error('a supplier name needs at least one letter or digit');
+  return slug;
+}
+
 /** A supplier's on-chain id: keccak256 of its slug (as in Slice 5, `keccak256("kalibre-studio")`). */
 export function supplierId(slug: string): Hex {
   return keccak256(stringToHex(slug));
