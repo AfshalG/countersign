@@ -448,14 +448,14 @@ FOUNDATION:
 SPIKES (throwaway code, real answers):
   Slice 1:   Passkey signature verified on Monad testnet              DONE
   Slice 2:   Primus proof of a supplier's address file, on testnet    DONE
-  Slice 3:   200 payments: order vaults vs one account, relayers,     TODO
+  Slice 3:   200 payments: order vaults vs one account, relayers,     D13 ANSWERED; 3 RUNS WAIT ON MON
              several agents at once, private RPC
-  Slice 4:   One test MCP server reached from Grok, Claude Code,      TODO
+  Slice 4:   One test MCP server reached from Grok, Claude Code,      BUILT; MORE AGENTS TO TEST
              Codex and Muse; an OpenRouter test agent across models
 
 CORE PIPELINE (a scripted agent pays a clean invoice, no prompt):
-  Slice 5:   Account and order vaults: policy, suppliers, pay, log    TODO
-  Slice 6:   Gateway: requests, runs queue, relayer pool, finality    TODO
+  Slice 5:   Account and order vaults: policy, suppliers, pay, log    PLANNED; BUILD NEXT
+  Slice 6:   Gateway: requests, runs queue, relayer pool, finality    PLANNED
   Slice 7:   Supplier portal and demo shop: invoices and orders,      TODO
              clean and doctored
   Slice 8:   Rule checks + scripted agent: first end-to-end payment   TODO
