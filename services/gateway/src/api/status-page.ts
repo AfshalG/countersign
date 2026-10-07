@@ -64,6 +64,9 @@ function page(title: string, body: string): string {
   dd { margin: .1rem 0 0; overflow-wrap: anywhere; }
   code { font: .95rem/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; }
   mark { background: var(--mark); color: inherit; }
+  .gap { display: inline-block; width: .35em; }
+  .lead { font-size: 1.15rem; margin: .25rem 0 0; }
+  details { margin-top: 1.5rem; } summary { cursor: pointer; }
   .note { border-left: 3px solid var(--line); padding: .25rem 0 .25rem .75rem; margin-top: 1.25rem; }
   a { color: inherit; }
 </style>
@@ -76,9 +79,43 @@ function row(label: string, value: string): string {
   return `<dt>${escape(label)}</dt><dd>${value}</dd>`;
 }
 
+/** Groups of four, so a long address can be read and compared; the characters stay contiguous. */
+function grouped(html: string): string {
+  // `html` is escaped text with <mark> tags; group by visible characters.
+  const parts = html.split(/(<mark>.<\/mark>|&[a-z#0-9]+;|.)/).filter((p) => p !== '');
+  let out = '';
+  parts.forEach((p, i) => {
+    out += i > 0 && i % 4 === 2 ? `<span class="gap"></span>${p}` : p;
+  });
+  return out;
+}
+
+const when = (d: Date | null) =>
+  d === null
+    ? null
+    : `${d.toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'UTC' })} UTC`;
+const seconds = (a: Date | null, b: Date | null) =>
+  a && b ? `${((b.getTime() - a.getTime()) / 1000).toFixed(1)} s` : null;
+
+const DECIDED_BY: Record<string, string> = {
+  checker: 'Countersign’s check',
+  rule: 'the account’s rules on Monad',
+  user_once: 'the owner, with their passkey',
+  user_refused: 'the owner, with their passkey',
+};
+
+/**
+ * A payment as a receipt a person reads (Afshal, 7 Oct: "receipts are not in hexa"): the amount,
+ * who it is for by name, what happened and when, a link to the explorer. Two addresses are shown
+ * in full only when they differ (shortening hides what an attacker changes), grouped in fours with
+ * the difference marked; every other id and hash is under "Technical details".
+ */
 export function paymentPage(
   r: PaymentRequestRow,
-  agent: { address: string; agentId: string | null } | null = null,
+  context: {
+    agent?: { address: string; agentId: string | null } | null;
+    supplierName?: string | null;
+  } = {},
 ): string {
   const headline = HEADLINE[r.status] ?? r.status;
   const reason = r.reason ? REASON_TEXT[r.reason] : undefined;
@@ -86,38 +123,76 @@ export function paymentPage(
   const onFile = evidence.payTo?.onFile;
   const invoice = evidence.payTo?.invoice ?? r.payTo;
   const explorer = monad.blockExplorers.default.url;
+  const supplier = context.supplierName ?? 'the supplier';
+  const usdc = `${escape(formatUsdc(BigInt(r.amount)))} USDC`;
+  const agent = context.agent;
+  const paid = r.status === 'settled';
+  const lead = paid ? `${usdc} paid to ${escape(supplier)}` : `${usdc} for ${escape(supplier)}`;
+  const timeline = [
+    ['Received', when(r.requestedAt)],
+    ['Checked', when(r.checkedAt)],
+    [
+      r.status === 'refused' ? 'Refused' : 'Decided',
+      r.decidedAt && r.decidedBy?.startsWith('user') ? when(r.decidedAt) : null,
+    ],
+    [
+      'Final on Monad',
+      r.finalizedAt
+        ? `${when(r.finalizedAt) ?? ''}${seconds(r.sentAt, r.finalizedAt) ? `, ${seconds(r.sentAt, r.finalizedAt) ?? ''} after sending` : ''}`
+        : null,
+    ],
+  ]
+    .filter(([, v]) => v !== null)
+    .map(([k, v]) => `${escape(k ?? '')} ${escape(v ?? '')}`)
+    .join('<br>');
   const rows = [
-    row('Amount', `${escape(formatUsdc(BigInt(r.amount)))} USDC`),
-    onFile
-      ? row(
-          'Address on file (the only one this order pays)',
-          `<code>${marked(onFile, invoice)}</code>`,
-        ) + row('Address on the invoice', `<code>${marked(invoice, onFile)}</code>`)
-      : row('Pay to', `<code>${escape(r.payTo)}</code>`),
     reason ? row('Why', escape(reason)) : '',
-    r.txHash
+    onFile && onFile.toLowerCase() !== invoice.toLowerCase()
       ? row(
-          'Transaction',
-          `<a href="${escape(`${explorer}/tx/${r.txHash}`)}" rel="noreferrer"><code>${escape(r.txHash)}</code></a>`,
-        )
+          `${supplier}’s address on file (the only one this order pays)`,
+          `<code>${grouped(marked(onFile, invoice))}</code>`,
+        ) + row('The address on the invoice', `<code>${grouped(marked(invoice, onFile))}</code>`)
+      : row(
+          paid ? 'Paid to' : 'To',
+          `${escape(supplier)}’s address on file <code>${escape(`${r.payTo.slice(0, 6)}…${r.payTo.slice(-4)}`)}</code>`,
+        ),
+    r.decidedBy && DECIDED_BY[r.decidedBy]
+      ? row('Decided by', escape(DECIDED_BY[r.decidedBy] ?? ''))
       : '',
     agent
       ? row(
-          r.status === 'settled' ? 'Paid by agent' : 'Sent by agent',
+          paid ? 'Paid by agent' : 'Sent by agent',
           agent.agentId === null
-            ? `<code>${escape(agent.address)}</code>`
-            : `#${escape(agent.agentId)} in Monad's ERC-8004 Identity Registry (its wallet <code>${escape(agent.address)}</code> signed this payment)`,
+            ? 'An agent not registered on ERC-8004'
+            : `#${escape(agent.agentId)}, registered in Monad’s ERC-8004 agent registry`,
         )
       : '',
-    row('Request', `<code>${escape(r.id)}</code>`),
+    timeline ? row('When', timeline) : '',
+    r.txHash
+      ? row(
+          'On Monad',
+          `<a href="${escape(`${explorer}/tx/${r.txHash}`)}" rel="noreferrer">View on the Monad explorer</a>`,
+        )
+      : '',
+    row('Reference', `<code>${escape(r.id.slice(2, 10).toUpperCase())}</code>`),
   ].join('');
   const note =
     r.status === 'held'
-      ? `<p class="note">Nothing has been paid. The owner decides with their passkey; the approver app that does this arrives in a later build. Until then this page shows the decision once it is made.</p>`
+      ? `<p class="note">Nothing has been paid. The owner decides with their passkey: pay once, or refuse.</p>`
       : '';
+  const technical = [
+    ['Request', r.id],
+    ['Order vault', r.vault],
+    ['Pay-to address', r.payTo],
+    ['Invoice hash', r.invoiceHash],
+    ...(r.txHash ? [['Transaction', r.txHash]] : []),
+    ...(agent ? [['Agent wallet', agent.address]] : []),
+  ]
+    .map(([k, v]) => row(k ?? '', `<code>${escape(v ?? '')}</code>`))
+    .join('');
   return page(
     headline,
-    `<p class="muted">Countersign · Monad testnet</p><h1>${escape(headline)}</h1><dl>${rows}</dl>${note}`,
+    `<p class="muted">Countersign · Monad testnet</p><h1>${escape(headline)}</h1><p class="lead">${lead}</p><dl>${rows}</dl>${note}<details><summary class="muted">Technical details</summary><dl>${technical}</dl></details>`,
   );
 }
 

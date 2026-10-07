@@ -76,7 +76,12 @@ console.log(
 if (!order) throw new Error('no open order');
 
 const onFile = order.addressOnFile.toLowerCase();
-const lookAlike = `${onFile.slice(0, 8)}${'d'.repeat(30)}${onFile.slice(-4)}`;
+// A realistic look-alike, as address poisoning makes them: the same first six and last four
+// characters, a random-looking middle (not a run of one letter).
+const middle = Array.from(crypto.getRandomValues(new Uint8Array(15)), (b) =>
+  b.toString(16).padStart(2, '0'),
+).join('');
+const lookAlike = `${onFile.slice(0, 8)}${middle}${onFile.slice(-4)}`;
 const held = await send({
   skill: 'pay_invoice',
   orderId: order.orderId,

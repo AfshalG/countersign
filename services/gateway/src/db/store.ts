@@ -527,6 +527,20 @@ export class Store {
     await this.db.insert(orders).values(order).onConflictDoNothing();
   }
 
+  async orderByVault(vault: string): Promise<OrderRow | undefined> {
+    const [row] = await this.db.select().from(orders).where(eq(orders.vault, vault));
+    return row;
+  }
+
+  /** The suppliers an account's owner approved through proposals, by name. */
+  async approvedSupplierNames(account: string): Promise<string[]> {
+    const rows = await this.db
+      .select({ name: proposals.supplierName })
+      .from(proposals)
+      .where(and(eq(proposals.account, account), eq(proposals.status, 'approved')));
+    return rows.map((r) => r.name);
+  }
+
   async closeOrder(vault: Address): Promise<void> {
     await this.db.update(orders).set({ closed: true }).where(eq(orders.vault, vault));
   }
