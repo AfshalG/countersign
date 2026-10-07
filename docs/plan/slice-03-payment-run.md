@@ -2,7 +2,7 @@
 
 ## Status
 
-**DECIDED (7 Oct 2026); ready to build once the testnet MON and USDC are claimed.** Technical decisions made by Claude; the faucet claims are Afshal's. Owner: Afshal (contracts); Claude builds.
+**BUILDING (7 Oct 2026).** Contracts, setup and the first full run are done: 200 vault payments settled through 8 wallets in 5.4 s. The one-account run and the rest wait on more testnet MON (about 28 MON; see "MON budget, measured"). Technical decisions made by Claude; the faucet claims are Afshal's. Owner: Afshal (contracts); Claude builds.
 
 ## Goal
 
@@ -129,17 +129,47 @@ git checkout -b feature/spike-03-payments
 5. Run scenario 3 (duplicates) through the vaults: exactly one of each pair paid, the other refused.
 6. Repeat scenario 1 on a private endpoint, if a paid one is available.
 
-## Results (filled in after the spike)
+## Results (filled in as the runs happen)
+
+Deployed on Monad testnet, 7 Oct 2026: `VaultFactory` `0xD302044D86E017d84eD6201eF87474D3eb30cf5e` (vault template `0xF375…3139`), `SharedAccount` `0x83F4db7781bb067Faeb95F0FD16980F708bEB5d3`, spike checker `0x2e15…0736`. Raw records for every transaction: `spikes/03-payments/results/`.
 
 | Measure | Vaults | One account |
 |---|---|---|
-| 200 payments, 200 suppliers: first send to last finalized | | |
-| 200 payments, 10 suppliers | | |
-| Blocks used / transactions per block | | |
-| Gas per payment | | |
-| Gas and MON per vault created | | |
-| Duplicates: paid / refused | | |
-| Relayer wallets needed | | |
+| 200 payments, 200 suppliers, 8 wallets: first send to last finalized | **5.4 s** (200 paid, 0 lost, 0 re-sent) | waits on MON |
+| Of which, sending alone | 4.4 s (about 45 a second) | |
+| One payment, send to finalized | p50 0.95 s, p95 1.12 s | |
+| 200 payments, 10 suppliers | waits on MON | waits on MON |
+| Blocks used / most in one block | 16 / 21 | |
+| Execution gas per payment (first payment to a supplier) | 164,449 (limit 176,782) | 171,771 (estimate) |
+| Execution gas per payment (supplier already holds USDC) | 147,314 | |
+| MON per payment (charged on the limit, 102 gwei) | 0.018 | 0.019 |
+| Creating and funding an order | 109,300 gas, 0.011 MON per vault | 62,100 gas, 0.0063 MON per order |
+| Duplicates: paid / refused | waits on MON | |
+| Relayer wallets: 1 / 4 / 8 | waits on MON / waits on MON / 5.4 s | |
+
+**Where a payment's 0.95 s goes** (vault run, 200 payments): endpoint accepts it, p50 127 ms; into a proposed block, p50 239 ms (p95 440); voted, +296 ms; finalized, +293 ms. The chain side is Monad's documented 600 ms; the rest is getting the transaction in.
+
+## Findings (7 Oct 2026)
+
+1. **A payment costs about twice the plan's gas.** About 164k for a vault payment and 172k for the one-account payment, not 80k. Monad prices first access to an account at 10,100 and to a storage page at 8,100 (Ethereum: 2,600 and 2,100), and a USDC payment touches the vault, its template, USDC's proxy and USDC's implementation, plus several storage pages. At 102 gwei on the limit, a payment costs about 0.018 MON.
+2. **Vaults are not slower or dearer per payment.** A vault payment uses about 4% less gas than the one-account payment (it reads less storage). Creating a vault costs more than adding an order to one account (109k against 62k).
+3. **Receipts report `gasUsed` equal to the gas limit.** Execution gas comes only from `eth_estimateGas`; a refused transaction pays its whole limit.
+4. **Out-of-order nonces are lost, not held.** Sending each transaction to whichever endpoint was free let a wallet's later nonce reach a node before the earlier one. Those transactions disappeared (`txpool_statusByHash`: "Unknown tx hash") and needed a re-send after 5 s: 10 payments took 9.1 s. Even Monad's own URL sits in front of several nodes. **Ordered sending** (each wallet keeps to one endpoint and sends its next nonce after the previous one is accepted) lost none: 3.0 s for the same 10, 5.4 s for 200.
+5. **Under 10 MON, an account may move MON out only once per 3 blocks** (Monad's reserve balance, execution side: the "emptying transaction" exception). A second funding transfer inside that window reverted and still paid its fee. Relayers are funded in one Multicall3 `aggregate3Value` transaction. Paying gas is not affected.
+6. **The public endpoints set the run's speed.** JSON-RPC batches give no extra throughput: Monad's endpoint counts each call in a batch, Ankr refuses batches (413) and monadinfra refuses them (403). Monad's endpoint limits `eth_call` to 15 a second (the docs say 25). `txpool_statusByHash` works on Monad's endpoint and monadinfra, not Ankr. `eth_getBlockReceipts` works on all three, so results are read one finalized block at a time.
+7. **`monadNewHeads` reports `Proposed`, `Voted`, `Finalized` and `Verified`** for each block, with a `blockId`; stage times are kept per block ID so a replaced proposal cannot lend its times to the finalized block.
+
+## Adapted from spec
+
+- **Vaults carry their fixed data as immutable clone arguments** (`cloneDeterministicWithImmutableArgs`: token, supplier, checker), so there is no `initialize` and no uninitialised-clone risk; test 5 ("cannot be initialised twice") does not apply. This is the design Slice 5 already plans. In the spike a vault's remaining budget is its USDC balance; Slice 5 stores the amount left.
+- **The factory mixes the opener into each vault's salt**, so nobody can take an address another opener is about to use. Vault addresses are computed locally (pinned by a test against the factory on chain).
+- **Funding:** one Multicall3 transaction (finding 5), not one transfer per wallet.
+- **Sending:** ordered sending (finding 4) instead of spreading each transaction across endpoints. The endpoints are still all used: wallets are spread across them.
+- **Smoke tests of 10 payments** before each kind of run, to catch script bugs for 0.18 MON instead of 3.6.
+
+## MON budget, measured
+
+Spent so far: 3.52 MON on setup, 3.61 on the 200-payment vault run, about 0.4 on smoke tests and funding. Left: 0.39 MON in the deployer and about 1 MON across the relayers. **The remaining runs need about 28 MON:** one account, 8 wallets (3.8); vaults with 1 and 4 wallets (3.2 each); scenario 2's setup (3.5) and its two runs (7.4); the duplicates, 400 sends (6.5). Afshal claims it from the faucet and the hackathon's Discord; the runs go in the order above as it arrives.
 
 ## Commit
 
