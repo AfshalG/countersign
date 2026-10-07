@@ -66,6 +66,12 @@ describe('the API reference', () => {
         if (path.startsWith('/v1')) expect(op.security, path).toEqual([{ Bearer: [] }]);
   });
 
+  it('sends the bare address to the reference instead of a 404', async () => {
+    const res = await app.request('/');
+    expect(res.status).toBe(302);
+    expect(res.headers.get('location')).toBe('/docs');
+  });
+
   it('renders the reference page', async () => {
     const res = await app.request('/docs');
     expect(res.status).toBe(200);
