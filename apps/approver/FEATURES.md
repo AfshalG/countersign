@@ -13,6 +13,7 @@ This file is kept in step with the code: when a feature lands or an API changes,
 | 7 Oct | Sign-in for agent apps is live: claude.ai, Grok and ChatGPT can connect to the MCP server by signing in (feature 6)                                                                |
 | 7 Oct | **Judge mode is live (feature 7):** any phone's new passkey gets its own testnet account, so your own Face ID works end to end. The "Coming next" list is renumbered               |
 | 7 Oct | **Demo invoices are live (feature 7, step 6):** the demo agent pays a clean, a changed-address or an amount-hold invoice into your own account; your Face ID decides the held ones |
+| 7 Oct | **Approving proposals is live (feature 2):** add the supplier and open the order with two Face ID signatures, or refuse with one. Removed from "Coming next"                       |
 
 ## What the product is, in one paragraph
 
@@ -25,7 +26,7 @@ A business lets an AI agent (Grok, Claude, ChatGPT and dots, Muse) pay its suppl
 - **When two addresses differ, show both in full** and make the different characters easy to see. The attack is a look-alike address, and the short `0x1234…abcd` form hides exactly the part an attacker changes.
 - **Plain words for reasons**: use `reasonText` from the API (or `REASON_TEXT` in `@countersign/shared`), not the code (`address_mismatch`).
 - **Refuse is a safe, equal choice**, never a small grey link. A refusal stops the agent's run.
-- **There is no "pay the new address anyway".** The contract pays only the supplier's address on file, even with the owner's passkey. A changed address can only be refused; paying a new address means changing the supplier's address first (feature 8), which then waits out a waiting period.
+- **There is no "pay the new address anyway".** The contract pays only the supplier's address on file, even with the owner's passkey. A changed address can only be refused; paying a new address means changing the supplier's address first (feature 2, an approved proposal), which then waits out a waiting period.
 - **Never put the gateway's service token in the browser.** The approvals routes need no token (the passkey is the authorisation). Routes marked _token_ are called from this app's server (Next.js route handlers) with `GATEWAY_TOKEN` from the environment.
 
 ## Live now: build these
@@ -42,12 +43,21 @@ What the owner sees when a payment is held: what it is, why it was held, the dif
 - Sample (held for its amount, address on file: `pay_once` and `refuse` offered): `…/v1/approvals/0xa5a1f6754338df015835ae6697e72a14217ac1b643cdbe8091b63c987baf7a0a`
 - **Testing with your own phone:** the samples belong to the demo account, whose owner passkey is a test key, so your Face ID gets `422 invalid_passkey`. That is correct, and it proves the passkey check works. For your own phone end to end, create your own account (feature 7).
 
-### 2. A proposed supplier and order (view now, approve soon)
+### 2. A proposed supplier and order (approve or refuse)
 
-When an agent reads a supplier's quote, it can only _propose_ the supplier and the order; nothing is real until the owner approves.
+When an agent reads a supplier's quote, it can only _propose_ the supplier and the order; nothing is real until the owner approves with Face ID.
 
-- `GET /v1/approvals/{id}` with `kind: "proposal"`: `summary` has `supplierName`, `website`, `payTo`, `amountUsdc`, `expiry`. `actions` is empty until feature 8 lands.
-- Sample (pending): `…/v1/approvals/0xb4ce00179b493b9590a242fb8fd0309a5fc1140584945a57358414efca8aea1b`
+- `GET /v1/approvals/{id}` with `kind: "proposal"`. `summary`: `supplierName`, `website`, `payTo`, `amountUsdc`, `expiry`, `addressOnFile` (null for a new supplier), `changesAddress`, `accountUsdc`, `enoughFunds`, `waitingPeriodSeconds`, `signBy`.
+- `actions`, each with `challenge` and a plain `summary` to show while asking for Face ID:
+  - `set_supplier` ("Add Northwind Prints as a supplier, paid only at 0x…"): only when the supplier is not on file at this address;
+  - `approve_order` ("Open an order with Northwind Prints for 0.002 USDC");
+  - `refuse` ("nothing is added and no money moves").
+- Approve: sign each offered approve action, then `POST /v1/approvals/{id}` with `{ "action": "approve", "assertions": { "set_supplier": a1, "approve_order": a2 } }`. About 3 s; the answer has `status: "approved"`, and the order appears in the agent's open orders.
+- Refuse: `{ "action": "refuse", "assertion": a }`.
+- **A changed address** (`changesAddress: true`, `differences[]` filled): approving changes the supplier's address for every order, and new payments to it wait out the waiting period. Make that unmistakable.
+- **Not enough USDC** (`enoughFunds: false`): only refuse is offered; say how much is missing (`amountUsdc` against `accountUsdc`).
+- Errors: `422 challenge_mismatch` or `invalid_passkey`, `409 not_pending`, `insufficient_funds`, `expired` or `stale` (the account changed since you opened it: open it again).
+- Try it: create your own account (feature 7), then ask an agent with the MCP tool `propose_order`, or have Afshal run `pnpm --filter @countersign/gateway proposal-smoke`.
 
 ### 3. A payment's record (the proof)
 
@@ -100,7 +110,6 @@ Anyone, a judge or you, gets their own testnet account from their phone's passke
 
 | #   | Feature            | What the screen does                                                                                                       | API (when it lands)                             |
 | --- | ------------------ | -------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
-| 8   | Approve a proposal | Approve a proposed supplier and order: two passkey signatures in a row (add the supplier, then fund the order)             | `actions.approve` on the proposal's approval    |
 | 9   | Pause and unpause  | The stop button: stop all payments from the account at once, and start again                                               | approval-style actions, signed with the passkey |
 | 10  | Supplier demo site | A separate supplier's site (Kalibre Studio) that issues quotes and invoices, clean and doctored, and shows "paid" arriving | Slice 7                                         |
 | 11  | Audit record       | Download a payment's record for an auditor                                                                                 | Slice 18                                        |
