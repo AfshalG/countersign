@@ -12,6 +12,8 @@ export type CheckDeps = {
   checker: Checker;
   chainId: number;
   checkerTimeoutMs: number;
+  /** How long a request taken for checking stays claimed; another worker re-checks it after that. */
+  leaseMs?: number;
 };
 
 /** A simulation the RPC could not answer: the request stays in `checking` and is tried again. */
@@ -51,7 +53,11 @@ async function simulate(
  */
 export async function checkOne(deps: CheckDeps, row: PaymentRequestRow): Promise<void> {
   const { store, chain, checker } = deps;
-  if (row.status === 'requested' && !(await store.transition(row.id, 'requested', 'checking')))
+  const lease = { leaseUntil: new Date(Date.now() + (deps.leaseMs ?? 30_000)) };
+  if (
+    row.status === 'requested' &&
+    !(await store.transition(row.id, 'requested', 'checking', lease))
+  )
     return;
   if (row.status !== 'requested' && row.status !== 'checking') return;
 

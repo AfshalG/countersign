@@ -40,6 +40,7 @@ export type TransitionPatch = Partial<
     | 'proposedAt'
     | 'votedAt'
     | 'finalizedAt'
+    | 'leaseUntil'
   >
 > & { reason?: Reason; decidedBy?: DecidedBy; detail?: unknown };
 
@@ -170,7 +171,7 @@ export class Store {
           status: to,
           ...(reason !== undefined ? { reason } : {}),
           ...(decidedBy !== undefined ? { decidedBy } : {}),
-          leaseUntil: null,
+          leaseUntil: fields.leaseUntil ?? null,
           updatedAt: new Date(),
         })
         .where(and(eq(paymentRequests.id, id), eq(paymentRequests.status, from)))
@@ -242,6 +243,32 @@ export class Store {
         )
         .returning();
     });
+  }
+
+  async listByStatus(status: PaymentStatus, limit: number): Promise<PaymentRequestRow[]> {
+    return this.db
+      .select()
+      .from(paymentRequests)
+      .where(eq(paymentRequests.status, status))
+      .orderBy(asc(paymentRequests.requestedAt))
+      .limit(limit);
+  }
+
+  /** Held payments past their deadline can no longer be paid (the vault refuses them): expire them. */
+  async expireHeld(nowSeconds: number): Promise<number> {
+    const due = await this.db
+      .select({ id: paymentRequests.id })
+      .from(paymentRequests)
+      .where(
+        and(eq(paymentRequests.status, 'held'), sql`${paymentRequests.deadline} < ${nowSeconds}`),
+      )
+      .limit(500);
+    let expired = 0;
+    for (const { id } of due) {
+      if (await this.transition(id, 'held', 'expired', { reason: 'expired', decidedBy: 'rule' }))
+        expired++;
+    }
+    return expired;
   }
 
   /** Requests waiting to settle whose transaction is one of `hashes`. */

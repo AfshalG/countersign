@@ -19,6 +19,10 @@ export class FakeChain implements Chain {
     return Promise.resolve(this.ownerKeyValid);
   }
 
+  finalizedReceipt(): Promise<null> {
+    return Promise.resolve(null);
+  }
+
   simulate(
     _vault: Address,
     payment: Payment,
