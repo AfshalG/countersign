@@ -14,6 +14,7 @@ This file is kept in step with the code: when a feature lands or an API changes,
 | 7 Oct | **Judge mode is live (feature 7):** any phone's new passkey gets its own testnet account, so your own Face ID works end to end. The "Coming next" list is renumbered               |
 | 7 Oct | **Demo invoices are live (feature 7, step 6):** the demo agent pays a clean, a changed-address or an amount-hold invoice into your own account; your Face ID decides the held ones |
 | 7 Oct | **Approving proposals is live (feature 2):** add the supplier and open the order with two Face ID signatures, or refuse with one. Removed from "Coming next"                       |
+| 7 Oct | **The stop button is live (feature 9):** pause and unpause the account with Face ID. Removed from "Coming next"                                                                    |
 
 ## What the product is, in one paragraph
 
@@ -106,13 +107,21 @@ Anyone, a judge or you, gets their own testnet account from their phone's passke
    - `amount_mismatch`: held; **pay once** or **refuse** with your own Face ID (feature 1's screen, on `approvalUrl`). Paid once, it settles about 1.4 s later. (Held by the stand-in checker until the real checker reads invoices, Slice 10.)
    - `409 order_used_up` once the order has nothing left; `409 not_ready` before setup.
 
+### 9. The stop button (pause and unpause)
+
+One tap stops every payment from the account, until the owner starts it again. A payment that arrives while paused is held ("The owner has paused the account."); after unpausing, it can be paid once from its approval (feature 1).
+
+- `GET /v1/owner/{account}` (no token): `paused`, and `actions` with the one action that changes it (`pause` or `unpause`): its `challenge`, `deadline` and `summary` ("Stop every payment from this account until you unpause it").
+- `POST /v1/owner/{account}` with `{ "action": "pause", "deadline": <as shown>, "assertion": a }`. About 1.3 s; the answer is the new state.
+- Errors: `409 already_paused`, `not_paused` or `stale` (open it again), `400 bad_deadline` (sign within ten minutes of opening), `422 challenge_mismatch` or `invalid_passkey`.
+- Make it easy to find and hard to hit by accident; show clearly when the account is paused.
+
 ## Coming next: design now, the API lands here
 
-| #   | Feature            | What the screen does                                                                                                       | API (when it lands)                             |
-| --- | ------------------ | -------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
-| 9   | Pause and unpause  | The stop button: stop all payments from the account at once, and start again                                               | approval-style actions, signed with the passkey |
-| 10  | Supplier demo site | A separate supplier's site (Kalibre Studio) that issues quotes and invoices, clean and doctored, and shows "paid" arriving | Slice 7                                         |
-| 11  | Audit record       | Download a payment's record for an auditor                                                                                 | Slice 18                                        |
+| #   | Feature            | What the screen does                                                                                                       | API (when it lands) |
+| --- | ------------------ | -------------------------------------------------------------------------------------------------------------------------- | ------------------- |
+| 10  | Supplier demo site | A separate supplier's site (Kalibre Studio) that issues quotes and invoices, clean and doctored, and shows "paid" arriving | Slice 7             |
+| 11  | Audit record       | Download a payment's record for an auditor                                                                                 | Slice 18            |
 
 ## Where to look in the repo
 
