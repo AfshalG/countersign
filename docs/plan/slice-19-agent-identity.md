@@ -2,7 +2,7 @@
 
 ## Status
 
-**BUILDING (7 Oct 2026).** Part A (ERC-8004 identity) first, then Part B (the A2A door). Technical decisions made by Claude (Afshal, 7 Oct: decide technical choices; go slice by slice).
+**BUILDING (7 Oct 2026).** Part A (ERC-8004 identity) DONE on testnet; Part B (the A2A door) next. Technical decisions made by Claude (Afshal, 7 Oct: decide technical choices; go slice by slice).
 
 ## Goal
 
@@ -61,7 +61,24 @@ Part A: the `AgentWalletSet` digest against the registry's own (`eip712Domain` v
 
 Register both agents on testnet; a payment through the hosted gateway shows the agent id; `getAgentWallet(agentId)` on the explorer equals the payment's signer.
 
+## Results, part A (7 Oct 2026, Monad testnet)
+
+| Step | Result |
+|---|---|
+| Agent 2066, the hosted agent behind the MCP tools | registered by the deployer (tx `0xfa658c16655c9e7504747eac094897969bf802c02294fa7e67e0ed3b7972aba8`); `agentWallet` set to `0x0f92A10b64B4A177cB1E090edC317C4202f71DC3`, the demo account's policy agent key, with its EIP-712 consent (tx `0xc55c9b450d147ebb62bb68fe333ecab69f614b6207dfe8bddbf586256c88b0da`) |
+| Agent 2067, judge mode's demo agent | registered (tx `0x171cb487cfe6d2e24b628cd16d6b10f629f23cd3a26a1210bacb42e1efb1a689`); wallet `0xEB6F67971df18a0b26CE81dC19fF3a3560ec5Df3` (tx `0x9532234da5fa76460c227bf246f9129cad0f23cee54d21edbf2eb0aee224e2e0`) |
+| The gateway names both (`POST /v1/agents`, read from the registry) | `eip155:10143:0x8004A818…`, wallets as above |
+| A fresh payment from the demo account (held, no MON spent) | its view shows `agent: { address: 0x0f92…, agentId: "2066" }` |
+| Registration files | `https://countersign-mcp.vercel.app/agents/countersign-hosted.json` (and `countersign-demo.json`), in the ERC-8004 format with MCP and A2A services |
+| Tests | 351, including 4 for agent identity in the gateway, 2 for the ERC-8004 shared module, 1 for the registration files |
+
+### Findings, carried forward
+
+1. **`register()` makes the caller the agent's first wallet**, and a transfer of the agent clears its wallet: Countersign's agents are owned by the deployer and their wallets set explicitly. → Slice 21 (docs for agent builders: register, then set the wallet to your signing key).
+2. **No reverse lookup in the registry** (wallet to agent id): the gateway keeps the agents it names and re-reads each wallet at start. An agent builder adds their agent with `POST /v1/agents`. → Slice 21.
+3. **Payments before this slice have no recorded agent** (the column is new); only new ones show it.
+
 ## Next
 
-Part B, then Slice 7.
+Part B (the A2A door), then Slice 7.
 
