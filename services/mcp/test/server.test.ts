@@ -3,128 +3,19 @@ import type { AddressInfo } from 'node:net';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { getRequestListener } from '@hono/node-server';
 import { createMCPClient } from '@ai-sdk/mcp';
-import { getAddress, keccak256, toHex } from 'viem';
+import { getAddress } from 'viem';
 import { generatePrivateKey } from 'viem/accounts';
 import { createServer } from '../lib/server';
-
-const ACCOUNT = '0xE890B35be32F04032B502Dc4Dc2db8062aD6d603';
-const VAULT = '0x771d1b283D9Bf9A6e14bAdF0c9C4d1BE05D87dC7';
-const ON_FILE = '0x90f9931B748B26763161a8191C178Fe425C25fEc';
-const LOOK_ALIKE = '0x90f9931B748B26763161a8191C178Fe425C25fEd';
-const ORDER_ID = keccak256(toHex('order 1'));
-const MCP_TOKEN = 'mcp-test-token-0123456789abcdef';
-const TX = `0x${'ab'.repeat(32)}`;
-
-/** A scripted gateway: one order; a payment to the address on file settles, any other is held. */
-const sent: { path: string; body: unknown }[] = [];
-const requests = new Map<string, Record<string, unknown>>();
-const byInvoice = new Map<string, Record<string, unknown>>();
-function gateway(input: Parameters<typeof fetch>[0], init?: RequestInit): Promise<Response> {
-  const url = new URL(
-    typeof input === 'string' ? input : input instanceof URL ? input.href : input.url,
-  );
-  const body =
-    typeof init?.body === 'string' ? (JSON.parse(init.body) as Record<string, unknown>) : undefined;
-  sent.push({ path: url.pathname, body });
-  const reply = (status: number, json: unknown) =>
-    Promise.resolve(
-      new Response(JSON.stringify(json), {
-        status,
-        headers: { 'content-type': 'application/json' },
-      }),
-    );
-  const view = (id: string, payTo: string, held: boolean) => ({
-    id,
-    runId: null,
-    status: held ? 'held' : 'settled',
-    reason: held ? 'address_mismatch' : null,
-    decidedBy: held ? 'rule' : 'checker',
-    account: ACCOUNT,
-    vault: VAULT,
-    payTo,
-    amount: '12500000',
-    invoiceHash: '0x',
-    deadline: 1,
-    evidence: held
-      ? { contract: 'PayToNotOnFile', payTo: { onFile: ON_FILE, invoice: payTo } }
-      : null,
-    tx: {
-      hash: held ? null : TX,
-      relayer: null,
-      nonce: null,
-      block: null,
-      proposedAt: null,
-      votedAt: null,
-      finalizedAt: null,
-    },
-    timings: { checkMs: 300, personMs: null, settleMs: held ? null : 900 },
-    statusUrl: `https://gateway.test/p/${id}`,
-  });
-  if (url.pathname.endsWith('/orders'))
-    return reply(200, {
-      account: ACCOUNT,
-      indexedTo: 1,
-      orders: [
-        {
-          orderId: ORDER_ID,
-          vault: VAULT,
-          supplierId: keccak256(toHex('kalibre-studio')),
-          payTo: ON_FILE,
-          supplierActive: true,
-          activeAfter: 0,
-          amount: '30000000',
-          remaining: '17500000',
-          expiry: 1_800_000_000,
-          approvedBlock: 1,
-        },
-      ],
-    });
-  if (url.pathname === '/v1/payments' && init?.method === 'POST') {
-    const payTo = (body?.payment as { payTo: string }).payTo;
-    const invoice = (body?.payment as { invoiceHash: string }).invoiceHash;
-    const earlier = byInvoice.get(invoice);
-    if (earlier) return reply(200, { created: false, request: earlier });
-    const id = `0x${String(requests.size + 1).padStart(64, '0')}`;
-    const v = view(id, payTo, payTo.toLowerCase() !== ON_FILE.toLowerCase());
-    requests.set(id, v);
-    byInvoice.set(invoice, v);
-    return reply(201, { created: true, request: v });
-  }
-  if (url.pathname === '/v1/checks')
-    return reply(200, {
-      verdict: 'would_settle',
-      reason: null,
-      decidedBy: 'checker',
-      evidence: {},
-    });
-  if (url.pathname === '/v1/runs' && init?.method === 'POST')
-    return reply(201, { runId: '0xrun', requests: [{ id: '0x1', status: 'requested' }] });
-  if (url.pathname === '/v1/runs/0xrun')
-    return reply(200, { runId: '0xrun', size: 2, byStatus: { settled: 1, held: 1 }, requests: [] });
-  if (url.pathname.startsWith('/v1/payments/')) {
-    const v = requests.get(url.pathname.split('/')[3] ?? '');
-    return v ? reply(200, v) : reply(404, { error: 'unknown_request' });
-  }
-  if (url.pathname.startsWith('/v1/runs/')) return reply(404, { error: 'unknown_run' });
-  if (url.pathname === '/v1/proposals')
-    return reply(201, {
-      created: true,
-      proposal: {
-        id: '0xprop',
-        status: 'pending',
-        approvalUrl: 'https://gateway.test/p/0xprop',
-        supplierName: 'Kalibre Studio',
-      },
-    });
-  if (url.pathname === '/v1/proposals/0xprop')
-    return reply(200, {
-      id: '0xprop',
-      status: 'pending',
-      approvalUrl: 'https://gateway.test/p/0xprop',
-      supplierName: 'Kalibre Studio',
-    });
-  return reply(404, { error: 'unknown_proposal' });
-}
+import {
+  ACCOUNT,
+  gateway,
+  LOOK_ALIKE,
+  MCP_TOKEN,
+  ON_FILE,
+  ORDER_ID,
+  sent,
+  TX,
+} from './fake-gateway';
 
 let http: Server;
 let url: string;
