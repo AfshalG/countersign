@@ -1,6 +1,8 @@
 # Countersign Architecture v3
 
-**Status: v3.5, 6 Oct 2026.** v3.5: nothing is cut for time; all 23 slices are in the entry.
+**Status: v3.6, 7 Oct 2026.** v3.6: every slice file is checked against all earlier slices, and each slice's findings are carried forward into later slices and this file.
+
+**v3.5, 6 Oct 2026.** Nothing is cut for time; all 23 slices are in the entry.
 
 **v3.4, 6 Oct 2026.** Locks the scope (D9, Afshal: "yup").
 
@@ -538,15 +540,16 @@ Same shape as the AgentDesk slices.
 2. **Goal**
 3. **Prerequisites**
 4. **Cross-checked**: Context7 IDs, Monad pages and other docs read for this slice, with dates
-5. **Design considerations**: the choices, the alternatives and why
-6. **What gets built**: files, functions, types
-7. **Tests first**: the failing tests written before the code
-8. **Git workflow**: `feature/...` off `development`
-9. **Manual testing**: numbered steps with expected results
-10. **Commit**
-11. **Next**
+5. **Checked against earlier slices**: every earlier slice file and its findings, adaptations and deployed addresses, read before writing; each one that bears on this slice is named, with what it changes here
+6. **Design considerations**: the choices, the alternatives and why
+7. **What gets built**: files, functions, types
+8. **Tests first**: the failing tests written before the code
+9. **Git workflow**: `feature/...` off `development`
+10. **Manual testing**: numbered steps with expected results
+11. **Commit**
+12. **Next**
 
-After a slice is built, two sections are added: **What was built** and **Adapted from spec**.
+After a slice is built, two sections are added: **What was built** and **Adapted from spec**. Its findings are then carried forward: every later slice file and this architecture are checked, and anything a finding changes is updated in the same commit (Afshal, 6 Oct: "whenever we are making new slices, we check against every previous slice and verify against previous slices... and change as needed").
 
 ## External Dependencies
 
