@@ -2,7 +2,7 @@
 
 ## Status
 
-**DRAFT, for Afshal's review (7 Oct 2026).** Owner: Afshal (contracts); Claude builds.
+**DECIDED (7 Oct 2026); ready to build once the testnet MON and USDC are claimed.** Technical decisions made by Claude; the faucet claims are Afshal's. Owner: Afshal (contracts); Claude builds.
 
 ## Goal
 
@@ -149,15 +149,15 @@ The commits above, merged into `development` with `--no-ff` once CI passes.
 
 Slice 4: one test MCP server reached from Grok, Claude Code, Codex and Muse, and the OpenRouter test agent.
 
-## Decisions for Afshal in this slice
+## Decisions (made 7 Oct)
 
-| # | Decision | Recommendation |
+| # | Decision | Decided |
 |---|---|---|
 | S3-1 | Token for the runs | Real testnet USDC, 0.001 per payment |
 | S3-2 | Relayer pool | Measure 1, 4 and 8 wallets, about 1 MON each |
 | S3-3 | Scenarios | The three above; the duplicate run drops to 50 pairs if MON is short |
 | S3-4 | RPC | Spread across the three public endpoints; a private endpoint only if the perk is a paid tier |
-| S3-5 | MON budget | About 12 MON in all (8–10 more from the faucet) |
+| S3-5 | MON budget | About 12 MON in all; **Afshal claims** 8–10 more MON and 1 USDC from the free testnet faucets |
 | S3-6 | Plan corrections carried forward | Gas margin 7.5% (was 20%); D17 reconsidered (free private tiers are slower than public); D13's wording about conflicts made exact |
 
 ---

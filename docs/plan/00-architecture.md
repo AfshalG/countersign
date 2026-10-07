@@ -1,6 +1,8 @@
 # Countersign Architecture v3
 
-**Status: v3.8, 7 Oct 2026.** v3.8 carries the Slice 3 and 4 research forward: Monad's real gas and pool rules, MCP's new protocol and SDK v2, pause-and-ask only in Claude Code and Codex, WhatsApp's 24-hour rule.
+**Status: v3.9, 7 Oct 2026.** v3.9: the MCP server moves to Vercel (`mcp-handler`), and the test agent uses the Vercel AI SDK; Railway keeps the always-running gateway, checker and Postgres.
+
+**v3.8, 7 Oct 2026.** v3.8 carries the Slice 3 and 4 research forward: Monad's real gas and pool rules, MCP's new protocol and SDK v2, pause-and-ask only in Claude Code and Codex, WhatsApp's 24-hour rule.
 
 **v3.7, 7 Oct 2026.** (Afshal: "go ahead"): Spike 4 tests one Countersign connector from Grok, Claude Code, Codex and Muse, plus an OpenRouter test agent (D30); held payments can also reach the person on WhatsApp (D31).
 
@@ -569,8 +571,8 @@ After a slice is built, two sections are added: **What was built** and **Adapted
 | Primus | Attestation | Proof of a supplier's address file |
 | ERC-8004 registries | Agent identity | Who the paying agent is |
 | Grok, Claude (and Claude Code), Codex, Muse | The demo | The agents people already use, each connected to the same MCP server |
-| Vercel | Approver app, supplier portal | Hosting |
-| Railway | Gateway, checker, MCP server, Postgres | Hosting |
+| Vercel | Approver app, supplier portal, demo shop, **MCP server** (`mcp-handler`, from Slice 4) | Hosting; the Vercel AI SDK for the OpenRouter test agent and model calls |
+| Railway | Gateway (relayer pool, finality websocket, run queue), checker, Postgres | Always-running processes Vercel functions cannot hold |
 
 ## What Already Exists
 
