@@ -1,0 +1,37 @@
+# Spike 2 only. Same compiler settings as contracts/.
+[profile.default]
+src = "src"
+out = "out"
+test = "test"
+script = "script"
+libs = ["dependencies"]
+# Primus's repo ships its own remappings (lib/ submodules); use only ours.
+auto_detect_remappings = false
+solc_version = "0.8.37"
+optimizer = true
+optimizer_runs = 200
+via_ir = true
+bytecode_hash = "none"
+use_literal_content = true
+fs_permissions = [{ access = "read", path = "./test/fixtures" }]
+
+[fuzz]
+runs = 256
+
+[profile.ci.fuzz]
+runs = 5000
+
+[rpc_endpoints]
+monad_testnet = "${MONAD_RPC_URL}"
+
+[soldeer]
+remappings_generate = true
+remappings_regenerate = false
+remappings_version = false
+remappings_location = "txt"
+
+[dependencies]
+"@openzeppelin-contracts" = "5.7.0"
+"@openzeppelin-contracts-upgradeable" = "5.7.0"
+forge-std = "1.17.0"
+primus-zktls-contracts = { version = "0.1.0", git = "https://github.com/primus-labs/zktls-contracts.git", rev = "3082c53d02bd899f5efe7700158f1aa166cac6c0" }

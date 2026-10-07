@@ -94,6 +94,37 @@ jobs:
       - run: forge fmt --check
       - run: forge test -vv
 
+  spike-02-primus:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: spikes/02-primus
+    env:
+      FOUNDRY_PROFILE: ci
+    steps:
+      - uses: actions/checkout@v7
+      - uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: v1.8.5
+      # The Soldeer registry has outages (HTTP 520/522 on 6 Oct 2026). Cache the
+      # downloaded libraries by lock file, and retry the install when it does run.
+      - uses: actions/cache@v6
+        id: soldeer-spike-02
+        with:
+          path: spikes/02-primus/dependencies
+          key: soldeer-spikes/02-primus-${{ hashFiles('spikes/02-primus/soldeer.lock') }}
+      - name: Install Solidity dependencies
+        if: steps.soldeer-spike-02.outputs.cache-hit != 'true'
+        run: |
+          for attempt in 1 2 3 4 5; do
+            forge soldeer install && exit 0
+            echo "Soldeer install failed (attempt $attempt), retrying in $((attempt * 15)) s"
+            sleep $((attempt * 15))
+          done
+          exit 1
+      - run: forge fmt --check
+      - run: forge test -vv
+
   secrets:
     runs-on: ubuntu-latest
     steps:
