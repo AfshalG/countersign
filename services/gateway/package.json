@@ -11,7 +11,9 @@
     "testnet-run": "tsx scripts/testnet-run.ts",
     "approvals-smoke": "tsx scripts/approvals-smoke.ts",
     "sample-approvals": "tsx scripts/sample-approvals.ts",
-    "top-up": "tsx scripts/top-up.ts"
+    "top-up": "tsx scripts/top-up.ts",
+    "fund-demo-wallet": "tsx scripts/fund-demo-wallet.ts",
+    "judge-smoke": "tsx scripts/judge-smoke.ts"
   },
   "dependencies": {
     "@countersign/chain": "workspace:*",
