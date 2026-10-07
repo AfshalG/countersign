@@ -35,3 +35,40 @@ export const ACCOUNT: Address = '0xE890B35be32F04032B502Dc4Dc2db8062aD6d603';
 export const VAULT: Address = '0xbd19BbE40044a3175A3213D8408a434b882CADF4';
 export const SUPPLIER: Address = '0x90f9931B748B26763161a8191C178Fe425C25fEc';
 export const AGENT_SIG: Hex = `0x${'ab'.repeat(65)}`;
+
+import type { Sender, SendOutcome } from '../src/relay/pool.js';
+
+/** Records every send. Endpoints listed in `blackHoles` accept a transaction and never include it. */
+export class FakeSender implements Sender {
+  sent: { endpoint: number; raw: Hex; at: number }[] = [];
+  blackHoles = new Set<number>();
+  chainNonces = new Map<string, number>();
+  reply: (endpoint: number, raw: Hex) => SendOutcome = () => 'accepted';
+
+  send(endpoint: number, raw: Hex): Promise<SendOutcome> {
+    this.sent.push({ endpoint, raw, at: Date.now() });
+    return Promise.resolve(this.reply(endpoint, raw));
+  }
+
+  nonceOf(address: Address): Promise<number> {
+    return Promise.resolve(this.chainNonces.get(address.toLowerCase()) ?? 0);
+  }
+
+  fees(): Promise<{ maxFeePerGas: bigint; maxPriorityFeePerGas: bigint }> {
+    return Promise.resolve({
+      maxFeePerGas: 127_500_000_000n,
+      maxPriorityFeePerGas: 2_000_000_000n,
+    });
+  }
+}
+
+export async function waitFor(
+  condition: () => boolean | Promise<boolean>,
+  timeoutMs = 3_000,
+): Promise<void> {
+  const start = Date.now();
+  while (!(await condition())) {
+    if (Date.now() - start > timeoutMs) throw new Error('timed out waiting for condition');
+    await new Promise((r) => setTimeout(r, 10));
+  }
+}

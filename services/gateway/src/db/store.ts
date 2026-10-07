@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import type { Address, Hex } from 'viem';
 import {
   canTransition,
@@ -212,6 +212,51 @@ export class Store {
       .onConflictDoNothing({ target: runs.id })
       .returning({ id: runs.id });
     return inserted.length > 0;
+  }
+
+  /**
+   * Reserves a relayer's next nonce, signs with it and, when `requestId` is given, stores the
+   * signed transaction on that released request, all in one database transaction: if anything
+   * fails the nonce is not used, so a crash can never leave a gap that blocks the wallet.
+   * The row lock on the relayer's nonce serialises concurrent signers for the same wallet.
+   */
+  async signWithNextNonce<T extends { raw: Hex; hash: Hex }>(
+    address: Address,
+    chainNonce: number,
+    sign: (nonce: number) => Promise<T>,
+    requestId?: string,
+  ): Promise<T & { nonce: number }> {
+    return this.db.transaction(async (tx) => {
+      const result = await tx.execute<{ nonce: number }>(sql`
+        insert into relayer_nonces (address, next_nonce) values (${address.toLowerCase()}, ${chainNonce + 1})
+        on conflict (address) do update set next_nonce = greatest(relayer_nonces.next_nonce, ${chainNonce}) + 1
+        returning next_nonce - 1 as nonce`);
+      const row = result.rows[0];
+      if (!row) throw new Error(`no nonce reserved for ${address}`);
+      const signed = await sign(row.nonce);
+      if (requestId !== undefined) {
+        const attached = await tx
+          .update(paymentRequests)
+          .set({
+            relayer: address,
+            relayerNonce: row.nonce,
+            rawTx: signed.raw,
+            txHash: signed.hash,
+            updatedAt: new Date(),
+          })
+          .where(
+            and(
+              eq(paymentRequests.id, requestId),
+              eq(paymentRequests.status, 'released'),
+              isNull(paymentRequests.rawTx),
+            ),
+          )
+          .returning({ id: paymentRequests.id });
+        if (attached.length === 0)
+          throw new Error(`request ${requestId} is no longer waiting to be sent`);
+      }
+      return { ...signed, nonce: row.nonce };
+    });
   }
 
   /**
