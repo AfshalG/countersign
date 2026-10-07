@@ -5,6 +5,7 @@ import type { DemoAccountRow } from '../db/schema.js';
 import type { Store } from '../db/store.js';
 import type { RelayerPool } from '../relay/pool.js';
 import type { FinalityTracker } from '../chain/finality.js';
+import type { DemoAgent } from './invoices.js';
 import { AssertionError, fromBrowser, type BrowserAssertion } from '../api/webauthn.js';
 import {
   DEMO_FUNDING,
@@ -51,6 +52,10 @@ export type DemoDeps = {
   checkerKey: Address;
   /** New demo accounts allowed per UTC day: each costs about 0.09 MON to set up. */
   perDay: number;
+  /** The demo agent's key (testnet only), for the demo invoices it pays into judges' accounts. */
+  agentPrivateKey?: Hex;
+  /** For tests: the demo agent itself. */
+  agent?: DemoAgent;
   finalTimeoutMs?: number;
 };
 

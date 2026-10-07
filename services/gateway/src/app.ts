@@ -521,7 +521,7 @@ export function createApp(deps: AppDeps) {
 
   registerOrderRoutes(app, { store, chain, indexing: deps.indexing, publicUrl });
   registerApprovalRoutes(app, { store, chain, chainId: deps.chainId, publicUrl });
-  if (deps.demo) registerDemoRoutes(app, deps.demo);
+  if (deps.demo) registerDemoRoutes(app, deps.demo, { token: deps.token, publicUrl });
 
   // A page a person can open from an agent's message; public, like the link in the message.
   app.get('/p/:id', async (c) => {

@@ -64,6 +64,16 @@ const assertion = (digest: Hex) => {
   };
 };
 
+const readyAccount = async (app: ReturnType<typeof appWith>) => {
+  const view = (await (
+    await post(app, '/v1/demo/accounts', { publicKey: { x: judge.qx, y: judge.qy } })
+  ).json()) as View;
+  await post(app, `/v1/demo/accounts/${view.account}/setup`, {
+    assertions: view.actions.map((a) => assertion(a.challenge)),
+  });
+  return view.account;
+};
+
 describe('judge mode over HTTP (what the approver app calls, with no token)', () => {
   it('creates the account for a passkey and gives back the three actions to sign', async () => {
     const app = appWith(deps);
@@ -119,6 +129,70 @@ describe('judge mode over HTTP (what the approver app calls, with no token)', ()
       publicKey: { x: other.qx, y: other.qy },
     });
     expect(limited.status).toBe(429);
+  });
+
+  it('has the demo agent pay an invoice into the account: settled, or held with the approval to decide', async () => {
+    const paid: { account: Address; payTo: Address; held: boolean }[] = [];
+    deps.agent = {
+      pay: (account, invoice) => {
+        const held =
+          invoice.payTo !== '0x90f9931B748B26763161a8191C178Fe425C25fEc' ||
+          (invoice.document !== undefined && JSON.stringify(invoice.document).includes('testHold'));
+        paid.push({ account, payTo: invoice.payTo, held });
+        return Promise.resolve({
+          id: `0x${'ab'.repeat(32)}`,
+          status: held ? 'held' : 'settled',
+          reason: held ? 'address_mismatch' : null,
+          reasonText: held
+            ? 'The invoice’s payment address is not the supplier’s address on file.'
+            : null,
+          txHash: held ? null : `0x${'cd'.repeat(32)}`,
+        });
+      },
+    };
+    const app = appWith(deps);
+    const account = await readyAccount(app);
+    const clean = await post(app, `/v1/demo/accounts/${account}/invoices`, { kind: 'clean' });
+    expect(clean.status).toBe(200);
+    expect(await clean.json()).toMatchObject({
+      kind: 'clean',
+      status: 'settled',
+      approvalUrl: null,
+    });
+    const changed = await post(app, `/v1/demo/accounts/${account}/invoices`, {
+      kind: 'changed_address',
+    });
+    expect(await changed.json()).toMatchObject({
+      status: 'held',
+      approvalUrl: `https://gateway.test/v1/approvals/0x${'ab'.repeat(32)}`,
+      statusUrl: `https://gateway.test/p/0x${'ab'.repeat(32)}`,
+    });
+    expect(paid.map((p) => p.account)).toEqual([account, account]);
+  });
+
+  it('refuses invoices before the account is set up, and once its order is used up', async () => {
+    deps.agent = { pay: () => Promise.resolve('no_open_order') };
+    const app = appWith(deps);
+    const created = (await (
+      await post(app, '/v1/demo/accounts', { publicKey: { x: judge.qx, y: judge.qy } })
+    ).json()) as View;
+    const early = await post(app, `/v1/demo/accounts/${created.account}/invoices`, {
+      kind: 'clean',
+    });
+    expect(early.status).toBe(409);
+    expect(await early.json()).toMatchObject({ error: 'not_ready' });
+    await post(app, `/v1/demo/accounts/${created.account}/setup`, {
+      assertions: created.actions.map((a) => assertion(a.challenge)),
+    });
+    const used = await post(app, `/v1/demo/accounts/${created.account}/invoices`, {
+      kind: 'clean',
+    });
+    expect(used.status).toBe(409);
+    expect(await used.json()).toMatchObject({ error: 'order_used_up' });
+    expect(
+      (await post(app, `/v1/demo/accounts/${created.account}/invoices`, { kind: 'nonsense' }))
+        .status,
+    ).toBe(400);
   });
 
   it('answers the browser’s CORS preflight', async () => {

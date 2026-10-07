@@ -1,8 +1,10 @@
 /**
  * Judge mode on a live gateway (Slice 9 part 4), as a new judge's phone does it: a fresh passkey
  * (a software one here; Face ID on a phone) gets an account, signs its three setup actions, and
- * the order appears in the gateway's index. No service token on the judge-mode calls. Spends
- * about 0.09 MON and 0.01 USDC.
+ * the order appears in the gateway's index; then the demo agent pays three invoices into it and the
+ * judge decides the held ones with the same passkey: a clean one settles, a look-alike address is
+ * refused, an amount hold is paid once. No service token on the judge-mode or approval calls.
+ * Spends about 0.14 MON and 0.01 USDC.
  *
  *   pnpm --filter @countersign/gateway judge-smoke [gateway URL]
  */
@@ -74,4 +76,73 @@ for (;;) {
   if (Date.now() - t > 45_000) throw new Error('the order was not indexed within 45 s');
   await new Promise((r) => setTimeout(r, 1_000));
 }
+
+type Invoice = { status: string; requestId: Hex; reasonText: string | null; txHash: Hex | null };
+type Approval = {
+  status: string;
+  actions: Record<string, { challenge: Hex }>;
+  summary: { txHash: Hex | null };
+};
+const invoice = async (kind: string) => {
+  const started = Date.now();
+  const r = (await call('POST', `/v1/demo/accounts/${created.account}/invoices`, {
+    kind,
+  })) as unknown as Invoice;
+  return { ...r, ms: Date.now() - started };
+};
+const approval = async (id: Hex) =>
+  (await (await fetch(`${gateway}/v1/approvals/${id}`)).json()) as Approval;
+const decide = async (id: Hex, action: string, challenge: Hex) => {
+  const s = judge.sign(challenge);
+  const res = await fetch(`${gateway}/v1/approvals/${id}`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      action,
+      assertion: {
+        authenticatorData: s.authenticatorData,
+        clientDataJSON: s.clientDataJSON,
+        signature: { r: s.r, s: s.s },
+      },
+    }),
+  });
+  return { status: res.status, body: (await res.json()) as Approval };
+};
+
+const clean = await invoice('clean');
+console.log(
+  `clean invoice: ${clean.status} in ${String(clean.ms)} ms, tx ${clean.txHash ?? 'none'}`,
+);
+
+const changed = await invoice('changed_address');
+const changedView = await approval(changed.requestId);
+console.log(
+  `changed address: ${changed.status} (${changed.reasonText ?? ''}); actions offered: ${Object.keys(changedView.actions).join(', ')}`,
+);
+const refused = await decide(
+  changed.requestId,
+  'refuse',
+  changedView.actions.refuse?.challenge as Hex,
+);
+console.log(`  refused with the judge's passkey: ${String(refused.status)} ${refused.body.status}`);
+
+const amount = await invoice('amount_mismatch');
+const amountView = await approval(amount.requestId);
+console.log(
+  `amount hold: ${amount.status}; actions offered: ${Object.keys(amountView.actions).join(', ')}`,
+);
+t = Date.now();
+const once = await decide(
+  amount.requestId,
+  'pay_once',
+  amountView.actions.pay_once?.challenge as Hex,
+);
+let after = once.body;
+while (after.status !== 'settled' && Date.now() - t < 30_000) {
+  await new Promise((r) => setTimeout(r, 300));
+  after = await approval(amount.requestId);
+}
+console.log(
+  `  paid once with the judge's passkey: ${String(once.status)} ${once.body.status}, then ${after.status} in ${String(Date.now() - t)} ms, tx ${after.summary.txHash ?? 'none'}`,
+);
 console.log(`explorer: https://testnet.monadexplorer.com/address/${created.account}`);
