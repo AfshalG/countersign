@@ -34,7 +34,7 @@ Everything the owner does, done with the passkey on their phone and enforced by 
 - `GET /v1/approvals/{id}`: no token (D24), CORS open (the app runs on another origin). Returns the status, a summary (amount, payee, the address on file, the reason in plain words), `differences[]`, and for a held payment two actions, `pay_once` and `refuse`, each with its `challenge` (the digest the passkey signs) and its typed data (for display and independent checking). A refusal's decision is fixed by the gateway (`reasonHash` = keccak256("refused by the owner"), `evidenceHash` = the request id), so the challenge shown is the one checked.
 - `POST /v1/approvals/{id}` `{ action, assertion }`: the assertion as `ox` gives it (hex authenticator data, the client data JSON, `{ r, s }`) or as `navigator.credentials.get` gives it (base64url, a DER signature). The gateway checks it is a `webauthn.get` over that action's challenge (a mismatch is refused before any chain call), derives the indexes, normalises s, then runs the same checks as the token routes: `payWithOwner` simulated, or `recordDecisionByOwner` verified. The passkey is the authorisation.
 
-**Part 2: approving a proposal on chain.** The view of a pending proposal offers `approve` (two signatures: `setSupplier`, then `approveOrder`, at consecutive nonces) and `refuse`. The gateway sends both transactions through the relayers, waits for Finalized, and marks the proposal approved. The account must hold the order's USDC.
+**Part 2: approving a proposal on chain (BUILT and run on testnet 7 Oct).** The view of a pending proposal offers `approve` (two signatures: `setSupplier`, then `approveOrder`, at consecutive nonces) and `refuse`. The gateway sends both transactions through the relayers, waits for Finalized, and marks the proposal approved. The account must hold the order's USDC.
 
 **Part 3: pause and unpause** from the app, the stop button (D23).
 
@@ -102,6 +102,21 @@ Provisioned: a separate funding wallet (`0x99c1…16Bb`, 0.5 MON and 2 USDC, abo
 | Amount hold (the stand-in checker, until Slice 10) | held, pay once or refuse; paid once with the judge's passkey, settled 1.35 s later through `payWithOwner` (tx `0x591d9ec41ce81bff7450a31ce3ae513756c0dd47d0552aa28ac3d27a93985527`) |
 | Tests | 322, including the real demo agent (our SDK in-process) paying through the full gateway on the fake chain |
 
+## Results, part 2 (7 Oct 2026, Monad testnet)
+
+`pnpm --filter @countersign/gateway proposal-smoke` against the hosted gateway (`20a2330`), a fresh judge account (`0x76dB7fE105b80e589EbB1070e54AEAD199AAE951`), no token on the approval calls:
+
+| Step | Result |
+|---|---|
+| The agent proposes Northwind Prints, 0.002 USDC, from a quote | the view offers `set_supplier`, `approve_order`, `refuse`, each with a plain summary; the account holds 0.005 USDC |
+| Approved with two passkey signatures | approved in 2.9 s (supplier added, then the order opened, each final before the next) |
+| The new order | indexed 0.24 s later, 2,000 base units |
+| The demo agent pays Northwind from it | settled (tx `0x68ce683f9ec022d49b625a76d9c4dc7448ca52ed60d857e71708230f4ddf30f8`) |
+| A second proposal (Southwind Ltd) | refused with the passkey, checked off chain against the account's owner key |
+| Tests | 340, including 11 for approving and refusing proposals and 4 for their routes |
+
+Design notes: the supplier's on-chain id comes from its name's slug (`supplierSlug`, so "Kalibre Studio" is Slice 5's `kalibre-studio` and a proposal never makes one supplier into two); the order's hash is the quote the agent read; a changed address is shown as a difference and approving it changes the address for every order (and the waiting period applies); only refuse is offered when the account cannot fund the order.
+
 ### Findings, carried forward
 
 1. **Railway did not deploy on push (fixed 7 Oct).** The Railway GitHub app was installed on another GitHub organisation but not on Afshal's personal account, so Railway could build the public repo when asked but could not list its branches or receive pushes. Afshal installed it for `countersign` only; the production environment is now connected to `development` (auto deploy on push) with **Wait for CI** on, so a merge deploys only after GitHub Actions pass. Switching production to `main` later is one setting. Verified: merge `9556a23` deployed itself after CI and was live about 105 s later. → Slice 21's deploy notes.
@@ -113,5 +128,5 @@ Provisioned: a separate funding wallet (`0x99c1…16Bb`, 0.5 MON and 2 USDC, abo
 
 ## Next
 
-Slice 11 (Sophie): the approver app on these routes, briefed in `apps/approver/FEATURES.md`. Next here: Part 2 (approve a proposed supplier and order with the passkey), then Part 3 (pause and unpause).
+Slice 11 (Sophie): the approver app on these routes, briefed in `apps/approver/FEATURES.md`. Next here: Part 3 (pause and unpause, the stop button).
 
