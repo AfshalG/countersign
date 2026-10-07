@@ -5,6 +5,8 @@
 
 An AI agent reads a supplier invoice and drafts the payment. Countersign's checker compares the invoice with the purchase order the company approved. A match is paid from that order's vault on Monad and is final about 0.6 seconds later. Anything that differs (a changed address, a padded amount, a duplicate, a hijacked agent) is held, and a person decides with Face ID. The rule lives in the contract, so it holds whichever agent prepared the payment.
 
+**Two layers (D32).** The contract is the security boundary: paying the wrong party is impossible, whoever signs (proved on testnet in Slice 5, no model involved). The checker is a detector for the right supplier billed the wrong amount (padded, duplicate, wrong order), published with its catch rate and false-hold rate. Lead with the contract; never present the checker as a guarantee.
+
 **Pitch line:** "Your agent can prepare the payment. It should not be the only one who signs it."
 **Tagline:** "Check any payment. Enforce it on Monad."
 
@@ -107,6 +109,8 @@ Pinned in Slice 0 (6 Oct 2026, checked with Context7 and npm): Node 24 LTS, pnpm
 - Tests run against deterministic mock model responses first. Real model calls only after those pass.
 - The model never sees a key, and its output never chooses an address or an amount.
 - The checker key lives only in the checker service.
+- Read invoice fields from structured data first; read a PDF from its text layer and its rendered page, and hold on any disagreement.
+- The checker is scored on the invoice set (catch rate, false holds) from Slice 10. Fooling the model can at most let through a payment that already passed every code check and contract rule; say exactly that, never "gains nothing".
 
 ## Agent-Facing Features
 

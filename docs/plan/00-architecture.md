@@ -125,6 +125,8 @@ You add Countersign to your agent (Grok, Claude) with one link. Face ID creates 
 
 **What a hijacked agent can still do.** Propose a bad order, which does nothing until a person signs it. Pay a real supplier, at its address on file, up to the approved amount of an open order. Nothing else.
 
+**What protects the money, and what the checker adds (D32, 7 Oct).** The contract is the security boundary: paying the wrong party is impossible, whoever signs (proved on testnet in Slice 5, no model involved). The checker is a **detector** for the payments the contract allows but the company would not: the right supplier paid the wrong amount (a padded invoice, the same work billed twice under a new invoice number, an invoice matched to the wrong order). It has a catch rate and a false-hold rate, which we measure on the demo set from Slice 10 and publish in Slice 20; we do not assume it is perfect. When it misses, the most that can go wrong is overpaying an approved supplier within one order. The pitch leads with the contract ("a compromised agent cannot steal this money") and presents the checker second, with its numbers.
+
 ## Which Agents Can Use It
 
 From `research/2026-10-01-how-ai-agents-pay-report.md` (research workspace). One remote MCP server with sign-in is the door for all of them.
@@ -195,7 +197,7 @@ A company's inbox gets dozens of invoices at once, several agents may work on it
 
 | Moat | Why it holds | What the hackathon shows |
 |---|---|---|
-| **Independence** | A check made by the agent, or by the company that makes the agent, is not a second signature. Auditors expect the party that prepares a payment not to be the only one that approves it. Agent vendors cannot be neutral across Grok, Claude, Muse and the rest; Countersign works with all of them | The same account checked whichever agent prepared the payment |
+| **Independence** | A check made by the agent, or by the company that makes the agent, is not a second signature. Auditors expect the party that prepares a payment not to be the only one that approves it. An agent vendor has little reason to check payments prepared by other vendors' agents; Countersign checks all of them. Independence is real when the company or its agent holds the agent key; in hosted mode we hold both keys (a stated limit), so the demo keeps the agent key on the agent's side | The same account checked whichever agent prepared the payment |
 | **Enforcement in the account** | The rule lives in the contract that holds the money. A check that only warns (a payee-verification service, a feature inside an agent) can be ignored or bypassed; this one cannot. Moving a company's paying account is also a bigger step than switching a tool | A held payment the contract refuses even when the agent signs it |
 | **A network of verified suppliers** | When a supplier publishes its address file and is verified (Slice 2), every Countersign customer that pays it benefits. Each new customer brings its suppliers; each verified supplier makes the product better for the next customer. Suppliers gain too: once verified, fewer of their invoices are held | The mechanism only (a verified supplier record any account can rely on); the network is a claim for later |
 | **The record of decisions** | Every approval, refusal and exception, with the evidence it relied on (D21), builds each company's payment history: its usual suppliers, amounts and timing. That history makes later checks more accurate and is the audit trail. It stays with the company's Countersign account, not with whichever agent it uses this year | The payment record and audit export (Slice 18) |
@@ -337,6 +339,8 @@ Agent and checker keys together can pay a supplier on file, at its address on fi
 - **Hosted mode.** Countersign holds both the agent key and the checker key, in separate services. The two-signature rule then guards against a hijacked agent, not against a compromised Countersign. The contract's limits bound that case.
 - **A proposal is only as good as its approval.** A hijacked agent can propose a bad supplier or order. The sheet shows the website check, but a person who taps through without reading can still approve it.
 - **The checker reads the same invoice the agent read.** A clever invoice could mislead both. Exact comparisons and the contract's limits bound what that can cost.
+- **Reading invoices is the weak link.** Comparisons are only as good as the fields read from the document. Structured invoices are read as data; a PDF whose text layer and rendered page disagree is held; a document that fools both readings the same way is bounded by the contract (the right supplier, within one order).
+- **The checker is a detector, not a guarantee.** It is published with its catch rate and false-hold rate on our invoice set (Slices 10 and 20).
 - **A real change of payment address waits.** A supplier who genuinely changes wallets is paid after the waiting period, not at once.
 - **A real supplier overbilling within tolerance is not fully stoppable.** The most it can cost is what is left in that one order.
 - **Whoever controls the approver's Apple or Google account controls their approvals.** Synced passkeys follow that account. A second approver for large amounts, or a device-bound key, narrows this later.
@@ -398,13 +402,13 @@ Six tools, all in one list page. `pay_invoice`, `pay_invoices` and `propose_orde
 
 ## The Check, Concretely (draft, fixed in Slice 10)
 
-1. The checker gets the invoice from its source where there is one, otherwise the file the agent passed. It hashes it.
-2. **Code** pulls every address and amount out of the text and compares them exactly with the order and the supplier record.
+1. The checker gets the invoice from its source where there is one (our supplier portal issues invoices with their fields as structured data; e-invoice formats such as UBL or Factur-X carry the same), otherwise the file the agent passed. It hashes it.
+2. **Reading the fields is the weak link, so it is done carefully.** Structured data is used when present. A plain PDF is read twice, from its text layer and from the rendered page, and any disagreement (hidden or overlaid text, a text layer that differs from what a person sees) is a hold. **Code** then compares every address and amount exactly with the order and the supplier record.
 3. **Jev**, through OpenRouter's System One API (`@typesafe-ai/sdk` with base URL `https://openrouter.ai/api`) and pinned to `jev-1.13` (the `jev-latest` alias moves with each release; every check logs the version that answered), answers fixed questions: is this the same supplier as on the order; is every line on the invoice also on the order; does the invoice ask for payment anywhere other than the address on file; does it contain instructions addressed to an automated reader.
 4. The time limit is about 1.5 seconds **in total**. The SDK's `timeout` is per attempt (default 10 s), it retries twice by default and honours a server's Retry-After for up to 60 s, so the checker passes `AbortSignal.timeout(1_500)`, allows at most one retry with a short backoff, and ignores Retry-After. **Claude Sonnet** is the fallback behind the same interface. Jev 1.13's documented weak spots (numbers, dates, counting, adversarial text) are exactly what code handles here; the model answers only yes-or-no questions about meaning.
 5. Any error, timeout or "unsure" is a hold.
 
-**The model can only hold, never release (D27).** "Clear" is decided by code against owner-signed records: approved supplier, address on file, amount within the order, invoice not paid before, evidence still fresh. The model's answers can only add a hold. A "looks fine" from the model never releases a payment that failed a code check, and the checker's signature is produced only when every code check passes. So fooling the model gains an attacker nothing. Slice 10 tests this directly: every code failure stays held whatever the model returns.
+**The model can only hold, never release (D27).** "Clear" is decided by code against owner-signed records: approved supplier, address on file, amount within the order, invoice not paid before, evidence still fresh. The model's answers can only add a hold. A "looks fine" from the model never releases a payment that failed a code check, and the checker's signature is produced only when every code check passes. Fooling the model can therefore only let through a payment that already passed every code check and every contract rule: to an approved supplier, at its address on file, within what is left of an approved order. That is the worst case of a miss, and why the checker is measured as a detector (D32) rather than presented as a guarantee. Slice 10 tests this directly: every code failure stays held whatever the model returns.
 
 **Evidence that expires (D21).** Each supplier and order keeps the evidence it was approved on: the address and the website proof that listed it (with its time), the quote it came from, and the passkey that approved it. Every check records which evidence it relied on. When that evidence changes or expires (the supplier's file changes, the proof is older than its limit, an invoice brings new payment details), the next payment re-checks exactly that item before paying, and the approval sheet says which assumption changed. Stale evidence is shown as stale, never as verified. The payment record (Slice 18) keeps the chain: payment, check, evidence, decision.
 
@@ -457,12 +461,13 @@ CORE PIPELINE (a scripted agent pays a clean invoice, no prompt):
   Slice 5:   Account and order vaults: policy, suppliers, pay, log    DONE (on testnet)
   Slice 6:   Gateway: requests, runs queue, relayer pool, finality    PLANNED
   Slice 7:   Supplier portal and demo shop: invoices and orders,      TODO
-             clean and doctored
+             clean and doctored, as the scored invoice set
   Slice 8:   Rule checks + scripted agent: first end-to-end payment   TODO
 
 THE HOLD:
   Slice 9:   Passkey owner: factory, suppliers, orders, pay once      TODO
-  Slice 10:  Invoice check: own read, exact compare, guard model      TODO
+  Slice 10:  Invoice check: own read, exact compare, guard model,     TODO
+             scored on the set (catch rate, false holds)
   Slice 11:  Approver app: proposals, holds, feed, the diff           TODO
 
 AGENT DOOR:
@@ -499,7 +504,7 @@ SHIP:
 | 21 | "Where your data goes" table |
 | 22 | Pitch labels "live on testnet today" against "next"; the independence argument; a "what if the big players build this" table |
 
-**What is demoable when.** After Slice 8, an invoice is paid on Monad. After Slice 11, the whole story runs with a scripted agent: clean invoice paid, changed address held and refused. After Slice 14, it runs in Grok or Claude, which is the version we demo.
+**What is demoable when.** After Slice 8, an invoice is paid on Monad. After Slice 11, the whole story runs with a scripted agent, in this order: a hijacked agent tries to pay a look-alike address and the contract refuses it (no model involved); a clean invoice is paid; a padded invoice to the real supplier, within budget, is held by the checker (D32). After Slice 14, it runs in Grok or Claude, which is the version we demo.
 
 **Nothing is cut for time (Afshal, 6 Oct): "Don't cut out any of the technicalities or technical depth from our initial plan even if you think that the time is not enough."** All 23 slices, 0 to 22, are in the entry, including attestation (15), the payment run (16), the bank-invoice check (17), the audit record (18), agent identity (19) and the benchmark (20). Only x402 paid services are a stretch goal, by Afshal's choice.
 
@@ -630,6 +635,7 @@ None of these has had an explicit yes, except that Afshal has said parallel exec
 | D29 | First-payment cap | Payments to an address newer than a set period are capped lower than usual. Decided from the address's activation time, not a payment count, so vaults share no counter (Slice 5, 7 Oct) |
 | D30 | One connector, many agents | Spike 4 tests one Countersign MCP server from Grok, Claude Code, Codex and Muse, and builds an OpenRouter test agent that runs the same scenarios across several models (also used by the benchmark in Slice 20). Instinct cannot take tools and is not connected |
 | D31 | WhatsApp approvals | Held payments and proposals can be sent to the person on WhatsApp as a link-button message (`cta_url`) to the approval page; the passkey still signs on the page. WhatsApp allows free-form messages only within 24 hours of the person's last message, so the person messages Countersign once to connect, and an approved template with a URL button (review up to 24 h, submitted early) covers the rest. Built with Slice 14. iMessage is not offered (Apple requires an approved provider) |
+| D32 | The contract is the boundary; the checker is a measured detector | Answering a critique (7 Oct): the contract makes paying the wrong party impossible; the checker catches the right party paid the wrong amount (padded, duplicate, wrong order), with a catch rate and false-hold rate measured from Slice 10 and published in Slice 20. Invoices are read as structured data first; a PDF is read from its text layer and its rendered page, and disagreement is a hold. The demo keeps the agent key on the agent's side. The pitch leads with the contract |
 | — | Who builds | Sophie and Roshan are busy this week; Claude drafts and builds their slices, Afshal reviews. Ownership in D6 returns when they are free |
 
 ---
