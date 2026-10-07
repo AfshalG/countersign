@@ -58,8 +58,9 @@ contract VaultPayTest is Base {
 
     function test_SignaturesForAnotherVaultAreRefused() public {
         _setSupplier(keccak256("other"), makeAddr("other wallet"), true);
-        vm.warp(block.timestamp + WAIT);
-        OrderVault other = _approveOrder(keccak256("order 2"), SUPPLIER, 50_000, uint64(block.timestamp + 30 days));
+        vm.warp(vm.getBlockTimestamp() + WAIT);
+        OrderVault other =
+            _approveOrder(keccak256("order 2"), SUPPLIER, 50_000, uint64(vm.getBlockTimestamp() + 30 days));
         Payment memory p = _payment(10_000, INVOICE);
         (bytes memory a, bytes memory c) = _sigs(other, p); // signed for the other vault
         vm.expectRevert(InvalidAgentSignature.selector);
@@ -96,7 +97,7 @@ contract VaultPayTest is Base {
         (bytes memory a, bytes memory c) = _sigs(vault, p);
         vm.expectRevert(AddressNotYetActive.selector);
         vault.pay(p, a, c);
-        vm.warp(block.timestamp + WAIT);
+        vm.warp(vm.getBlockTimestamp() + WAIT);
         p.deadline = _deadline();
         _pay(vault, p);
         assertEq(usdc.balanceOf(moved), 10_000);
@@ -118,13 +119,13 @@ contract VaultPayTest is Base {
     }
 
     function test_TheNormalCapAppliesOnceTheAddressIsNoLongerNew() public {
-        vm.warp(block.timestamp + NEW_PERIOD);
+        vm.warp(vm.getBlockTimestamp() + NEW_PERIOD);
         _pay(vault, _payment(NEW_CAP + 1, INVOICE));
         assertEq(usdc.balanceOf(supplierAddr), NEW_CAP + 1);
     }
 
     function test_RefusesMoreThanTheCap() public {
-        vm.warp(block.timestamp + NEW_PERIOD);
+        vm.warp(vm.getBlockTimestamp() + NEW_PERIOD);
         Payment memory p = _payment(CAP + 1, INVOICE);
         (bytes memory a, bytes memory c) = _sigs(vault, p);
         vm.expectRevert(OverCap.selector);
@@ -132,7 +133,7 @@ contract VaultPayTest is Base {
     }
 
     function test_RefusesMoreThanIsLeftInTheOrder() public {
-        vm.warp(block.timestamp + NEW_PERIOD);
+        vm.warp(vm.getBlockTimestamp() + NEW_PERIOD);
         _pay(vault, _payment(45_000, INVOICE));
         Payment memory p = _payment(5_001, keccak256("second invoice"));
         (bytes memory a, bytes memory c) = _sigs(vault, p);
@@ -255,9 +256,9 @@ contract VaultOwnerTest is Base {
 
     function test_TheOwnerDoesNotNeedACurrentAgentPolicy() public {
         Policy memory shortLived = defaultPolicy();
-        shortLived.expiry = uint64(block.timestamp + 1 days);
+        shortLived.expiry = uint64(vm.getBlockTimestamp() + 1 days);
         _setPolicy(shortLived);
-        vm.warp(block.timestamp + 2 days); // policy over, order (30 days) still open
+        vm.warp(vm.getBlockTimestamp() + 2 days); // policy over, order (30 days) still open
         Payment memory p = _payment(10_000, INVOICE);
         (bytes memory a, bytes memory c) = _sigs(vault, p);
         vm.expectRevert(PolicyExpired.selector);

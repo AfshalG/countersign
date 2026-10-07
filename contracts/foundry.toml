@@ -13,7 +13,10 @@ via_ir = true
 bytecode_hash = "none"
 use_literal_content = true
 # The EIP-712 fixture shared with packages/shared (test/Eip712Fixture.t.sol).
-fs_permissions = [{ access = "read-write", path = "../packages/shared/test/fixtures" }]
+fs_permissions = [
+    { access = "read-write", path = "../packages/shared/test/fixtures" },
+    { access = "read-write", path = "deployments" },
+]
 
 [lint]
 # Deadlines, waiting periods and expiries are hours to days long; the few seconds a block

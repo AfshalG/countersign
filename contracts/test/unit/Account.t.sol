@@ -165,7 +165,7 @@ contract PolicyTest is Base {
 
     function test_APolicyMustNotAlreadyHaveExpired() public {
         Policy memory p = defaultPolicy();
-        p.expiry = uint64(block.timestamp);
+        p.expiry = uint64(vm.getBlockTimestamp());
         _expectNext(InvalidPolicy.selector);
         _setPolicy(p);
     }
@@ -209,8 +209,8 @@ contract PolicyTest is Base {
         _setPolicy(p);
         assertEq(account.effectiveWaitingPeriod(), WAIT); // still the old one
         _setSupplier(SUPPLIER, supplierAddr, true);
-        assertEq(account.supplier(SUPPLIER).activeAfter, block.timestamp + WAIT);
-        vm.warp(block.timestamp + WAIT);
+        assertEq(account.supplier(SUPPLIER).activeAfter, vm.getBlockTimestamp() + WAIT);
+        vm.warp(vm.getBlockTimestamp() + WAIT);
         assertEq(account.effectiveWaitingPeriod(), 10 minutes);
     }
 }
@@ -221,20 +221,20 @@ contract SupplierTest is Base {
         Supplier memory s = account.supplier(SUPPLIER);
         assertEq(s.payTo, supplierAddr);
         assertTrue(s.active);
-        assertEq(s.activeAfter, block.timestamp + WAIT);
+        assertEq(s.activeAfter, vm.getBlockTimestamp() + WAIT);
     }
 
     function test_AChangedAddressWaitsAgain() public {
         _setSupplier(SUPPLIER, supplierAddr, true);
-        vm.warp(block.timestamp + 3 days);
+        vm.warp(vm.getBlockTimestamp() + 3 days);
         _setSupplier(SUPPLIER, makeAddr("new wallet"), true);
-        assertEq(account.supplier(SUPPLIER).activeAfter, block.timestamp + WAIT);
+        assertEq(account.supplier(SUPPLIER).activeAfter, vm.getBlockTimestamp() + WAIT);
     }
 
     function test_TurningASupplierOffKeepsItsActivationTime() public {
         _setSupplier(SUPPLIER, supplierAddr, true);
         uint64 activeAfter = account.supplier(SUPPLIER).activeAfter;
-        vm.warp(block.timestamp + 3 days);
+        vm.warp(vm.getBlockTimestamp() + 3 days);
         _setSupplier(SUPPLIER, supplierAddr, false);
         assertFalse(account.supplier(SUPPLIER).active);
         assertEq(account.supplier(SUPPLIER).activeAfter, activeAfter);
@@ -247,7 +247,9 @@ contract SupplierTest is Base {
 
     function test_EmitsSupplierSet() public {
         vm.expectEmit(address(account));
-        emit CountersignAccount.SupplierSet(SUPPLIER, supplierAddr, true, uint64(block.timestamp + WAIT), bytes32(0));
+        emit CountersignAccount.SupplierSet(
+            SUPPLIER, supplierAddr, true, uint64(vm.getBlockTimestamp() + WAIT), bytes32(0)
+        );
         _setSupplier(SUPPLIER, supplierAddr, true);
     }
 }
@@ -260,7 +262,7 @@ contract OrderTest is Base {
     }
 
     function test_ApprovingAnOrderCreatesAndFundsItsVault() public {
-        uint64 expiry = uint64(block.timestamp + 30 days);
+        uint64 expiry = uint64(vm.getBlockTimestamp() + 30 days);
         address predicted = account.predictVault(ORDER, SUPPLIER, ORDER_HASH, expiry, 50_000);
         OrderVault vault = _approveOrder(ORDER, SUPPLIER, 50_000, expiry);
         assertEq(address(vault), predicted);
@@ -277,35 +279,35 @@ contract OrderTest is Base {
 
     function test_RefusesAnUnknownSupplier() public {
         _expectNext(UnknownSupplier.selector);
-        _approveOrder(ORDER, keccak256("nobody"), 50_000, uint64(block.timestamp + 30 days));
+        _approveOrder(ORDER, keccak256("nobody"), 50_000, uint64(vm.getBlockTimestamp() + 30 days));
     }
 
     function test_RefusesASupplierThatIsOff() public {
         _setSupplier(SUPPLIER, supplierAddr, false);
         _expectNext(SupplierInactive.selector);
-        _approveOrder(ORDER, SUPPLIER, 50_000, uint64(block.timestamp + 30 days));
+        _approveOrder(ORDER, SUPPLIER, 50_000, uint64(vm.getBlockTimestamp() + 30 days));
     }
 
     function test_RefusesTheSameOrderTwice() public {
-        _approveOrder(ORDER, SUPPLIER, 50_000, uint64(block.timestamp + 30 days));
+        _approveOrder(ORDER, SUPPLIER, 50_000, uint64(vm.getBlockTimestamp() + 30 days));
         _expectNext(OrderExists.selector);
-        _approveOrder(ORDER, SUPPLIER, 50_000, uint64(block.timestamp + 30 days));
+        _approveOrder(ORDER, SUPPLIER, 50_000, uint64(vm.getBlockTimestamp() + 30 days));
     }
 
     function test_RefusesAZeroAmountOrAPastExpiry() public {
         _expectNext(InvalidOrder.selector);
-        _approveOrder(ORDER, SUPPLIER, 0, uint64(block.timestamp + 30 days));
+        _approveOrder(ORDER, SUPPLIER, 0, uint64(vm.getBlockTimestamp() + 30 days));
         _expectNext(InvalidOrder.selector);
-        _approveOrder(ORDER, SUPPLIER, 50_000, uint64(block.timestamp));
+        _approveOrder(ORDER, SUPPLIER, 50_000, uint64(vm.getBlockTimestamp()));
     }
 
     function test_RefusesMoreThanTheAccountHolds() public {
         _expectNext(InsufficientBalance.selector);
-        _approveOrder(ORDER, SUPPLIER, FUNDS + 1, uint64(block.timestamp + 30 days));
+        _approveOrder(ORDER, SUPPLIER, FUNDS + 1, uint64(vm.getBlockTimestamp() + 30 days));
     }
 
     function test_ClosingAnOrderReturnsWhatIsLeftToTheAccount() public {
-        OrderVault vault = _approveOrder(ORDER, SUPPLIER, 50_000, uint64(block.timestamp + 30 days));
+        OrderVault vault = _approveOrder(ORDER, SUPPLIER, 50_000, uint64(vm.getBlockTimestamp() + 30 days));
         assertEq(_closeOrder(ORDER), 50_000);
         assertEq(usdc.balanceOf(address(vault)), 0);
         assertEq(usdc.balanceOf(address(account)), FUNDS);
@@ -318,7 +320,7 @@ contract OrderTest is Base {
     }
 
     function test_ClosingTwiceIsRefused() public {
-        _approveOrder(ORDER, SUPPLIER, 50_000, uint64(block.timestamp + 30 days));
+        _approveOrder(ORDER, SUPPLIER, 50_000, uint64(vm.getBlockTimestamp() + 30 days));
         _closeOrder(ORDER);
         _expectNext(VaultClosed.selector);
         _closeOrder(ORDER);

@@ -47,7 +47,7 @@ contract FuzzTest is Base {
     }
 
     function testFuzz_PayMovesExactlyTheAmountOrNothing(uint256 amount, bytes32 invoice) public {
-        vm.warp(block.timestamp + NEW_PERIOD); // past the new-address period: the normal cap applies
+        vm.warp(vm.getBlockTimestamp() + NEW_PERIOD); // past the new-address period: the normal cap applies
         amount = bound(amount, 0, uint256(type(uint128).max));
         Payment memory p = _payment(amount, invoice);
         (bytes memory a, bytes memory c) = _sigs(vault, p);
@@ -78,7 +78,7 @@ contract FuzzTest is Base {
         address moved = makeAddr("moved wallet");
         _setSupplier(SUPPLIER, moved, true);
         elapsed = bound(elapsed, 0, WAIT - 1);
-        vm.warp(block.timestamp + elapsed);
+        vm.warp(vm.getBlockTimestamp() + elapsed);
         Payment memory p = _payment(10_000, invoice);
         p.payTo = moved;
         (bytes memory a, bytes memory c) = _sigs(vault, p);
@@ -189,7 +189,7 @@ contract FuzzTest is Base {
         amount = bound(amount, 0, available * 2);
         if (amount == 0) _expectNext(InvalidOrder.selector);
         else if (amount > available) _expectNext(InsufficientBalance.selector);
-        OrderVault v = _approveOrder(orderId, SUPPLIER, amount, uint64(block.timestamp + 30 days));
+        OrderVault v = _approveOrder(orderId, SUPPLIER, amount, uint64(vm.getBlockTimestamp() + 30 days));
         if (amount > 0 && amount <= available) {
             assertEq(usdc.balanceOf(address(v)), amount);
             assertEq(usdc.balanceOf(address(account)), available - amount);
@@ -202,15 +202,15 @@ contract FuzzTest is Base {
         Policy memory p = defaultPolicy();
         p.waitingPeriod = newWait;
         _setPolicy(p);
-        vm.warp(block.timestamp + elapsed);
+        vm.warp(vm.getBlockTimestamp() + elapsed);
         assertEq(account.effectiveWaitingPeriod(), WAIT);
         _setSupplier(keccak256("fresh"), makeAddr("fresh wallet"), true);
-        assertEq(account.supplier(keccak256("fresh")).activeAfter, block.timestamp + WAIT);
+        assertEq(account.supplier(keccak256("fresh")).activeAfter, vm.getBlockTimestamp() + WAIT);
     }
 
     function testFuzz_ANewSupplierAddressAlwaysWaits(address payTo) public {
         vm.assume(payTo != address(0));
         _setSupplier(keccak256("any"), payTo, true);
-        assertEq(account.supplier(keccak256("any")).activeAfter, block.timestamp + WAIT);
+        assertEq(account.supplier(keccak256("any")).activeAfter, vm.getBlockTimestamp() + WAIT);
     }
 }

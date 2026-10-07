@@ -77,7 +77,7 @@ contract Handler is Test {
     }
 
     function _deadline() internal view returns (uint64) {
-        return uint64(block.timestamp + 1 hours);
+        return uint64(vm.getBlockTimestamp() + 1 hours);
     }
 
     function _owner(bytes32 structHash) internal view returns (WebAuthn.WebAuthnAuth memory) {
@@ -100,7 +100,7 @@ contract Handler is Test {
         uint256 available = usdc.balanceOf(address(account));
         if (available == 0) return;
         uint256 amount = bound(amountSeed, 1, available);
-        uint64 expiry = uint64(block.timestamp + bound(daysSeed, 1, 60) * 1 days);
+        uint64 expiry = uint64(vm.getBlockTimestamp() + bound(daysSeed, 1, 60) * 1 days);
         bytes32 orderId = keccak256(abi.encode("order", ++counter));
         uint256 n = account.ownerNonce();
         uint64 dl = _deadline();
@@ -222,7 +222,7 @@ contract Handler is Test {
     }
 
     function warp(uint256 seconds_) external {
-        vm.warp(block.timestamp + bound(seconds_, 1, 3 days));
+        vm.warp(vm.getBlockTimestamp() + bound(seconds_, 1, 3 days));
     }
 }
 
@@ -232,11 +232,11 @@ contract InvariantsTest is Base {
     function setUp() public override {
         super.setUp();
         _setPolicy(
-            _withExpiry(defaultPolicy(), uint64(block.timestamp + 3650 days)) // ten years: warps never end it
+            _withExpiry(defaultPolicy(), uint64(vm.getBlockTimestamp() + 3650 days)) // ten years: warps never end it
         );
         handler = new Handler(account, usdc, [OWNER_PK, agentPk, checkerPk], SUPPLIER, [uint256(CAP), NEW_CAP], FUNDS);
         _setSupplier(SUPPLIER, handler.currentPayTo(), true);
-        vm.warp(block.timestamp + WAIT);
+        vm.warp(vm.getBlockTimestamp() + WAIT);
         targetContract(address(handler));
     }
 

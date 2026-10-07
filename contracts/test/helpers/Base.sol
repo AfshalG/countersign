@@ -67,7 +67,7 @@ abstract contract Base is Test {
     // ---------- owner actions, signed with the passkey ----------
 
     function _deadline() internal view returns (uint64) {
-        return uint64(block.timestamp + 1 hours);
+        return uint64(vm.getBlockTimestamp() + 1 hours);
     }
 
     function _ownerSign(bytes32 structHash) internal view returns (WebAuthn.WebAuthnAuth memory) {
@@ -82,7 +82,7 @@ abstract contract Base is Test {
             newAddressCap: NEW_CAP,
             newAddressPeriod: NEW_PERIOD,
             waitingPeriod: WAIT,
-            expiry: uint64(block.timestamp + 365 days)
+            expiry: uint64(vm.getBlockTimestamp() + 365 days)
         });
     }
 
@@ -152,8 +152,8 @@ abstract contract Base is Test {
     function _readyVault() internal returns (OrderVault vault) {
         _setPolicy(defaultPolicy());
         _setSupplier(SUPPLIER, supplierAddr, true);
-        vm.warp(block.timestamp + WAIT);
-        vault = _approveOrder(ORDER, SUPPLIER, 50_000, uint64(block.timestamp + 30 days));
+        vm.warp(vm.getBlockTimestamp() + WAIT);
+        vault = _approveOrder(ORDER, SUPPLIER, 50_000, uint64(vm.getBlockTimestamp() + 30 days));
     }
 
     // ---------- payments, signed by the agent and the checker ----------

@@ -30,10 +30,10 @@ contract GasTest is Base {
         account.setSupplier(SUPPLIER, supplierAddr, true, 0, n, dl, auth);
         emit log_named_uint("setSupplier (passkey)", g - gasleft());
 
-        vm.warp(block.timestamp + WAIT);
+        vm.warp(vm.getBlockTimestamp() + WAIT);
         dl = _deadline();
         n = account.ownerNonce();
-        uint64 expiry = uint64(block.timestamp + 30 days);
+        uint64 expiry = uint64(vm.getBlockTimestamp() + 30 days);
         auth = _ownerSign(OwnerAuth.approveOrderHash(ORDER, SUPPLIER, ORDER_HASH, 50_000, expiry, n, dl));
         g = gasleft();
         OrderVault vault = OrderVault(account.approveOrder(ORDER, SUPPLIER, ORDER_HASH, 50_000, expiry, n, dl, auth));
