@@ -97,7 +97,7 @@ Pinned in Slice 0 (6 Oct 2026, checked with Context7 and npm): Node 24 LTS, pnpm
 ## Contract Rules
 
 - The owner is a passkey, verified through the precompile. Every signed payment is EIP-712 typed data.
-- Vaults are `Clones` (EIP-1167), deployed and initialised by the account in the same transaction. OpenZeppelin warns that a clone left uninitialised can be initialised by someone else.
+- Vaults are `Clones` (EIP-1167) with immutable arguments (account, supplier, order hash, expiry, amount): no initialiser, so nothing can be set after creation. Accounts are clones initialised by the factory in the same transaction (OpenZeppelin warns that a clone left uninitialised can be initialised by someone else).
 - Every revert is a named error with a test. Every external function has a fuzz test.
 - Never pass a caller-supplied digest to `P256.verify`. With a zero hash, a signature for any key can be forged; always let `WebAuthn.verify` hash the signed data itself.
 

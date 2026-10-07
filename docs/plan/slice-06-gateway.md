@@ -10,7 +10,7 @@ The always-running service between agents and the chain. It takes a payment requ
 
 ## Prerequisites
 
-- Slice 5 built: contract ABIs, the EIP-712 types in `packages/shared`, and measured gas per operation.
+- Slice 5 built (done 7 Oct): contract ABIs, the EIP-712 types in `packages/shared` (`ownerActionTypes`, `paymentTypes`, `decisionTypes`, `accountDomain`, `vaultDomain`), factory `0x094250cCC1dDBd8530e4FC9A1C900db3D0D9EB5f` on testnet, and measured gas per operation.
 - Spike 3's measurements (done 7 Oct, S3-7 and S3-8): ordered sending with failover, pool size, one-transaction funding, gas per payment. The spike's nonce allocator, stage tracker, pacer, failover lanes and funding rule are rewritten here as product code with their tests (spike code is never imported).
 - A Railway project with Postgres (Afshal has an account).
 
@@ -33,7 +33,7 @@ The always-running service between agents and the chain. It takes a payment requ
 | 2 | Long-running clients get time limits and explicit shutdown (Primus's SDK hung). The supplier proof is not checked here |
 | 3 | **Measured (vault run, 7 Oct):** 200 payments through 8 wallets in 5.4 s, of which 4.4 s was sending; 0.95 s per payment from send to finalized. Changes here: ordered sending per wallet, one endpoint per wallet (out-of-order nonces were lost, not held); relayers funded in one Multicall3 transaction (reserve balance); results read with `eth_getBlockReceipts` per finalized block; `eth_call` limited to 15 a second, so reads are paced; about 0.018 MON per payment, so a wallet's float is sized from that. Duplicates must be caught **before** sending, because a refused transaction pays its whole gas limit. 4 wallets: 11.4 s for 200. An endpoint can accept and drop transactions (monadinfra, twice), so the gateway fails over between endpoints. Vaults were not faster than one account (S3-7), so the gateway claims speed from finality and the pool, not from vaults |
 | 4 | The MCP server on Vercel calls the gateway over HTTPS with a service token. Tools never wait on a person: a held result returns at once with the approval link, and agents check back with `payment_status` |
-| 5 | Payments are the vault-domain `Payment` (amount, invoice hash, payTo, deadline); each invoice hash pays once per vault; `payWithOwner` for held payments; events (`PaymentExecuted`, `DecisionRecorded`) read from receipts, not log scans |
+| 5 | **Built (7 Oct):** payments are the vault-domain `Payment` (amount, invoice hash, payTo, deadline); each invoice hash pays once per vault; `payWithOwner` for held payments; `recordDecision` (checker) and `recordDecisionByOwner` (passkey); events (`PaymentExecuted`, `DecisionRecorded`) read from receipts, not log scans. Every refusal is a named error the gateway maps to a typed reason. **Gas on Monad:** `pay` 246k execution (limit about 266k), `payWithOwner` 214k, `recordDecision` 87k, `approveOrder` 274k, so a payment costs about 0.027 MON and a relayer's float is sized from that, not from Spike 3's 0.018. Simulate each payment before sending (an `eth_call` refuses with the named error for free) |
 | Architecture | The state of a payment request (statuses, typed reasons, `decidedBy`, evidence, timings recorded separately), D15 (batch runs), D16 (parallel checks under a cap; code checks first), D17 (public endpoints, with wallets spread across them and failover between them, instead of a free private RPC), D18 (holds grouped by reason), D27 (the checker signs only when every code check passes), money rules 1, 4 and 5 |
 
 ## Design considerations

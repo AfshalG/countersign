@@ -361,7 +361,7 @@ Published in the README and the stated limits (Slice 21).
 
 | Function | Who authorises | What it does |
 |---|---|---|
-| `createAccount(ownerKey, salt)` | Anyone, via the factory | Deploys an account bound to a passkey |
+| `createAccount(qx, qy, waitingPeriod, salt)` | Anyone, via the factory | Deploys an account bound to a passkey and its starting waiting period (both part of the address); it starts with no agent or checker key |
 | `setPolicy(policy)` | Owner passkey | Agent key, checker key, per-payment cap, expiry |
 | `setSupplier(supplierId, payTo, active)` | Owner passkey | Adds a supplier, changes its address, or turns it off |
 | `approveOrder(orderId, supplierId, amount, expiry, orderHash)` | Owner passkey | Deploys the order's vault and moves the amount into it |
@@ -369,17 +369,17 @@ Published in the README and the stated limits (Slice 21).
 | `vault.pay(payment, agentSig, checkerSig)` | Agent and checker | Pays the order's supplier at its address on file, within the vault's balance and the cap |
 | `vault.payWithOwner(payment, ownerSig)` | Owner passkey | Pays a held payment once |
 | `vault.sweep()` | Anyone, after expiry | Returns an expired order's money to the account. It can go nowhere else |
-| `recordDecision(decision, sig)` | Checker or owner passkey | Emits a held, refused or blocked outcome with its evidence hash. Writes no storage and moves no money |
+| `vault.recordDecision(decision, checkerSig)` / `vault.recordDecisionByOwner(decision, passkey)` | Checker, or owner passkey | Emits a held, refused or blocked outcome with its evidence hash. Writes no storage and moves no money |
 | `withdraw(to, amount)` | Owner passkey | Returns money not set aside for an order to the company |
 | `pause()` / `unpause()` | Owner passkey | Stops every vault from paying, and starts them again (D23) |
 
-`payment` carries the amount, the invoice hash, the pay-to address and a deadline; the order is the vault itself, and each invoice hash pays at most once per vault (Slice 5). The vault requires the pay-to address to equal the one on file, so neither the agent nor the checker can choose where money goes. Owner actions are signed over EIP-712 digests in the account's domain with a per-account nonce and a deadline. Vaults are clones whose account, supplier, order hash and expiry are immutable arguments, so opening one writes little storage (each new slot costs about 27,900 gas on Monad).
+`payment` carries the amount, the invoice hash, the pay-to address and a deadline; the order is the vault itself, and each invoice hash pays at most once per vault (Slice 5). The vault requires the pay-to address to equal the one on file, so neither the agent nor the checker can choose where money goes. Owner actions are signed over EIP-712 digests in the account's domain with a per-account nonce and a deadline. Vaults are clones whose account, supplier, order hash, expiry and amount are immutable arguments, so a vault has no initialiser and opening one writes no vault storage (each new slot costs about 27,900 gas on Monad). **Built and on testnet (Slice 5, 7 Oct):** factory `0x0942…EB5f`; a payment costs about 246k gas on Monad (0.027 MON at the limit), `approveOrder` 274k, `payWithOwner` 214k.
 
-**Waiting period and first-payment cap (D28, D29).** A new supplier or a changed address can receive money only after a waiting period set by the owner (48 hours by default), and the owner is notified when the change is made. Lowering the waiting period itself takes effect only after the current waiting period has passed (Slice 5). While an address is newer than a set period (for example 7 days after it became active), each payment to it is capped lower than usual; this is decided from the address's activation time, not a payment count, so no counter is shared across vaults (Slice 5). Real address changes are rarely urgent; fraud nearly always is. The waiting period cannot be skipped from the app, because a person tricked into approving a change is the case it exists for.
+**Waiting period and first-payment cap (D28, D29).** A new supplier or a changed address can receive money only after a waiting period set by the owner (48 hours by default, 30 days at most, so a raised period can always be brought down), and the owner is notified when the change is made. Lowering the waiting period itself takes effect only after the current waiting period has passed (Slice 5). While an address is newer than a set period (for example 7 days after it became active), each payment to it is capped lower than usual; this is decided from the address's activation time, not a payment count, so no counter is shared across vaults (Slice 5). Real address changes are rarely urgent; fraud nearly always is. The waiting period cannot be skipped from the app, because a person tricked into approving a change is the case it exists for.
 
 **Signatures are bound to one vault on one chain (D22).** Every signed payment is EIP-712 typed data whose domain includes the chain ID and the vault's own address, so a signature for one company's payment can never be replayed on another company's vault, another order or another chain. Slice 5 has a test for each.
 
-Vaults are minimal clones (EIP-1167), so opening an order costs little. OpenZeppelin's `Clones` library is checked in Context7 in Slice 5.
+Vaults are minimal clones (EIP-1167), so opening an order costs little. OpenZeppelin's `Clones` was read from the installed 5.7.0 source in Slice 5.
 
 Events: `PaymentExecuted`, `DecisionRecorded`, `PolicySet`, `SupplierSet`, `OrderApproved`, `OrderClosed`. The feed, the audit export and the benchmark read these.
 
@@ -454,7 +454,7 @@ SPIKES (throwaway code, real answers):
              Codex and Muse; an OpenRouter test agent across models
 
 CORE PIPELINE (a scripted agent pays a clean invoice, no prompt):
-  Slice 5:   Account and order vaults: policy, suppliers, pay, log    PLANNED; BUILD NEXT
+  Slice 5:   Account and order vaults: policy, suppliers, pay, log    DONE (on testnet)
   Slice 6:   Gateway: requests, runs queue, relayer pool, finality    PLANNED
   Slice 7:   Supplier portal and demo shop: invoices and orders,      TODO
              clean and doctored
