@@ -14,9 +14,11 @@ An AI agent reads a supplier invoice and drafts the payment. Countersign's check
 
 ## The Plan Is the Source of Truth
 
-- `docs/plan/00-architecture.md`: pieces, decision model, payment state, keys, contract and MCP surfaces, slice list, decisions D1–D13.
+- `docs/plan/00-architecture.md`: pieces, decision model, payment state, keys, contract and MCP surfaces, slice list, decisions D1–D29.
 - `docs/plan/slice-NN-*.md`: one file per slice. Read the current slice file before writing its code.
 - One slice at a time. A slice file is written and reviewed before its code.
+- **Check every new slice file against all earlier slice files**: their findings, adaptations and deployed addresses. Name in its "Checked against earlier slices" section each one that changes this slice.
+- **Carry findings forward**: when a slice is built, check every later slice file and the architecture, and update whatever its findings change, in the same commit.
 - If the code has to differ from the slice file, record it under "Adapted from spec" in the same commit.
 
 ## Layout
