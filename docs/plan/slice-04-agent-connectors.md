@@ -2,7 +2,7 @@
 
 ## Status
 
-**DECIDED (7 Oct 2026); ready to build.** Technical decisions made by Claude (Afshal, 7 Oct: decide technical choices); Muse's directory and the accounts are Afshal's. Owner: Roshan (MCP server, D6); Claude builds while he is busy.
+**BUILDING (7 Oct 2026).** Server live at `https://countersign-connector-spike.vercel.app/api/mcp`; smoke test passes all three doors; Claude Code passes; Codex skipped; web apps, Muse and the OpenRouter run pending. Technical decisions made by Claude (Afshal, 7 Oct: decide technical choices); Muse's directory and the accounts are Afshal's. Owner: Roshan (MCP server, D6); Claude builds while he is busy.
 
 ## Goal
 
@@ -131,8 +131,8 @@ Then run the OpenRouter test agent across the chosen models and record what each
 | grok.com | | | | | |
 | Grok CLI / xAI API | | | | | |
 | claude.ai | | | | | |
-| Claude Code | | | | | |
-| Codex | | | | | |
+| Claude Code | ✅ (7 Oct) | Pro or above (Afshal's) | Bearer token | Not exercised (the tool returns at once) | Called `connection_info` and `check_payment`; reported "HELD: address differs" verbatim, refused to pay, gave the approval link. 4 turns, 15 s, $0.17 |
+| Codex | Not tested | — | — | — | Skipped by Afshal (7 Oct): the Codex CLI's own OpenAI login had expired (401 from OpenAI before any tool call). Re-test with `codex login`, then `codex exec` with `-c mcp_servers.countersign.url=…` |
 | ChatGPT developer mode | | | | | |
 | Muse (custom connector in chat) | | | | | |
 | Instinct | Not connectable as a tool | | | | Reached through WhatsApp (D31) |
