@@ -2,7 +2,7 @@
 
 ## Status
 
-**LIVE (7 Oct 2026); waiting on one sign-in from claude.ai.** Afshal chose WorkOS AuthKit ("yes go with workos"); the account is his (Staging environment). Technical decisions made by Claude.
+**DONE (7 Oct 2026).** Afshal chose WorkOS AuthKit ("yes go with workos"); the account is his (Staging environment). Technical decisions made by Claude.
 
 ## Goal
 
@@ -58,11 +58,13 @@ WorkOS configured through the dashboard (no API key needed: tokens are checked a
 | The bearer token | the six tools |
 | A client registering itself with WorkOS (DCR) | a client ID issued |
 | Tests | 18 for the MCP server, 5 of them for sign-in; 285 in the repo |
+| claude.ai, Afshal's account (21:45–21:48 UTC) | the custom connector got 401, read the discovery document, Afshal signed in with Google through WorkOS, then six calls from `Claude-User` answered 200; "list my open orders" reached the gateway (`GET /v1/accounts/0xE890…/orders`, 200 in 135 ms). Only a WorkOS token can pass for claude.ai, which never had the static token |
 
 ### Findings, carried forward
 
 1. **WorkOS needs no API key on our side.** The server checks tokens against WorkOS's public keys, and the resource indicator is set in the dashboard, so no WorkOS secret is stored anywhere. → Slice 21 (security model).
-2. **Demo credentials for Google and the others.** WorkOS's Staging environment signs people in through its own Google app; fine for the hackathon, and a production environment would need our own OAuth apps. → Slice 22.
+2. **Vercel's log viewer shows one line per request.** The "how the caller signed in" line is logged but not shown by `vercel logs`; the proof here is the 401, discovery, 200 sequence and the gateway's own request log. → Slice 21 (observability).
+3. **Demo credentials for Google and the others.** WorkOS's Staging environment signs people in through its own Google app; fine for the hackathon, and a production environment would need our own OAuth apps. → Slice 22.
 
 ## Next
 
