@@ -1,6 +1,8 @@
 # Countersign Architecture v3
 
-**Status: v3.10, 7 Oct 2026.** v3.10 carries Slice 5's design forward: D29 decided by address age (no shared counter), lowering the waiting period is itself delayed, payments carry a deadline and pay each invoice once per vault, vaults are clones with immutable arguments.
+**Status: v3.11, 7 Oct 2026.** v3.11 (D33): Track 04 is judged mostly on other developers building on the entry (developer experience 20%, who adopts it and why 25%, integrations 20%), so Countersign is built and presented as an open primitive: a developer kit (SDK, MCP connector, web API, docs), a checker anyone can run, ERC-8004 agent identity moved up, and one other Metropolis team integrating. The invoice flow becomes the reference app built on it.
+
+**v3.10, 7 Oct 2026.** v3.10 carries Slice 5's design forward: D29 decided by address age (no shared counter), lowering the waiting period is itself delayed, payments carry a deadline and pay each invoice once per vault, vaults are clones with immutable arguments.
 
 **v3.9, 7 Oct 2026.** v3.9: the MCP server moves to Vercel (`mcp-handler`), and the test agent uses the Vercel AI SDK; Railway keeps the always-running gateway, checker and Postgres.
 
@@ -51,6 +53,14 @@ The person who pays a company's bills checks each invoice by hand against what w
 - Deel added USDC payouts in February 2026.
 
 These teams have the pain, already use Grok, Claude or similar agents, and have no finance team to catch a changed invoice.
+
+**Who builds on it (D33, 7 Oct).** Businesses are the end users; developers are who adopts the primitive, and Track 04 judges that. Three kinds:
+
+- **Agent builders** whose agents spend money: give the agent a Countersign account through the SDK or the MCP connector instead of a card or a wallet key. Grok, for example, already reaches stablecoins through a third-party connector (MoonPay's PayBox, with user-set limits); that is the slot Countersign fills, open and enforced on chain.
+- **Wallets and payment apps** that want an "agent mode": embed the account, the passkey approvals and the holds.
+- **Checker operators:** anyone can run a checker, because the owner chooses the checker key; our checker (Jev plus code) is the reference, not the only one.
+
+Why not roll their own: the hard parts are done and tested. Passkey ownership through Monad's P256 precompile, payee addresses proven from the payee's own website, per-order vaults that refuse a look-alike address or a second payment of the same invoice, and a gateway that sends hundreds of payments without losing or double-sending one. **Traction this week:** one other Metropolis team's agent pays through Countersign (outreach on the hackathon Discord; the SDK makes it minutes of work).
 
 **Where it goes next:** finance teams at companies with 100 or more staff. That is the market ceiling in `13-pain-and-market-sizing.md` (research workspace): about $1.4 billion a year in the US at incumbent prices.
 
@@ -459,7 +469,7 @@ SPIKES (throwaway code, real answers):
 
 CORE PIPELINE (a scripted agent pays a clean invoice, no prompt):
   Slice 5:   Account and order vaults: policy, suppliers, pay, log    DONE (on testnet)
-  Slice 6:   Gateway: requests, runs queue, relayer pool, finality    PLANNED
+  Slice 6:   Gateway: requests, runs queue, relayer pool, finality    BUILDING (TESTNET RUN NEXT)
   Slice 7:   Supplier portal and demo shop: invoices and orders,      TODO
              clean and doctored, as the scored invoice set
   Slice 8:   Rule checks + scripted agent: first end-to-end payment   TODO
@@ -467,11 +477,13 @@ CORE PIPELINE (a scripted agent pays a clean invoice, no prompt):
 THE HOLD:
   Slice 9:   Passkey owner: factory, suppliers, orders, pay once      TODO
   Slice 10:  Invoice check: own read, exact compare, guard model,     TODO
-             scored on the set (catch rate, false holds)
+             scored on the set (catch rate, false holds); the
+             checker spec, so anyone can run one (D33)
   Slice 11:  Approver app: proposals, holds, feed, the diff           TODO
 
 AGENT DOOR:
-  Slice 12:  MCP server and web API: six tools incl. batch runs       TODO
+  Slice 12:  Developer kit: TypeScript SDK, MCP server and web API    TODO
+             (six tools incl. batch runs), quickstart docs (D33)
   Slice 13:  Sign-in from the agent app with one link                 TODO
   Slice 14:  Proposals and holds in the chat (every agent that        TODO
              connected in Spike 4) and on WhatsApp
@@ -481,13 +493,18 @@ DEPTH AND PROOF:
   Slice 16:  Payment run: 200 invoices in parallel, run board         TODO
   Slice 17:  Advice-only check for bank-transfer invoices             TODO
   Slice 18:  Audit record export                                      TODO
-  Slice 19:  ERC-8004 agent identity                                  TODO
+  Slice 19:  ERC-8004 agent identity; built right after Slice 12      TODO
+             (D33: the track names the registry)
   Slice 20:  Benchmark: four arms and the false-alarm rate            TODO
 
 SHIP:
-  Slice 21:  Evidence pack: README, status, limits, deployed list     TODO
-  Slice 22:  Demo script, video, write-up, submission                 TODO
+  Slice 21:  Developer docs and evidence pack: README, quickstart,     TODO
+             limits, deployed list
+  Slice 22:  Demo, pitch story, video, another team integrating,      TODO
+             submission
 ```
+
+**Build order from 7 Oct (D33).** 6 → 12 → 19 → 7 → 8 → 9 → 11 → 10 → 14, then 15–18, 20–22. The developer kit and agent identity come straight after the gateway because they carry most of Track 04's score; the reference app (supplier portal, approver app) follows as the demo built on them. Numbers stay as they are so every earlier reference still holds; only the order changes.
 
 **v3.1 additions per slice (D21–D25)**
 
@@ -636,6 +653,7 @@ None of these has had an explicit yes, except that Afshal has said parallel exec
 | D30 | One connector, many agents | Spike 4 tests one Countersign MCP server from Grok, Claude Code, Codex and Muse, and builds an OpenRouter test agent that runs the same scenarios across several models (also used by the benchmark in Slice 20). Instinct cannot take tools and is not connected |
 | D31 | WhatsApp approvals | Held payments and proposals can be sent to the person on WhatsApp as a link-button message (`cta_url`) to the approval page; the passkey still signs on the page. WhatsApp allows free-form messages only within 24 hours of the person's last message, so the person messages Countersign once to connect, and an approved template with a URL button (review up to 24 h, submitted early) covers the rest. Built with Slice 14. iMessage is not offered (Apple requires an approved provider) |
 | D32 | The contract is the boundary; the checker is a measured detector | Answering a critique (7 Oct): the contract makes paying the wrong party impossible; the checker catches the right party paid the wrong amount (padded, duplicate, wrong order), with a catch rate and false-hold rate measured from Slice 10 and published in Slice 20. Invoices are read as structured data first; a PDF is read from its text layer and its rendered page, and disagreement is a hold. The demo keeps the agent key on the agent's side. The pitch leads with the contract |
+| D33 | Countersign as an open primitive (Track 04) | 7 Oct, after reading the track's judging criteria (65% is about developers building on the entry): a developer kit (TypeScript SDK, MCP connector, web API, quickstart docs), a checker anyone can run (the owner sets the checker key), ERC-8004 agent identity right after the kit, one other Metropolis team integrating during the hackathon; the invoice flow is the reference app. Afshal: "change all the existing slices and other md files as needed" |
 | — | Who builds | Sophie and Roshan are busy this week; Claude drafts and builds their slices, Afshal reviews. Ownership in D6 returns when they are free |
 
 ---
