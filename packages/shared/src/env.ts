@@ -33,8 +33,9 @@ export function loadEnv<S extends z.ZodObject>(
 
   for (const name of names) {
     const value = source[name];
-    if (value === undefined || value === '') missing.add(name);
-    else present[name] = value;
+    if (value !== undefined && value !== '') present[name] = value;
+    // An optional setting (z.….optional()) may be absent; anything else absent is missing.
+    else if (!(schema.shape[name] as z.ZodType).safeParse(undefined).success) missing.add(name);
   }
 
   const result = schema.safeParse(present);

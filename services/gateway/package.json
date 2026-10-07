@@ -9,7 +9,8 @@
     "start": "tsx src/main.ts",
     "db:generate": "drizzle-kit generate",
     "testnet-run": "tsx scripts/testnet-run.ts",
-    "approvals-smoke": "tsx scripts/approvals-smoke.ts"
+    "approvals-smoke": "tsx scripts/approvals-smoke.ts",
+    "sample-approvals": "tsx scripts/sample-approvals.ts"
   },
   "dependencies": {
     "@countersign/chain": "workspace:*",

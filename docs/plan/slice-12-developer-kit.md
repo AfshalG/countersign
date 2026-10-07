@@ -163,6 +163,7 @@ docs/developers/quickstart.md
 6. **The feed must stop at once on abort.** Some runtimes do not tie the abort to the response body; the SDK now cancels the reader. → Slice 16 (the run board's feed).
 7. **One wording for every reason** (`REASON_TEXT` in `packages/shared`), used by the status page, the SDK and the tools. → Slices 11 and 14.
 8. **More MON is needed** before Slice 16 and the demo (the relayers hold about 0.10).
+9. **`railway up` drops the service's branch trigger.** After a manual `railway up`, merges to `development` stopped deploying until the source was reconnected to `development`. → Slice 21's deploy notes.
 
 ## Commit
 

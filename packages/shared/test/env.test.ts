@@ -53,6 +53,22 @@ describe('loadEnv', () => {
     );
   });
 
+  it('lets an optional setting be absent, and still checks it when present', () => {
+    const withOptional = schema.extend({
+      AUTHKIT_DOMAIN: z
+        .string()
+        .regex(/^[a-z0-9.-]+$/)
+        .optional(),
+    });
+    expect(loadEnv(withOptional, valid).AUTHKIT_DOMAIN).toBeUndefined();
+    expect(
+      loadEnv(withOptional, { ...valid, AUTHKIT_DOMAIN: 'abc.authkit.app' }).AUTHKIT_DOMAIN,
+    ).toBe('abc.authkit.app');
+    expect(
+      problemsOf(() => loadEnv(withOptional, { ...valid, AUTHKIT_DOMAIN: 'NOT A DOMAIN' })),
+    ).toEqual([{ name: 'AUTHKIT_DOMAIN', issue: 'invalid' }]);
+  });
+
   it('treats an empty string as missing', () => {
     expect(problemsOf(() => loadEnv(schema, { ...valid, MONAD_RPC_URL: '' }))).toEqual([
       { name: 'MONAD_RPC_URL', issue: 'missing' },

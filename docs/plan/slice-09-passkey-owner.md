@@ -46,7 +46,25 @@ Unit: the assertion parser (ox's shape, the raw browser shape with DER, high-s n
 
 Testnet (manual): a held payment on the hosted gateway paid once with the owner's software passkey through the approvals API, then (Slice 11) with a phone's Face ID through the app.
 
+## Results, part 1 (7 Oct 2026, Monad testnet)
+
+`pnpm --filter @countersign/gateway approvals-smoke` against the hosted gateway, the owner's passkey being Slice 5's software key for the demo account:
+
+| Step | Result |
+|---|---|
+| A held payment's approval, fetched with no token | "Held for the owner", the reason in plain words, actions `pay_once` and `refuse` |
+| `pay_once` with the owner's passkey | 200 released; settled 1.36 s later through `payWithOwner` (tx `0xc254f105ab3df93c006d19ef7e5667431cc5dcf184be1f67219813d3642e53a2`) |
+| `refuse` with the owner's passkey | 200 refused; nothing paid |
+| The same approval sent again | 409 `not_held` |
+| Tests | 274 TypeScript tests, including 8 for the approvals routes and 5 for the assertion parser (285 and 10 after finding 3 and Slice 13) |
+
+### Findings, carried forward
+
+1. **Railway did not deploy on push (fixed 7 Oct).** The Railway GitHub app was installed on another GitHub organisation but not on Afshal's personal account, so Railway could build the public repo when asked but could not list its branches or receive pushes. Afshal installed it for `countersign` only; the production environment is now connected to `development` (auto deploy on push) with **Wait for CI** on, so a merge deploys only after GitHub Actions pass. Switching production to `main` later is one setting. → Slice 21's deploy notes.
+2. The stand-in checker's `testHold` document is how holds are made on testnet until the real checker (Slice 10).
+3. **Pay once was offered where the contract can never pay (fixed 7 Oct).** While writing Sophie's brief, the README's claim 2 ("not even the owner's passkey can send it elsewhere", `test_TheOwnerStillPaysOnlyTheAddressOnFile`) contradicted the approvals view, which offered `pay_once` on a hold for an address not on file. Tapping it was safe (`422 contract_refuses`, nothing moved) but the button could never work. Now such a hold offers only `refuse`, `summary.payOnce` says `address_not_on_file`, and `pay_once` is refused as `422 not_offered` before any chain call. The shelved app design's "Pay the new address anyway" is impossible by design: a new address goes through changing the supplier (part 2), then the waiting period. → Slice 11 (`apps/approver/FEATURES.md`), Slice 14 (holds in the chat offer the same actions).
+
 ## Next
 
-Slice 11 (Sophie): the approver app on these routes. Then Part 2 here, Slice 19.
+Slice 11 (Sophie): the approver app on these routes, briefed in `apps/approver/FEATURES.md` (sample approvals from `pnpm --filter @countersign/gateway sample-approvals`). Then Part 4 here (her own phone's passkey end to end), Part 2, Part 3, Slice 19.
 
