@@ -2,7 +2,7 @@
 
 ## Status
 
-**DECIDED (7 Oct 2026); plan ready, build after Slice 5.** Technical decisions made by Claude. Owner: Afshal (gateway, D6).
+**BUILT (7 Oct 2026); the testnet run passed.** Deploying to Railway (manual step 1) waits on Afshal's go for its cost; the run used Postgres in Docker. Technical decisions made by Claude. Owner: Afshal (gateway, D6).
 
 ## Goal
 
@@ -135,13 +135,31 @@ packages/chain/              viem clients, ABIs, Monad config shared with other 
 5. Kill the service mid-run and restart it: every request still reaches exactly one final status, and no invoice is paid twice.
 6. Hold one (test checker says no), approve it with the passkey: `settled` through `payWithOwner`.
 
-## Results (filled in after the build)
+## Results (7 Oct 2026, Monad testnet)
+
+Run with `pnpm --filter @countersign/gateway testnet-run` (`services/gateway/scripts/testnet-run.ts`) against Slice 5's account `0xE890B35be32F04032B502Dc4Dc2db8062aD6d603` and order vault `0x771d1b283D9Bf9A6e14bAdF0c9C4d1BE05D87dC7`, with 8 relayers and the stand-in checker. The driver checks every answer against the chain. Raw results: `services/gateway/results/2026-10-07-testnet.json`.
 
 | Measure | Value |
 |---|---|
-| One payment: request to finalized | |
-| Run of 50 / 200: first request to last finalized | |
-| Crash test: requests recovered, double-sends | |
+| One payment: request to finalized | 2.1 s (1.8 to 2.1 s over three runs); check 0.33 s, send to finalized 1.2 s |
+| The same invoice again | The same request ID back; no second transaction |
+| A look-alike address; over the new-address cap | Held `address_mismatch` (the contract's `PayToNotOnFile`); blocked `over_limit`. Nothing sent, no gas |
+| Run of 10: first request to last finalized | 3.2 s; the feed streamed 50 status changes |
+| Crash test: killed with 6 released and 2 in flight | All 8 settled after the restart; the relayers sent exactly 8 transactions; no invoice paid twice |
+| Held, then approved with the owner's passkey | A stranger's passkey refused (422); the owner's released it; settled through `payWithOwner` 4.7 s after the approval |
+| Held, then refused with the owner's passkey | Refused; nothing sent; the vault never paid it |
+| Totals | 20 payments, 20 transactions, exactly 9,400 USDC base units paid; 0.539 MON of gas (0.027 MON a payment at a 100 gwei base fee) |
+
+Not done here: manual step 1 on Railway (waits on the cost go-ahead). Runs of 50 and 200 belong to Slice 16; Spike 3 measured 200 in 5.4 s.
+
+### Findings, carried forward
+
+1. **A relayer ran dry mid-run (fixed in `f016766`).** The pool gave work to the least-loaded wallet, and at idle that was always the first, so one wallet took 5 of the first 14 payments, ran out of MON, and its next payment was refused and sat in `settling`. Each wallet now reserves its unincluded transactions' maximum gas cost and only gets work it can pay for; a payment refused for low balance waits and is sent again unchanged once a balance read shows the wallet can pay; `/health` lists wallets waiting for a top-up. → Slice 16 (runs of 200) and Slice 21 (a funder that tops relayers up).
+2. **Monad's node checks the fee actually charged, not the maximum.** The stuck payment was accepted with 0.0307 MON in its wallet against a maximum cost of 0.0338 (charged: 0.0271). The pool's reservation is therefore about 25% cautious, which is safe. Budget about 0.034 MON per payment in flight per wallet. → Slice 16.
+3. **A restart sends the same transaction again.** The stuck payment settled after a restart with the same hash and nonce, and the crash test (2 in flight, 6 released at the kill) ended with 8 transactions for 8 payments.
+4. **A look-alike address is held, not blocked**, as designed: the owner sees both addresses side by side (Slices 11 and 14). Over the cap is blocked.
+5. **Open:** the owner-approved payment took 3.9 s from send to finalized, against about 1.2 s for agent payments. Not explained yet (possibly an endpoint move after the 3 s stall). Watch in Slice 16's runs.
+6. The relayers hold about 0.26 MON after this run (from 0.88 plus a 0.24 top-up from the deployer): about 7 more payments. More MON is needed before Slice 16.
 
 ## Commit
 
@@ -149,7 +167,7 @@ Gated commits, merged into `development` after CI passes.
 
 ## Next
 
-Slice 7: the supplier portal and demo shop, with the clean and doctored documents.
+Slice 12: the developer kit (SDK, MCP server and web API, quickstart docs), next in the D33 build order. Slice 7 follows after Slice 19.
 
 ## Decisions (made 7 Oct)
 

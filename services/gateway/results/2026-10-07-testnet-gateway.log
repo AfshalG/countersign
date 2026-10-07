@@ -1,0 +1,23 @@
+
+----- 2026-10-07T07:57:59.783Z start (first start) -----
+recovered: 0 settled from receipts, 0 re-sent
+gateway listening on 8787 with 8 relayers
+(node:26343) TimeoutNegativeWarning: -1 is a negative number.
+Timeout duration was set to 1.
+(Use `node --trace-warnings ...` to show where the warning was created)
+SIGTERM: stopping
+
+----- 2026-10-07T08:00:24.520Z start (first start) -----
+recovered: 0 settled from receipts, 0 re-sent
+gateway listening on 8787 with 8 relayers
+endpoint refused 0x095b6f0d7707da75c228384c97fc010bd74fb14725160feb3654e3ec52314a12: eth_sendRawTransaction: Signer had insufficient balance
+SIGTERM: stopping
+
+----- 2026-10-07T08:10:37.015Z start (first start) -----
+recovered: 0 settled from receipts, 0 re-sent
+gateway listening on 8787 with 8 relayers
+
+----- 2026-10-07T08:10:49.711Z start (after the kill) -----
+recovered: 2 settled from receipts, 0 re-sent
+gateway listening on 8787 with 8 relayers
+SIGTERM: stopping
