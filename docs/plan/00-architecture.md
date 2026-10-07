@@ -469,7 +469,7 @@ SPIKES (throwaway code, real answers):
 
 CORE PIPELINE (a scripted agent pays a clean invoice, no prompt):
   Slice 5:   Account and order vaults: policy, suppliers, pay, log    DONE (on testnet)
-  Slice 6:   Gateway: requests, runs queue, relayer pool, finality    BUILDING (TESTNET RUN NEXT)
+  Slice 6:   Gateway: requests, runs queue, relayer pool, finality    BUILT (TESTNET RUN PASSED)
   Slice 7:   Supplier portal and demo shop: invoices and orders,      TODO
              clean and doctored, as the scored invoice set
   Slice 8:   Rule checks + scripted agent: first end-to-end payment   TODO

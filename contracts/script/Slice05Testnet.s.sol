@@ -214,6 +214,32 @@ contract Slice05Testnet is Script {
         console.log("account USDC", USDC.balanceOf(address(account)), "vault USDC", USDC.balanceOf(address(vault)));
     }
 
+    // ---------- Slice 6: an order for the gateway's testnet run ----------
+
+    /// Funds the test account with 0.03 USDC and approves an order of that amount for Kalibre
+    /// Studio, so the gateway can send up to 30 payments of 0.001 through it.
+    function openGatewayOrder() external {
+        _keys();
+        CountersignAccount account = _account();
+        bytes32 orderId = keccak256("gateway testnet order 2026-002");
+        uint64 expiry = uint64(block.timestamp + 30 days);
+        uint64 dl = _deadline();
+        uint256 n = account.ownerNonce();
+        WebAuthn.WebAuthnAuth memory auth = _owner(
+            account,
+            OwnerAuth.approveOrderHash(
+                orderId, SUPPLIER, keccak256("purchase order 2026-002, PDF"), 30_000, expiry, n, dl
+            )
+        );
+        vm.startBroadcast(deployerKey);
+        require(USDC.transfer(address(account), 30_000), "fund");
+        address vault = account.approveOrder(
+            orderId, SUPPLIER, keccak256("purchase order 2026-002, PDF"), 30_000, expiry, n, dl, auth
+        );
+        vm.stopBroadcast();
+        console.log("gateway order vault", vault);
+    }
+
     // ---------- step 4: a held payment, paid once with the owner's passkey ----------
 
     function payHeld() external {

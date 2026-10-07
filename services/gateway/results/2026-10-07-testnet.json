@@ -1,0 +1,267 @@
+{
+  "startedAt": "2026-10-07T08:10:35.651Z",
+  "preflight": {
+    "account": "0xE890B35be32F04032B502Dc4Dc2db8062aD6d603",
+    "vault": "0x771d1b283D9Bf9A6e14bAdF0c9C4d1BE05D87dC7",
+    "remaining": "23000"
+  },
+  "health": {
+    "ok": true,
+    "db": true,
+    "chainId": 10143,
+    "finality": {
+      "open": true,
+      "lastHeadMsAgo": 191
+    },
+    "relayers": [
+      {
+        "address": "0x41477b603E26Ba7336380D9885Ef96C507b71691",
+        "mon": "0.003521"
+      },
+      {
+        "address": "0x4bA5922256FBF0432064aE3E1d3770E2f9A84E3D",
+        "mon": "0.112049"
+      },
+      {
+        "address": "0x2B4E3b55979FeC077A1B92bb08c20E26b8D45c5C",
+        "mon": "0.112049"
+      },
+      {
+        "address": "0x06e1570d7CD6B7E0944E108a9064d004949e3D5E",
+        "mon": "0.112049"
+      },
+      {
+        "address": "0x6FEe84299130b17e5D317b66BCD4b73890bC1841",
+        "mon": "0.115352"
+      },
+      {
+        "address": "0x65AA3D672d6dc9FF1Ce288E24F43Aa82C32b429A",
+        "mon": "0.115352"
+      },
+      {
+        "address": "0x24f2CeC1B8B500733056A1a075c3682e0E0BC670",
+        "mon": "0.115352"
+      },
+      {
+        "address": "0x28b0595212dc6F0f2aDA7d919b65b40fcC576FFf",
+        "mon": "0.115352"
+      }
+    ],
+    "moves": 0,
+    "starved": []
+  },
+  "single": {
+    "wallMs": 2093,
+    "view": {
+      "id": "0xcd3be834cbb1f6af3c501e57ba79be7aa879d368b37052dee42efb8c2c4b789a",
+      "runId": null,
+      "status": "settled",
+      "reason": null,
+      "decidedBy": "checker",
+      "account": "0xE890B35be32F04032B502Dc4Dc2db8062aD6d603",
+      "vault": "0x771d1b283D9Bf9A6e14bAdF0c9C4d1BE05D87dC7",
+      "payTo": "0x90f9931B748B26763161a8191C178Fe425C25fEc",
+      "amount": "1000",
+      "invoiceHash": "0xff59dac69941d6f5594b333cfb4c72b5de1c5ede8a457c5d550f19d1f113ad82",
+      "deadline": 1791367842,
+      "evidence": {
+        "checker": "test"
+      },
+      "tx": {
+        "hash": "0xe213100407cc8e52764f11d84fbc5d97920292eced2d5cc59afa7120d63b08b9",
+        "relayer": "0x6FEe84299130b17e5D317b66BCD4b73890bC1841",
+        "nonce": 76,
+        "block": 68919416,
+        "proposedAt": "2026-10-07T08:10:43.514Z",
+        "votedAt": "2026-10-07T08:10:43.759Z",
+        "finalizedAt": "2026-10-07T08:10:44.010Z"
+      },
+      "timings": {
+        "checkMs": 330,
+        "personMs": null,
+        "settleMs": 1161
+      }
+    }
+  },
+  "duplicate": {
+    "status": 200,
+    "sameId": true
+  },
+  "refused": {
+    "lookAlike": {
+      "id": "0xde152d81e3e3c1cad8b9e260a7286464a5ba2e782e97e24ba1fb36c127114cf0",
+      "runId": null,
+      "status": "held",
+      "reason": "address_mismatch",
+      "decidedBy": "rule",
+      "account": "0xE890B35be32F04032B502Dc4Dc2db8062aD6d603",
+      "vault": "0x771d1b283D9Bf9A6e14bAdF0c9C4d1BE05D87dC7",
+      "payTo": "0x90f9931B748B26763161a8191c178fE425c25FeD",
+      "amount": "1000",
+      "invoiceHash": "0x099067d12a8a50dea0d134f2a15597442a584e2c92f3e5f0afeb93f738dc5aff",
+      "deadline": 1791367844,
+      "evidence": {
+        "contract": "PayToNotOnFile"
+      },
+      "tx": {
+        "hash": null,
+        "relayer": null,
+        "nonce": null,
+        "block": null,
+        "proposedAt": null,
+        "votedAt": null,
+        "finalizedAt": null
+      },
+      "timings": {
+        "checkMs": 219,
+        "personMs": null,
+        "settleMs": null
+      }
+    },
+    "overCap": {
+      "id": "0xe9376fb4c970f6c85c68b491830365600105b8ea6faecb553f6d3fa3f2865fb1",
+      "runId": null,
+      "status": "blocked",
+      "reason": "over_limit",
+      "decidedBy": "rule",
+      "account": "0xE890B35be32F04032B502Dc4Dc2db8062aD6d603",
+      "vault": "0x771d1b283D9Bf9A6e14bAdF0c9C4d1BE05D87dC7",
+      "payTo": "0x90f9931B748B26763161a8191C178Fe425C25fEc",
+      "amount": "3000",
+      "invoiceHash": "0x326e19b04612d08e6381cba4a2b473893e657fc652ed9ecd0ff375f38f3d499c",
+      "deadline": 1791367844,
+      "evidence": {
+        "contract": "OverNewAddressCap"
+      },
+      "tx": {
+        "hash": null,
+        "relayer": null,
+        "nonce": null,
+        "block": null,
+        "proposedAt": null,
+        "votedAt": null,
+        "finalizedAt": null
+      },
+      "timings": {
+        "checkMs": 123,
+        "personMs": null,
+        "settleMs": null
+      }
+    }
+  },
+  "runOf10": {
+    "wallMs": 3187,
+    "feedEvents": 50,
+    "byStatus": {
+      "requested": 0,
+      "checking": 0,
+      "held": 0,
+      "released": 0,
+      "settling": 0,
+      "settled": 10,
+      "blocked": 0,
+      "refused": 0,
+      "expired": 0,
+      "failed": 0
+    }
+  },
+  "crash": {
+    "atKill": {
+      "requested": 0,
+      "checking": 0,
+      "held": 0,
+      "released": 6,
+      "settling": 2,
+      "settled": 0,
+      "blocked": 0,
+      "refused": 0,
+      "expired": 0,
+      "failed": 0
+    },
+    "after": {
+      "requested": 0,
+      "checking": 0,
+      "held": 0,
+      "released": 0,
+      "settling": 0,
+      "settled": 8,
+      "blocked": 0,
+      "refused": 0,
+      "expired": 0,
+      "failed": 0
+    },
+    "transactions": 8
+  },
+  "approved": {
+    "approveToFinalizedMs": 4748,
+    "view": {
+      "id": "0xcf329c6c85054ca1862db9bf0cd59342d16c43fc51bd55d2e3d63774bb6b3896",
+      "runId": null,
+      "status": "settled",
+      "reason": "amount_mismatch",
+      "decidedBy": "user_once",
+      "account": "0xE890B35be32F04032B502Dc4Dc2db8062aD6d603",
+      "vault": "0x771d1b283D9Bf9A6e14bAdF0c9C4d1BE05D87dC7",
+      "payTo": "0x90f9931B748B26763161a8191C178Fe425C25fEc",
+      "amount": "1000",
+      "invoiceHash": "0xd087dc838261ef29b13ce9b8240604a7b66a4af562f7dff5a0a988b67d8bcc0d",
+      "deadline": 1791367886,
+      "evidence": {
+        "reason": "amount_mismatch",
+        "checker": "test"
+      },
+      "tx": {
+        "hash": "0x6f2b7abdcf6cf146d7975db5e55b6ee1485fde2c3e6f52e7e9c130df97606318",
+        "relayer": "0x2B4E3b55979FeC077A1B92bb08c20E26b8D45c5C",
+        "nonce": 111,
+        "block": 68919570,
+        "proposedAt": "2026-10-07T08:11:31.154Z",
+        "votedAt": "2026-10-07T08:11:31.459Z",
+        "finalizedAt": "2026-10-07T08:11:31.750Z"
+      },
+      "timings": {
+        "checkMs": 189,
+        "personMs": 357,
+        "settleMs": 3931
+      }
+    }
+  },
+  "refusedByOwner": {
+    "id": "0x1fe12ee603f00891c1768822c1d285166c4f76fb3913f0430b4e5e3cf56364c4",
+    "runId": null,
+    "status": "refused",
+    "reason": "user_refused",
+    "decidedBy": "user_refused",
+    "account": "0xE890B35be32F04032B502Dc4Dc2db8062aD6d603",
+    "vault": "0x771d1b283D9Bf9A6e14bAdF0c9C4d1BE05D87dC7",
+    "payTo": "0x90f9931B748B26763161a8191C178Fe425C25fEc",
+    "amount": "1000",
+    "invoiceHash": "0x57f1edcb322d9ccb9bbc8fc0be905d5d0919443e64181b34e2a1f30f056cfdeb",
+    "deadline": 1791367892,
+    "evidence": {
+      "reason": "items_mismatch",
+      "checker": "test"
+    },
+    "tx": {
+      "hash": null,
+      "relayer": null,
+      "nonce": null,
+      "block": null,
+      "proposedAt": null,
+      "votedAt": null,
+      "finalizedAt": null
+    },
+    "timings": {
+      "checkMs": 156,
+      "personMs": 214,
+      "settleMs": null
+    }
+  },
+  "totals": {
+    "transactions": 20,
+    "usdcPaid": "9400",
+    "monSpent": "0.539172"
+  },
+  "failures": [],
+  "finishedAt": "2026-10-07T08:11:33.213Z"
+}
