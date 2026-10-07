@@ -128,7 +128,8 @@ contract FuzzTest is Base {
         (, uint256 v1, uint256 a1) = _balances();
         assertEq(v1, 0);
         assertEq(a1 - a0, v0);
-        if (caller != address(account)) assertEq(usdc.balanceOf(caller), callerBefore);
+        // The vault itself (an address the fuzzer can pick as caller) is emptied into the account by design.
+        if (caller != address(account) && caller != address(vault)) assertEq(usdc.balanceOf(caller), callerBefore);
     }
 
     // ---------- vault.recordDecision ----------

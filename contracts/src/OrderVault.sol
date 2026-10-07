@@ -128,8 +128,8 @@ contract OrderVault is EIP712, IOrderVault {
         paid[p.invoiceHash] = true;
         uint256 newSpent = spent + p.amount;
         spent = newSpent;
-        usdc.safeTransfer(p.payTo, p.amount);
         emit PaymentExecuted(p.invoiceHash, p.payTo, p.amount, funded - newSpent, by);
+        usdc.safeTransfer(p.payTo, p.amount);
     }
 
     function _signedBy(bytes32 digest, bytes calldata sig, address expected) private pure returns (bool) {
@@ -173,7 +173,7 @@ contract OrderVault is EIP712, IOrderVault {
     function close() external onlyClone returns (uint256 returned) {
         address acct = account();
         if (msg.sender != acct) revert NotAccount();
-        returned = _closeTo(acct);
+        returned = _closeTo(acct, false);
     }
 
     /// @notice After the order expires, anyone can return what is left to the account. It
@@ -182,14 +182,14 @@ contract OrderVault is EIP712, IOrderVault {
         (address acct,,, uint64 exp,) = _args();
         if (closed) revert VaultClosed();
         if (block.timestamp <= exp) revert NotExpired();
-        returned = _closeTo(acct);
-        emit Swept(returned);
+        returned = _closeTo(acct, true);
     }
 
-    function _closeTo(address acct) private returns (uint256 returned) {
+    function _closeTo(address acct, bool swept) private returns (uint256 returned) {
         if (closed) revert VaultClosed();
         closed = true;
         returned = usdc.balanceOf(address(this));
+        if (swept) emit Swept(returned);
         if (returned > 0) usdc.safeTransfer(acct, returned);
     }
 }

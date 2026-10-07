@@ -15,6 +15,14 @@ use_literal_content = true
 # The EIP-712 fixture shared with packages/shared (test/Eip712Fixture.t.sol).
 fs_permissions = [{ access = "read-write", path = "../packages/shared/test/fixtures" }]
 
+[lint]
+# Deadlines, waiting periods and expiries are hours to days long; the few seconds a block
+# producer can move a timestamp do not matter to any rule here.
+# Every external call made before an event is a read (the P256 precompile, the account's
+# paymentContext, a token balance) or a call into our own vault or account clone, and USDC
+# transfers come after their events; none can re-enter. Checked one by one, 7 Oct.
+exclude_lints = ["block-timestamp", "reentrancy-events"]
+
 [fuzz]
 runs = 256
 

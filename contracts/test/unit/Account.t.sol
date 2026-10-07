@@ -46,6 +46,12 @@ contract FactoryTest is Base {
         factory.createAccount(bytes32(uint256(1)), bytes32(uint256(2)), WAIT, bytes32("salt"));
     }
 
+    function test_AnAccountsWaitingPeriodHasAMaximum() public {
+        // Otherwise a huge wait could never be lowered in practice: a decrease waits out the current one.
+        vm.expectRevert(InvalidPolicy.selector);
+        factory.createAccount(qx, qy, 30 days + 1, bytes32("too long"));
+    }
+
     function test_ANewAccountCannotPayAnything() public view {
         Policy memory p = account.policy();
         assertEq(p.agentKey, address(0));
@@ -178,6 +184,16 @@ contract PolicyTest is Base {
         p.checkerKey = makeAddr("new checker");
         _setPolicy(p);
         assertEq(account.policy().checkerKey, p.checkerKey);
+    }
+
+    function test_TheWaitingPeriodHasAMaximum() public {
+        Policy memory p = defaultPolicy();
+        p.waitingPeriod = 30 days + 1;
+        _expectNext(InvalidPolicy.selector);
+        _setPolicy(p);
+        p.waitingPeriod = 30 days;
+        _setPolicy(p);
+        assertEq(account.effectiveWaitingPeriod(), 30 days);
     }
 
     function test_ALongerWaitingPeriodAppliesAtOnce() public {

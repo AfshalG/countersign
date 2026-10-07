@@ -7,6 +7,7 @@ import {Clones} from "@openzeppelin-contracts/proxy/Clones.sol";
 import {Initializable} from "@openzeppelin-contracts/proxy/utils/Initializable.sol";
 import {EIP712} from "@openzeppelin-contracts/utils/cryptography/EIP712.sol";
 import {P256} from "@openzeppelin-contracts/utils/cryptography/P256.sol";
+import {SafeCast} from "@openzeppelin-contracts/utils/math/SafeCast.sol";
 import {WebAuthn} from "@openzeppelin-contracts/utils/cryptography/WebAuthn.sol";
 import {Policy, Supplier, PaymentContext} from "./CountersignTypes.sol";
 import {OwnerAuth} from "./libraries/OwnerAuth.sol";
@@ -48,6 +49,10 @@ contract CountersignAccount is Initializable, EIP712, ICountersignAccount {
     event Paused();
     event Unpaused();
 
+    /// The longest waiting period allowed. A decrease waits out the current period, so an
+    /// unbounded one could lock supplier changes for good.
+    uint64 public constant MAX_WAITING_PERIOD = 30 days;
+
     IERC20 public immutable usdc;
     address public immutable vaultTemplate;
 
@@ -63,6 +68,7 @@ contract CountersignAccount is Initializable, EIP712, ICountersignAccount {
     mapping(bytes32 orderId => address vault) public vaultOf;
 
     constructor(IERC20 usdc_, address vaultTemplate_) EIP712("Countersign Account", "1") {
+        if (address(usdc_) == address(0) || vaultTemplate_ == address(0)) revert InvalidPayTo();
         usdc = usdc_;
         vaultTemplate = vaultTemplate_;
         _disableInitializers();
@@ -72,6 +78,7 @@ contract CountersignAccount is Initializable, EIP712, ICountersignAccount {
     /// can be paid until the owner sets a policy.
     function initialize(bytes32 qx, bytes32 qy, uint64 waitingPeriod) external initializer {
         if (!P256.isValidPublicKey(qx, qy)) revert InvalidOwnerKey();
+        if (waitingPeriod > MAX_WAITING_PERIOD) revert InvalidPolicy();
         _qx = qx;
         _qy = qy;
         _policy.waitingPeriod = waitingPeriod;
@@ -88,6 +95,7 @@ contract CountersignAccount is Initializable, EIP712, ICountersignAccount {
         if (p.agentKey == p.checkerKey) revert SameAgentAndChecker();
         if (p.newAddressCap > p.perPaymentCap) revert InvalidPolicy();
         if (p.expiry <= block.timestamp) revert InvalidPolicy();
+        if (p.waitingPeriod > MAX_WAITING_PERIOD) revert InvalidPolicy();
 
         uint64 current = effectiveWaitingPeriod();
         uint64 wait = p.waitingPeriod;
@@ -96,7 +104,7 @@ contract CountersignAccount is Initializable, EIP712, ICountersignAccount {
             // to zero and add a fraudster's address in the same minute.
             wait = current;
             _pendingWaitingPeriod = p.waitingPeriod;
-            _pendingWaitingPeriodAt = uint64(block.timestamp) + current;
+            _pendingWaitingPeriodAt = SafeCast.toUint64(block.timestamp) + current;
             emit WaitingPeriodDecreaseScheduled(p.waitingPeriod, _pendingWaitingPeriodAt);
         } else {
             _pendingWaitingPeriod = 0;
@@ -133,7 +141,7 @@ contract CountersignAccount is Initializable, EIP712, ICountersignAccount {
         // A new or changed address waits; turning a supplier on or off does not reset it.
         if (s.payTo != payTo) {
             s.payTo = payTo;
-            s.activeAfter = uint64(block.timestamp) + effectiveWaitingPeriod();
+            s.activeAfter = SafeCast.toUint64(block.timestamp) + effectiveWaitingPeriod();
         }
         s.active = active;
         s.proofHash = proofHash;
@@ -167,8 +175,8 @@ contract CountersignAccount is Initializable, EIP712, ICountersignAccount {
             vaultTemplate, _vaultArgs(supplierId, orderHash, expiry, amount), orderId
         );
         vaultOf[orderId] = vault;
-        usdc.safeTransfer(vault, amount);
         emit OrderApproved(orderId, vault, supplierId, orderHash, amount, expiry);
+        usdc.safeTransfer(vault, amount);
     }
 
     function closeOrder(bytes32 orderId, uint256 nonce, uint64 deadline, WebAuthn.WebAuthnAuth calldata auth)
@@ -191,8 +199,8 @@ contract CountersignAccount is Initializable, EIP712, ICountersignAccount {
         if (to == address(0)) revert InvalidPayTo();
         if (amount == 0) revert ZeroAmount();
         if (usdc.balanceOf(address(this)) < amount) revert InsufficientBalance();
-        usdc.safeTransfer(to, amount);
         emit Withdrawn(to, amount);
+        usdc.safeTransfer(to, amount);
     }
 
     /// @notice The stop button: every vault refuses to pay until unpaused (D23).
