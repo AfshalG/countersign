@@ -1,0 +1,75 @@
+{
+  "at": "2026-10-07T04:37:01.045Z",
+  "steps": [
+    {
+      "label": "approve factory",
+      "gasUsed": "94216",
+      "gasLimit": "94216",
+      "mon": "0.009610032",
+      "hash": "0x50ea4af3bb1407895cd3eb741f3f9ac8b8d16dffbac1379f3b4647d03ff87334"
+    },
+    {
+      "label": "open 50 vaults",
+      "gasUsed": "5464823",
+      "gasLimit": "5464823",
+      "mon": "0.557411946",
+      "hash": "0xab953e0fdf3e09fb7693d36a99ef8c0189fc9ca249566bb869d5bedb520cd496"
+    },
+    {
+      "label": "open 50 vaults",
+      "gasUsed": "5464862",
+      "gasLimit": "5464862",
+      "mon": "0.557415924",
+      "hash": "0xe349f2551e483bc5240079b8afadda824519d03552816e879e33c4b7bf6a19b8"
+    },
+    {
+      "label": "open 50 vaults",
+      "gasUsed": "5464836",
+      "gasLimit": "5464836",
+      "mon": "0.557413272",
+      "hash": "0xf1473a5288f62d445f7d19986b31b88b0dea2225f9dcdee42d319718ceb89b16"
+    },
+    {
+      "label": "open 50 vaults",
+      "gasUsed": "5464902",
+      "gasLimit": "5464902",
+      "mon": "0.557420004",
+      "hash": "0xa313acf14115224d6cb9f7d557f705c7bd8ad22311b673638d4ec4e0a40392de"
+    },
+    {
+      "label": "set 50 account orders",
+      "gasUsed": "3107463",
+      "gasLimit": "3107463",
+      "mon": "0.316961226",
+      "hash": "0x0c8a6bc07f779b891346318747661724ac8f9a9df9bebab76aa4e3309cd1584a"
+    },
+    {
+      "label": "set 50 account orders",
+      "gasUsed": "3107425",
+      "gasLimit": "3107425",
+      "mon": "0.31695735",
+      "hash": "0xf9956eb565d14fbc5b7e702e50ea4256b72ec797146e5838dc3c50c02c6ae59d"
+    },
+    {
+      "label": "set 50 account orders",
+      "gasUsed": "3107425",
+      "gasLimit": "3107425",
+      "mon": "0.31695735",
+      "hash": "0x91151b03b09dde08d42d34aabd9b1c71e1ce2ac47830717c87753dfbfe03893b"
+    },
+    {
+      "label": "set 50 account orders",
+      "gasUsed": "3107450",
+      "gasLimit": "3107450",
+      "mon": "0.3169599",
+      "hash": "0x126e5b26d03aee7547d1473b02dc15278d15c4f0133953956043afcf6d53a342"
+    },
+    {
+      "label": "fund account",
+      "gasUsed": "108054",
+      "gasLimit": "108054",
+      "mon": "0.011021508",
+      "hash": "0xdc40e517d9ad7ab1b1b2dd64c3b922adde00eba2984a2ee6936dee4b9f89caec"
+    }
+  ]
+}
