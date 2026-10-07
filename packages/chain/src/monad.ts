@@ -14,14 +14,29 @@ export const deployments = {
 } as const satisfies Record<string, Address>;
 
 /**
- * The public testnet endpoints and the share of each one's limit a sender uses (Spike 3:
+ * The public testnet endpoints and the share of each one's limit used for sends and for reads (Spike 3:
  * Monad 50/s with eth_call capped at 15/s, Ankr 300 per 10 s, monadinfra 20/s).
  * `poolStatus`: whether txpool_statusByHash works there (Ankr refuses it).
  */
 export const ENDPOINTS = [
-  { url: 'https://testnet-rpc.monad.xyz', sendsPerSecond: 30, poolStatus: true },
-  { url: 'https://rpc.ankr.com/monad_testnet', sendsPerSecond: 25, poolStatus: false },
-  { url: 'https://rpc-testnet.monadinfra.com', sendsPerSecond: 12, poolStatus: true },
+  {
+    url: 'https://testnet-rpc.monad.xyz',
+    sendsPerSecond: 30,
+    readsPerSecond: 10,
+    poolStatus: true,
+  },
+  {
+    url: 'https://rpc.ankr.com/monad_testnet',
+    sendsPerSecond: 25,
+    readsPerSecond: 5,
+    poolStatus: false,
+  },
+  {
+    url: 'https://rpc-testnet.monadinfra.com',
+    sendsPerSecond: 12,
+    readsPerSecond: 6,
+    poolStatus: true,
+  },
 ] as const;
 
 export const WS_URL = 'wss://testnet-rpc.monad.xyz';
