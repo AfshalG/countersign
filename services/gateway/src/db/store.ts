@@ -197,6 +197,23 @@ export class Store {
     });
   }
 
+  /** Requests waiting to settle whose transaction is one of `hashes`. */
+  async settlingByTx(hashes: readonly string[]): Promise<PaymentRequestRow[]> {
+    if (hashes.length === 0) return [];
+    return this.db
+      .select()
+      .from(paymentRequests)
+      .where(
+        and(
+          eq(paymentRequests.status, 'settling'),
+          inArray(
+            paymentRequests.txHash,
+            hashes.map((h) => h.toLowerCase()),
+          ),
+        ),
+      );
+  }
+
   async listRun(runId: string): Promise<PaymentRequestRow[]> {
     return this.db
       .select()
