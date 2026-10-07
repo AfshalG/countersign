@@ -4,7 +4,15 @@ import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
   {
-    ignores: ['**/dist/**', '**/coverage/**', 'contracts/**', '**/*.config.ts', 'eslint.config.js'],
+    // dependencies/ holds Solidity libraries downloaded by Soldeer: not ours to lint.
+    ignores: [
+      '**/dist/**',
+      '**/coverage/**',
+      '**/dependencies/**',
+      'contracts/**',
+      '**/*.config.ts',
+      'eslint.config.js',
+    ],
   },
   js.configs.recommended,
   ...tseslint.configs.strictTypeChecked,

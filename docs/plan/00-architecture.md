@@ -436,7 +436,7 @@ FOUNDATION:
 
 SPIKES (throwaway code, real answers):
   Slice 1:   Passkey signature verified on Monad testnet              DONE
-  Slice 2:   Primus proof of a supplier's address file, on testnet    TODO
+  Slice 2:   Primus proof of a supplier's address file, on testnet    DONE
   Slice 3:   200 payments: order vaults vs one account, relayers,     TODO
              several agents at once, private RPC
   Slice 4:   Grok's custom connector reaches a test MCP server        TODO

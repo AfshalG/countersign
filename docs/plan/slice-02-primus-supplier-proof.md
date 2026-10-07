@@ -2,7 +2,7 @@
 
 ## Status
 
-**DRAFT, for Afshal's review (6 Oct 2026).** No code yet. Owner: Afshal (contracts); Claude builds while Roshan and Sophie are busy.
+**DONE (7 Oct 2026, UTC).** Approved by Afshal ("ok", S2-1 to S2-5). Built on `feature/spike-02-primus`, CI green. Owner: Afshal (contracts); Claude built it.
 
 ## Goal
 
@@ -138,16 +138,44 @@ git checkout -b feature/spike-02-primus
 6. Read-only call of the same attestation on **Primus's Monad mainnet verifier**. Expected: passes.
 7. Change the supplier file to a different address, attest again, and check it against the original proposed address. Expected: fails with "address differs".
 
-## Results (filled in after the spike)
+## Results (7 Oct 2026, UTC)
 
 | Measure | Value |
 |---|---|
-| SDK installs on Node 24 | |
-| Time to get an attestation | |
-| `verifyAttestation` gas on Monad testnet | |
-| Probe check gas, whole transaction | |
-| Passes Primus's own mainnet verifier | |
-| Free proof quota | |
+| SDK installs on Node 24 | Yes, in WebAssembly mode; the native build is not needed and is turned off |
+| Time to get an attestation | 4.2–4.9 s |
+| Probe check gas, testnet transaction | 122,391 (whole transaction 193,173); about 123k locally |
+| Sending to finalized | 1.19 s |
+| Passes Primus's own mainnet verifier | Yes (read-only); a copy with one changed character is rejected |
+| Supplier file changed to another address | Refused on testnet: `AddressDiffers` |
+| Free proof quota | Not found in the docs or the Hub |
+
+Deployed (chain 10143): Primus verifier proxy `0x643C855Aaee9Fe8e37B5e3dE19e75A889d3218FE` (logic `0xD143…e70a`, trusts only `0xDB73…8eF6`), probe `0xF469cEC069AEAa068238c50e70FE682a794E6ca6`. Demo supplier: `countersign-supplier-demo.vercel.app`, address `0x90f9931B748B26763161a8191C178Fe425C25fEc`.
+
+## Verdict
+
+**The spike works.** Adding a supplier can show a proof that its own website lists the address, checked on Monad. Slice 15 wires the probe's checks into the account.
+
+## Findings about Primus (carry into Slices 5, 10 and 15)
+
+1. **Its verifier checks only the signature.** It does not check the timestamp, although its comments say it does. Every business rule is ours.
+2. **Its hash packs strings with no separators**, so bytes can move between neighbouring fields without breaking the signature. Shown with Primus's real signature: a URL-into-header shift and a data-into-conditions shift both pass Primus's verifier. The probe pins every field (URL, method, header, body, key, parse path, conditions, extra parameters, data), which rejects both.
+3. **The `attestors` list inside an attestation is not signed.** Only the verifier's own list counts.
+4. `data` is Primus's JSON of the extracted value (`{"payTo":"…"}`), not the raw file; the value is verbatim. Suppliers must publish the checksummed address, or the check must compare case-insensitively (decide in Slice 15).
+5. `timestamp` is in milliseconds.
+6. Its `initialize` is not locked on the bare contract, so it must be deployed behind its proxy and initialised in the same transaction.
+7. Its signatures use plain `ecrecover`, so they are malleable; never use a signature as an identifier.
+
+## Adapted from spec
+
+1. **Native build skipped** (`allowBuilds: false`): the SDK falls back to the WebAssembly build it ships. No vendor build code runs on our machines or servers.
+2. **`tslib` declared** for the SDK through `packageExtensions`; the SDK uses it without declaring it.
+3. **Scripts exit explicitly** with a time limit; the SDK keeps connections open.
+4. **Field pinning wider than planned:** the plan pinned URL, method and body; the probe also pins header, key, parse path, conditions and extra parameters, because of finding 2.
+5. **Fixtures are ABI-encoded by TypeScript** and decoded in Foundry, instead of JSON parsing in Solidity.
+6. **Two shift tests expected a different error** than the probe raised; the pinned neighbouring field caught each first. Tests corrected to the stricter outcome.
+7. **CI:** Soldeer installs Primus's contracts from GitHub at commit `3082c53`; ESLint and Prettier skip downloaded libraries.
+8. Primus's public repo contains a block-explorer API key in its own config. It is theirs and already public; it is not in our repo.
 
 ## Commit
 

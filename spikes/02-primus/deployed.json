@@ -1,0 +1,8 @@
+{
+  "chainId": 10143,
+  "primusLogic": "0xD143D3a0205792C96707350B69bfbc4d1946e70a",
+  "verifier": "0x643C855Aaee9Fe8e37B5e3dE19e75A889d3218FE",
+  "probe": "0xF469cEC069AEAa068238c50e70FE682a794E6ca6",
+  "maxAgeSeconds": 86400,
+  "primusAttestor": "0xDB736B13E2f522dBE18B2015d0291E4b193D8eF6"
+}
