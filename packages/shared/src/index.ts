@@ -18,6 +18,7 @@ export {
   FINAL_STATUSES,
   PAYMENT_STATUSES,
   REASONS,
+  REASON_TEXT,
   canTransition,
   isFinal,
   refusalFor,
