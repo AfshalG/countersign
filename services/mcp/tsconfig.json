@@ -9,5 +9,5 @@
     "allowJs": false,
     "incremental": false
   },
-  "include": ["lib", "app", "test", "next-env.d.ts"]
+  "include": ["app", "lib", "next-env.d.ts", "scripts", "test"]
 }
