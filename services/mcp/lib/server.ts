@@ -1,6 +1,6 @@
-import { createMcpHandler } from 'mcp-handler';
+import { createMcpHandler, withMcpAuth } from 'mcp-handler';
 import { Countersign } from '@countersign/sdk';
-import { tokenMatches } from './auth';
+import { accessVerifier, type AuthKit } from './auth';
 import { createTools } from './tools';
 
 export type ServerOptions = {
@@ -10,12 +10,19 @@ export type ServerOptions = {
   account: `0x${string}`;
   agentKey: `0x${string}`;
   mcpToken: string;
+  /** Sign-in through WorkOS (Slice 13); without it only `mcpToken` is accepted. */
+  authkit?: AuthKit;
+  /** One line per call: how the caller signed in and who they are. */
+  log?: (line: Record<string, unknown>) => void;
   /** For tests: the gateway as a fetch function. */
   fetch?: typeof fetch;
   waitMs?: number;
 };
 
-/** The MCP endpoint: the six tools for one account, behind the bearer token. */
+/**
+ * The MCP endpoint: the six tools for one account, behind the bearer token or a WorkOS sign-in.
+ * Every signed-in person uses the demo account in hosted mode until judge mode (Slice 9 part 4).
+ */
 export function createServer(options: ServerOptions): (req: Request) => Promise<Response> {
   const cs = new Countersign({
     gateway: options.gatewayUrl,
@@ -45,16 +52,21 @@ export function createServer(options: ServerOptions): (req: Request) => Promise<
     },
     { serverInfo: { name: 'countersign', version: '0.1.0' } },
   );
-  return async (req: Request) => {
-    if (!tokenMatches(req.headers.get('authorization'), options.mcpToken)) {
-      return new Response(JSON.stringify({ error: 'invalid_token' }), {
-        status: 401,
-        headers: {
-          'content-type': 'application/json',
-          'www-authenticate': 'Bearer error="invalid_token"',
-        },
+  return withMcpAuth(
+    (req) => {
+      options.log?.({
+        via: req.auth?.extra?.via,
+        user: req.auth?.extra?.userId,
+        client: req.auth?.clientId,
       });
-    }
-    return mcp(req);
-  };
+      return mcp(req);
+    },
+    accessVerifier(options.mcpToken, options.authkit),
+    {
+      required: true,
+      // The 401 names <origin>/.well-known/oauth-protected-resource, from configuration when
+      // sign-in is on (behind Vercel's proxy the request's own origin is also right).
+      ...(options.authkit ? { resourceUrl: new URL(options.authkit.audience).origin } : {}),
+    },
+  );
 }
