@@ -139,7 +139,8 @@ export const approvalView = z
       z.object({ field: z.string(), onFile: z.string(), onInvoice: z.string() }),
     ),
     actions: z.record(z.string(), typedAction).openapi({
-      description: 'For a held payment: pay_once and refuse. Empty once decided',
+      description:
+        'For a held payment: refuse, and pay_once when its address is the one on file (the vault pays nowhere else, even for the owner). Empty once decided',
     }),
     statusUrl: z.string(),
   })
@@ -152,6 +153,10 @@ export function paymentApproval(
 ): z.infer<typeof approvalView> {
   const evidence = (row.evidence ?? {}) as { payTo?: { onFile?: string; invoice?: string } };
   const onFile = evidence.payTo?.onFile ?? null;
+  // The vault pays only the supplier's address on file, even with the owner's passkey
+  // (test_TheOwnerStillPaysOnlyTheAddressOnFile), so a new address is never offered as pay once:
+  // the owner refuses it, or changes the supplier's address on file first (a proposal).
+  const offFile = onFile !== null && onFile.toLowerCase() !== row.payTo.toLowerCase();
   const payment = paymentOf(row);
   const domain = vaultDomain(chainId, row.vault as Hex);
   const decision = {
@@ -162,24 +167,28 @@ export function paymentApproval(
   const actions =
     row.status === 'held'
       ? {
-          pay_once: {
-            challenge: hashTypedData({
-              domain,
-              types: paymentTypes,
-              primaryType: 'Payment',
-              message: payment,
-            }),
-            typedData: {
-              domain,
-              types: paymentTypes,
-              primaryType: 'Payment',
-              message: {
-                ...payment,
-                amount: payment.amount.toString(),
-                deadline: payment.deadline.toString(),
-              },
-            },
-          },
+          ...(offFile
+            ? {}
+            : {
+                pay_once: {
+                  challenge: hashTypedData({
+                    domain,
+                    types: paymentTypes,
+                    primaryType: 'Payment',
+                    message: payment,
+                  }),
+                  typedData: {
+                    domain,
+                    types: paymentTypes,
+                    primaryType: 'Payment',
+                    message: {
+                      ...payment,
+                      amount: payment.amount.toString(),
+                      deadline: payment.deadline.toString(),
+                    },
+                  },
+                },
+              }),
           refuse: {
             challenge: hashTypedData({
               domain,
@@ -201,6 +210,7 @@ export function paymentApproval(
       amountUsdc: formatUsdc(BigInt(row.amount)),
       payTo: row.payTo,
       addressOnFile: onFile,
+      payOnce: row.status !== 'held' ? null : offFile ? 'address_not_on_file' : 'offered',
       reason: row.reason,
       reasonText: row.reason ? REASON_TEXT[row.reason] : null,
       account: row.account,
@@ -209,10 +219,7 @@ export function paymentApproval(
       deadline: new Date(row.deadline * 1000).toISOString(),
       txHash: row.txHash,
     },
-    differences:
-      onFile && onFile.toLowerCase() !== row.payTo.toLowerCase()
-        ? [{ field: 'payTo', onFile, onInvoice: row.payTo }]
-        : [],
+    differences: offFile ? [{ field: 'payTo', onFile, onInvoice: row.payTo }] : [],
     actions,
     statusUrl: `${publicUrl}/p/${row.id}`,
   };
@@ -302,7 +309,7 @@ const decide = createRoute({
     409: json(apiError, 'not_held, or contract_refuses'),
     422: json(
       apiError,
-      'invalid_passkey, or challenge_mismatch (the passkey signed another action)',
+      'invalid_passkey, challenge_mismatch (the passkey signed another action), or not_offered (pay_once for an address not on file)',
     ),
   },
 });
@@ -329,7 +336,14 @@ export function registerApprovalRoutes(
     if (!row) return c.json({ error: 'unknown_request' }, 404);
     if (row.status !== 'held') return c.json({ error: 'not_held', status: row.status }, 409);
     const action = paymentApproval(row, chainId, publicUrl).actions[body.action];
-    if (!action) return c.json({ error: 'not_held', status: row.status }, 409);
+    if (!action)
+      return c.json(
+        {
+          error: 'not_offered',
+          message: 'The vault pays only the address on file; refuse, or change the supplier first',
+        },
+        422,
+      );
     let auth: WebAuthnAuth;
     try {
       auth = fromBrowser(body.assertion, action.challenge as Hex);
