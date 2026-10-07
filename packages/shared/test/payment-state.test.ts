@@ -1,0 +1,88 @@
+import { describe, expect, it } from 'vitest';
+import {
+  CONTRACT_REFUSALS,
+  FINAL_STATUSES,
+  PAYMENT_STATUSES,
+  REASONS,
+  canTransition,
+  isFinal,
+  refusalFor,
+} from '../src/payment-state.js';
+
+describe('payment request states', () => {
+  it('lets a request move only along the drawn paths', () => {
+    expect(canTransition('requested', 'checking')).toBe(true);
+    expect(canTransition('checking', 'held')).toBe(true);
+    expect(canTransition('checking', 'released')).toBe(true);
+    expect(canTransition('held', 'released')).toBe(true); // pay once with the passkey
+    expect(canTransition('held', 'refused')).toBe(true);
+    expect(canTransition('held', 'expired')).toBe(true);
+    expect(canTransition('released', 'settling')).toBe(true);
+    expect(canTransition('settling', 'settled')).toBe(true);
+    expect(canTransition('settling', 'failed')).toBe(true);
+  });
+
+  it('never skips the check or settles without sending', () => {
+    expect(canTransition('requested', 'released')).toBe(false);
+    expect(canTransition('requested', 'settled')).toBe(false);
+    expect(canTransition('checking', 'settled')).toBe(false);
+    expect(canTransition('held', 'settling')).toBe(false);
+  });
+
+  it('never leaves a final status', () => {
+    for (const from of FINAL_STATUSES) {
+      for (const to of PAYMENT_STATUSES) expect(canTransition(from, to)).toBe(false);
+    }
+  });
+
+  it('knows which statuses are final', () => {
+    expect(isFinal('settled')).toBe(true);
+    expect(isFinal('held')).toBe(false);
+    expect(FINAL_STATUSES).toEqual(['settled', 'blocked', 'refused', 'expired', 'failed']);
+  });
+});
+
+describe('contract refusals', () => {
+  it('maps every named error a payment can raise to a typed reason and a status', () => {
+    const errors = [
+      'DeadlinePassed',
+      'ZeroAmount',
+      'AccountPaused',
+      'VaultClosed',
+      'OrderExpired',
+      'AlreadyPaid',
+      'SupplierInactive',
+      'PayToNotOnFile',
+      'AddressNotYetActive',
+      'OverNewAddressCap',
+      'OverCap',
+      'OverRemaining',
+      'PolicyNotSet',
+      'PolicyExpired',
+      'InvalidAgentSignature',
+      'InvalidCheckerSignature',
+      'InvalidOwnerSignature',
+    ];
+    for (const e of errors) {
+      const r = refusalFor(e);
+      expect(REASONS).toContain(r.reason);
+      expect(['blocked', 'held']).toContain(r.status);
+    }
+    expect(Object.keys(CONTRACT_REFUSALS).sort()).toEqual([...errors].sort());
+  });
+
+  it('holds what a person can resolve and blocks what nobody should pay', () => {
+    expect(refusalFor('PayToNotOnFile')).toEqual({ status: 'held', reason: 'address_mismatch' });
+    expect(refusalFor('AddressNotYetActive')).toEqual({
+      status: 'held',
+      reason: 'address_not_yet_active',
+    });
+    expect(refusalFor('AccountPaused')).toEqual({ status: 'held', reason: 'paused' });
+    expect(refusalFor('OverRemaining')).toEqual({ status: 'blocked', reason: 'over_limit' });
+    expect(refusalFor('AlreadyPaid')).toEqual({ status: 'blocked', reason: 'duplicate_invoice' });
+  });
+
+  it('treats an error it does not know as a hold, never a pass (fail closed)', () => {
+    expect(refusalFor('SomethingNew')).toEqual({ status: 'held', reason: 'checker_unavailable' });
+  });
+});

@@ -14,6 +14,8 @@ export default tseslint.config(
       'contracts/**',
       '**/*.config.ts',
       'eslint.config.js',
+      // Plain Node build scripts (no TypeScript project): packages/chain's ABI generator.
+      '**/scripts/*.mjs',
     ],
   },
   js.configs.recommended,

@@ -61,6 +61,11 @@ jobs:
       - run: forge fmt --check
       - run: forge build
       - run: forge test -vvv
+      # The TypeScript ABIs in packages/chain must match what the contracts compile to.
+      - name: ABIs are up to date
+        run: |
+          node ../packages/chain/scripts/generate-abis.mjs
+          git diff --exit-code ../packages/chain/src/abis.ts
 
   # Kept separate from `contracts` so main's required check names never change.
   spike-01-passkey:
