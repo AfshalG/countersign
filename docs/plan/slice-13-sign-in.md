@@ -2,7 +2,7 @@
 
 ## Status
 
-**BUILDING (7 Oct 2026).** Afshal chose WorkOS AuthKit ("yes go with workos"); the account is his. The MCP server's side (discovery, token checks) is built and tested without the account; the WorkOS settings and keys are added when the account exists. Technical decisions made by Claude.
+**LIVE (7 Oct 2026); waiting on one sign-in from claude.ai.** Afshal chose WorkOS AuthKit ("yes go with workos"); the account is his (Staging environment). Technical decisions made by Claude.
 
 ## Goal
 
@@ -45,6 +45,24 @@ The bearer token still works; no token is refused with the `resource_metadata` c
 2. claude.ai: add the custom connector with the MCP URL; sign in with Google through WorkOS; `list_open_orders` answers.
 3. grok.com and ChatGPT developer mode (whoever has the accounts; Afshal's are Singapore-region and Claude only).
 4. The smoke test with the bearer token still passes.
+
+## Results (7 Oct 2026)
+
+WorkOS configured through the dashboard (no API key needed: tokens are checked against WorkOS's public keys): Dynamic Client Registration and Client ID Metadata Document on; resource indicator `https://countersign-mcp.vercel.app/api/mcp`, the default; Google, Microsoft, GitHub and Apple sign-in with WorkOS's demo credentials, and email with password. AuthKit domain `industrious-discussion-31-staging.authkit.app`. Vercel: `AUTHKIT_DOMAIN`, `MCP_PUBLIC_URL`.
+
+| Check on the deployed server | Result |
+|---|---|
+| A request with no token | 401, `WWW-Authenticate` with `resource_metadata` |
+| `/.well-known/oauth-protected-resource` (and `/api/mcp` after it) | 200: the MCP URL as resource, AuthKit as authorisation server |
+| `/.well-known/oauth-authorization-server` | AuthKit's metadata passed through (issuer matches) |
+| The bearer token | the six tools |
+| A client registering itself with WorkOS (DCR) | a client ID issued |
+| Tests | 18 for the MCP server, 5 of them for sign-in; 285 in the repo |
+
+### Findings, carried forward
+
+1. **WorkOS needs no API key on our side.** The server checks tokens against WorkOS's public keys, and the resource indicator is set in the dashboard, so no WorkOS secret is stored anywhere. → Slice 21 (security model).
+2. **Demo credentials for Google and the others.** WorkOS's Staging environment signs people in through its own Google app; fine for the hackathon, and a production environment would need our own OAuth apps. → Slice 22.
 
 ## Next
 

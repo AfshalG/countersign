@@ -10,6 +10,7 @@ This file is kept in step with the code: when a feature lands or an API changes,
 | ----- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 7 Oct | First version. Approvals API live; sample approvals below; sign-in for agent apps built (WorkOS, waiting on the account)                                                   |
 | 7 Oct | A hold for an address that is not on file offers only **refuse** (`summary.payOnce: "address_not_on_file"`): the contract never pays a new address, not even for the owner |
+| 7 Oct | Sign-in for agent apps is live: claude.ai, Grok and ChatGPT can connect to the MCP server by signing in (feature 6)                                                        |
 
 ## What the product is, in one paragraph
 
@@ -71,7 +72,7 @@ An agent can hand over a whole run (up to 500 invoices). The owner watches them 
 
 For judges and developers: how to connect an agent to Countersign.
 
-- MCP server: `https://countersign-mcp.vercel.app/api/mcp` (Claude Code and Codex with a token today; claude.ai, Grok and ChatGPT by signing in once WorkOS is set up).
+- MCP server: `https://countersign-mcp.vercel.app/api/mcp`. claude.ai, Grok and ChatGPT connect by adding it as a custom connector and signing in (Google, Microsoft, GitHub, Apple or email); Claude Code and Codex can also use a token.
 - SDK and quickstart: `docs/developers/quickstart.md`, `packages/sdk/README.md`. API reference: `https://gateway-production-e17a.up.railway.app/docs`.
 
 ## Coming next: design now, the API lands here
