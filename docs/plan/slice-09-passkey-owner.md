@@ -38,7 +38,11 @@ Everything the owner does, done with the passkey on their phone and enforced by 
 
 **Part 3: pause and unpause** from the app, the stop button (D23).
 
-**Part 4: an account for a new passkey** (`POST /v1/demo/account`): the factory creates it, the gateway funds it with a little testnet USDC and opens a demo order, so a judge can try the whole flow (D35, judge mode).
+**Part 4: an account for a new passkey (judge mode, D35), next.** Corrected 7 Oct: the gateway cannot open the demo order itself; only the account's passkey can (money rule 8), so the new passkey signs three setup actions. This part comes before 2 and 3 because it lets Sophie's phone (and a judge's) run the whole flow with their own Face ID.
+1. `POST /v1/demo/accounts` with the new passkey's public key (as `navigator.credentials.create` gives it, or `{ x, y }`): the gateway checks it is a valid P256 key, creates the account through a relayer (`createAccount`, waiting period 0, stated on screen), sends it 0.01 test USDC from the funding wallet, registers it for indexing, and returns three setup actions with their challenges: `setPolicy` (nonce 0: the hosted demo agent's key, the gateway's checker key, caps 0.005 and 0.002 USDC, 30 days), `setSupplier` (nonce 1: Kalibre Studio at its Primus-proven address), `approveOrder` (nonce 2: 0.005 USDC, 30 days).
+2. `POST /v1/demo/accounts/{account}/setup` with the three assertions: each checked against its challenge before any chain call, sent in nonce order, final before the next.
+3. `POST /v1/demo/accounts/{account}/invoices` with `clean`, `changed_address` or `amount`: the hosted demo agent pays a demo invoice through the normal pipeline; the clean one settles, the others are held with an approval for the judge's own passkey.
+Cost (measured in Slice 5's testnet broadcast): `createAccount` 198k gas, the USDC transfer about 100k, `setPolicy` 154k, `setSupplier` 105k, `approveOrder` 296k: about 0.09 MON per account, plus about 0.05 MON for a payment and a pay once. The routes are off unless a funding key and a daily limit are set; a global daily cap and one account per passkey.
 
 ## Tests first
 
@@ -60,9 +64,10 @@ Testnet (manual): a held payment on the hosted gateway paid once with the owner'
 
 ### Findings, carried forward
 
-1. **Railway did not deploy on push (fixed 7 Oct).** The Railway GitHub app was installed on another GitHub organisation but not on Afshal's personal account, so Railway could build the public repo when asked but could not list its branches or receive pushes. Afshal installed it for `countersign` only; the production environment is now connected to `development` (auto deploy on push) with **Wait for CI** on, so a merge deploys only after GitHub Actions pass. Switching production to `main` later is one setting. → Slice 21's deploy notes.
+1. **Railway did not deploy on push (fixed 7 Oct).** The Railway GitHub app was installed on another GitHub organisation but not on Afshal's personal account, so Railway could build the public repo when asked but could not list its branches or receive pushes. Afshal installed it for `countersign` only; the production environment is now connected to `development` (auto deploy on push) with **Wait for CI** on, so a merge deploys only after GitHub Actions pass. Switching production to `main` later is one setting. Verified: merge `9556a23` deployed itself after CI and was live about 105 s later. → Slice 21's deploy notes.
 2. The stand-in checker's `testHold` document is how holds are made on testnet until the real checker (Slice 10).
 3. **Pay once was offered where the contract can never pay (fixed 7 Oct).** While writing Sophie's brief, the README's claim 2 ("not even the owner's passkey can send it elsewhere", `test_TheOwnerStillPaysOnlyTheAddressOnFile`) contradicted the approvals view, which offered `pay_once` on a hold for an address not on file. Tapping it was safe (`422 contract_refuses`, nothing moved) but the button could never work. Now such a hold offers only `refuse`, `summary.payOnce` says `address_not_on_file`, and `pay_once` is refused as `422 not_offered` before any chain call. The shelved app design's "Pay the new address anyway" is impossible by design: a new address goes through changing the supplier (part 2), then the waiting period. → Slice 11 (`apps/approver/FEATURES.md`), Slice 14 (holds in the chat offer the same actions).
+4. **Part 4 needs the new passkey three times, and MON.** The plan said the gateway would open the demo order; owner actions need the owner's passkey, so a judge signs `setPolicy`, `setSupplier` and `approveOrder`. Each account costs about 0.09 MON to set up; the relayers hold about 0.10, so judge mode, Sophie's end-to-end test and Slice 16's runs all wait on more testnet MON. → Slice 22 (the demo's MON budget), D35.
 
 ## Next
 
