@@ -1,6 +1,8 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { validate } from '@scalar/openapi-parser';
+import { generatePrivateKey } from 'viem/accounts';
 import { createApp } from '../src/app.js';
+import { TestChecker } from '../src/checker.js';
 import { Store } from '../src/db/store.js';
 import type { Database } from '../src/db/client.js';
 import { freshDatabase } from './db/helpers.js';
@@ -14,6 +16,9 @@ beforeAll(async () => {
   app = createApp({
     store: new Store(database.db),
     chain: new FakeChain(),
+    checker: new TestChecker(generatePrivateKey(), 10143),
+    chainId: 10143,
+    checkerTimeoutMs: 2_000,
     token: 'a-service-token-of-24-characters',
     health: () => Promise.resolve({}),
   });
@@ -46,6 +51,7 @@ describe('the API reference', () => {
         '/v1/payments/{id}',
         '/v1/payments/{id}/approve',
         '/v1/payments/{id}/refuse',
+        '/v1/checks',
         '/v1/runs',
         '/v1/runs/{id}',
       ].sort(),

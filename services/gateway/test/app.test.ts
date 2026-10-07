@@ -3,6 +3,8 @@ import { keccak256, toHex } from 'viem';
 import { Store } from '../src/db/store.js';
 import type { Database } from '../src/db/client.js';
 import { createApp } from '../src/app.js';
+import { TestChecker } from '../src/checker.js';
+import { generatePrivateKey } from 'viem/accounts';
 import { freshDatabase, truncate } from './db/helpers.js';
 import { ACCOUNT, AGENT_SIG, FakeChain, SUPPLIER, VAULT } from './fakes.js';
 
@@ -22,7 +24,15 @@ afterAll(async () => {
 beforeEach(async () => {
   await truncate(database);
   chain = new FakeChain();
-  app = createApp({ store, chain, token: TOKEN, health: () => Promise.resolve({ relayers: [] }) });
+  app = createApp({
+    store,
+    chain,
+    checker: new TestChecker(generatePrivateKey(), 10143),
+    chainId: 10143,
+    checkerTimeoutMs: 2_000,
+    token: TOKEN,
+    health: () => Promise.resolve({ relayers: [] }),
+  });
 });
 
 const auth = { authorization: `Bearer ${TOKEN}`, 'content-type': 'application/json' };

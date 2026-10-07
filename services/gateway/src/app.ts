@@ -6,6 +6,8 @@ import { streamSSE } from 'hono/streaming';
 import type { Address, Hex } from 'viem';
 import { OUTCOME, PAYMENT_STATUSES } from '@countersign/shared';
 import type { Chain, WebAuthnAuth } from './chain/types.js';
+import type { Checker } from './checker.js';
+import { evaluate, SimulationUnavailable } from './pipeline/check.js';
 import type { PaymentRequestRow } from './db/schema.js';
 import type { StatusChange, Store } from './db/store.js';
 import { requestId, runId } from './ids.js';
@@ -14,6 +16,7 @@ import {
   address,
   apiError,
   bytes32,
+  checkVerdict,
   created,
   ownerAuth,
   paymentView,
@@ -25,7 +28,11 @@ import {
 
 export type AppDeps = {
   store: Store;
-  chain: Pick<Chain, 'simulate' | 'verifyOwnerDecision'>;
+  chain: Pick<Chain, 'simulate' | 'verifyOwnerDecision' | 'addressOnFile'>;
+  /** The checker and its time limit, for checks with no payment (POST /v1/checks). */
+  checker: Checker;
+  chainId: number;
+  checkerTimeoutMs: number;
   /** The service token the MCP server and the apps send (per-account sign-in comes in Slice 13). */
   token: string;
   /** Extra health details: relayer balances, the finality socket. */
@@ -130,6 +137,24 @@ const submitRun = createRoute({
     },
   },
   responses: { 201: json(runCreated, 'The run and each request’s first status'), ...errors },
+});
+
+const checkPayment = createRoute({
+  method: 'post',
+  path: '/v1/checks',
+  tags: ['Payments'],
+  summary: 'Check a payment without paying it',
+  description:
+    'The full check (the contract’s rules by simulation, then the checker) with nothing stored and nothing sent. For bank-transfer invoices (advice only) and dry runs. Never returns a signature.',
+  security: secured,
+  request: {
+    body: { content: { 'application/json': { schema: submission.extend({ account: address }) } } },
+  },
+  responses: {
+    200: json(checkVerdict, 'What would happen'),
+    503: json(apiError, 'chain_unavailable: the chain could not be asked; nothing was decided'),
+    ...errors,
+  },
 });
 
 const getPayment = createRoute({
@@ -302,6 +327,66 @@ export function createApp(deps: AppDeps) {
       requests.push({ id: request.id, status: request.status });
     }
     return c.json({ runId: id, requests }, 201);
+  });
+
+  app.openapi(checkPayment, async (c) => {
+    const body = c.req.valid('json');
+    const now = new Date();
+    // The same row shape a stored request has, so the check runs exactly as it would for real.
+    const row: PaymentRequestRow = {
+      id: requestId(body.account, body.vault, body.payment.invoiceHash as Hex),
+      runId: null,
+      account: body.account,
+      vault: body.vault,
+      invoiceHash: body.payment.invoiceHash,
+      payTo: body.payment.payTo,
+      amount: body.payment.amount,
+      deadline: body.payment.deadline,
+      agentSig: body.agentSig,
+      document: body.document ?? null,
+      status: 'checking',
+      reason: null,
+      decidedBy: null,
+      evidence: null,
+      checkerSig: null,
+      ownerAuth: null,
+      relayer: null,
+      relayerNonce: null,
+      rawTx: null,
+      txHash: null,
+      blockNumber: null,
+      requestedAt: now,
+      checkedAt: null,
+      decidedAt: null,
+      sentAt: null,
+      proposedAt: null,
+      votedAt: null,
+      finalizedAt: null,
+      updatedAt: now,
+      leaseUntil: null,
+    };
+    try {
+      const outcome = await evaluate(deps, row, { dryRun: true });
+      return c.json(
+        outcome.status === 'released'
+          ? {
+              verdict: 'would_settle' as const,
+              reason: null,
+              decidedBy: outcome.decidedBy,
+              evidence: outcome.evidence,
+            }
+          : {
+              verdict: outcome.status,
+              reason: outcome.reason,
+              decidedBy: outcome.decidedBy,
+              evidence: outcome.evidence,
+            },
+        200,
+      );
+    } catch (e) {
+      if (e instanceof SimulationUnavailable) return c.json({ error: 'chain_unavailable' }, 503);
+      throw e;
+    }
   });
 
   app.openapi(getPayment, async (c) => {

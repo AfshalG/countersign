@@ -132,6 +132,15 @@ export const runView = z
   })
   .openapi('Run');
 
+export const checkVerdict = z
+  .object({
+    verdict: z.enum(['would_settle', 'held', 'blocked']),
+    reason: z.enum(REASONS).nullable(),
+    decidedBy: z.enum(DECIDED_BY),
+    evidence: z.unknown(),
+  })
+  .openapi('CheckVerdict');
+
 export const apiError = z
   .object({
     error: z.string().openapi({

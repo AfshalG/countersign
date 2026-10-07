@@ -49,15 +49,17 @@ const pool = new RelayerPool({
   },
 });
 const tracker = new FinalityTracker({ store, receipts: monad, pool });
+const checker = new TestChecker(settings.TEST_CHECKER_PRIVATE_KEY, chainId, (input) =>
+  testHold(input.request.document),
+);
+const CHECKER_TIMEOUT_MS = 2_000;
 const workers = new Workers({
   store,
   chain: monad,
-  checker: new TestChecker(settings.TEST_CHECKER_PRIVATE_KEY, chainId, (input) =>
-    testHold(input.request.document),
-  ),
+  checker,
   pool,
   chainId,
-  checkerTimeoutMs: 2_000,
+  checkerTimeoutMs: CHECKER_TIMEOUT_MS,
   leaseMs: 30_000,
   checkConcurrency: 8,
   sendConcurrency: 8,
@@ -78,6 +80,9 @@ tracker.startPolling(1_000);
 const app = createApp({
   store,
   chain: monad,
+  checker,
+  chainId,
+  checkerTimeoutMs: CHECKER_TIMEOUT_MS,
   token: settings.GATEWAY_SERVICE_TOKEN,
   health: async () => ({
     chainId,
