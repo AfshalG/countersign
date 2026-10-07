@@ -106,6 +106,7 @@ const demo = judge && {
   agentKey: judge.agent,
   checkerKey: privateKeyToAddress(settings.TEST_CHECKER_PRIVATE_KEY),
   perDay: judge.perDay,
+  agentPrivateKey: judge.agentKey,
 };
 
 const app = createApp({

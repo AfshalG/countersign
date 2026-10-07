@@ -1,5 +1,7 @@
 import { createRoute, z, type OpenAPIHono } from '@hono/zod-openapi';
 import type { Address } from 'viem';
+import { demoPlan } from '../demo/plan.js';
+import { DEMO_INVOICE_KINDS, demoInvoice, sdkAgent } from '../demo/invoices.js';
 import {
   createDemoAccount,
   DemoError,
@@ -139,13 +141,64 @@ const setupRoute = createRoute({
   },
 });
 
+const invoiceRoute = createRoute({
+  method: 'post',
+  path: '/v1/demo/accounts/{account}/invoices',
+  tags: ['Judge mode'],
+  summary: 'Have the demo agent pay a Kalibre Studio invoice into this account',
+  description:
+    '`clean` pays the address on file and settles. `changed_address` uses a look-alike address (same first six and last four characters): the contract refuses it, so it is held and can only be refused. `amount_mismatch` is held by the stand-in checker until the real checker (Slice 10) reads invoices: pay it once or refuse it with the account’s passkey. Each is 0.001 USDC, from the account’s 0.005 order.',
+  request: {
+    params: accountParam,
+    body: {
+      content: { 'application/json': { schema: z.object({ kind: z.enum(DEMO_INVOICE_KINDS) }) } },
+    },
+  },
+  responses: {
+    200: json(
+      z
+        .object({
+          kind: z.enum(DEMO_INVOICE_KINDS),
+          requestId: z.string(),
+          status: z.string(),
+          reason: z.string().nullable(),
+          reasonText: z.string().nullable(),
+          txHash: z.string().nullable(),
+          approvalUrl: z.string().nullable().openapi({
+            description: 'When held: what the phone shows and signs (GET), and where it posts',
+          }),
+          statusUrl: z.string(),
+        })
+        .openapi('DemoInvoice'),
+      'Paid, or held for the owner',
+    ),
+    404: json(demoError, 'unknown_account'),
+    409: json(demoError, 'not_ready (set the account up first) or order_used_up'),
+  },
+});
+
 const refusal = (e: DemoError) => ({
   error: e.code,
   message: e.message,
   ...(e.detail === undefined ? {} : { detail: e.detail }),
 });
 
-export function registerDemoRoutes(app: OpenAPIHono, deps: DemoDeps): void {
+export function registerDemoRoutes(
+  app: OpenAPIHono,
+  deps: DemoDeps,
+  options: { token: string; publicUrl: string },
+): void {
+  const agent =
+    deps.agent ??
+    (deps.agentPrivateKey === undefined
+      ? undefined
+      : sdkAgent({
+          request: (url, init) => app.request(url, init),
+          token: options.token,
+          agentKey: deps.agentPrivateKey,
+          chainId: deps.chainId,
+        }));
+
   app.openapi(createAccountRoute, async (c) => {
     try {
       const view = await createDemoAccount(deps, publicKeyOf(c.req.valid('json').publicKey));
@@ -163,6 +216,39 @@ export function registerDemoRoutes(app: OpenAPIHono, deps: DemoDeps): void {
     if (!row)
       return c.json({ error: 'unknown_account', message: 'no demo account at this address' }, 404);
     return c.json(demoView(row, deps.chainId), 200);
+  });
+
+  app.openapi(invoiceRoute, async (c) => {
+    const account = c.req.valid('param').account as Address;
+    const row = await deps.store.getDemoAccount(account);
+    if (!row)
+      return c.json({ error: 'unknown_account', message: 'no demo account at this address' }, 404);
+    if (row.status !== 'ready' || agent === undefined)
+      return c.json(
+        { error: 'not_ready', message: 'set the account up with its passkey first' },
+        409,
+      );
+    const kind = c.req.valid('json').kind;
+    const plan = demoPlan.fromJson(row.plan as Parameters<typeof demoPlan.fromJson>[0]);
+    const paid = await agent.pay(account, demoInvoice(kind, plan.supplier.payTo));
+    if (paid === 'no_open_order')
+      return c.json(
+        { error: 'order_used_up', message: 'this account’s demo order has nothing left to pay' },
+        409,
+      );
+    return c.json(
+      {
+        kind,
+        requestId: paid.id,
+        status: paid.status,
+        reason: paid.reason,
+        reasonText: paid.reasonText,
+        txHash: paid.txHash,
+        approvalUrl: paid.status === 'held' ? `${options.publicUrl}/v1/approvals/${paid.id}` : null,
+        statusUrl: `${options.publicUrl}/p/${paid.id}`,
+      },
+      200,
+    );
   });
 
   app.openapi(setupRoute, async (c) => {

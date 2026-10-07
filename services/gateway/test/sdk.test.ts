@@ -10,6 +10,7 @@ import { RelayerPool } from '../src/relay/pool.js';
 import { FinalityTracker } from '../src/chain/finality.js';
 import { TestChecker } from '../src/checker.js';
 import { Workers } from '../src/workers.js';
+import { demoInvoice, sdkAgent } from '../src/demo/invoices.js';
 import { freshDatabase, truncate } from './db/helpers.js';
 import { ACCOUNT, SUPPLIER, VAULT } from './fakes.js';
 import { FakeMonad } from './fake-monad.js';
@@ -23,6 +24,7 @@ let database: Database;
 let store: Store;
 let monad: FakeMonad;
 let cs: Countersign;
+let app: ReturnType<typeof createApp>;
 const TOKEN = 'sdk-test-service-token-0123456789';
 const CHAIN_ID = 10143;
 const running: { stop: () => void }[] = [];
@@ -68,7 +70,7 @@ beforeEach(async () => {
   workers.start();
   monad.start(20);
   running.push(workers, pool);
-  const app = createApp({
+  app = createApp({
     store,
     chain: monad,
     checker,
@@ -201,4 +203,21 @@ describe('the SDK against the gateway', () => {
     expect(proposal.approvalUrl).toBe(`https://gateway.test/p/${proposal.id}`);
     expect((await cs.proposal(proposal.id)).id).toBe(proposal.id);
   });
+
+  it('the hosted demo agent (judge mode) pays a clean demo invoice and gets a look-alike held', async () => {
+    const agent = sdkAgent({
+      request: (input, init) => app.request(input, init),
+      token: TOKEN,
+      agentKey: generatePrivateKey(),
+      chainId: CHAIN_ID,
+    });
+    expect(await agent.pay(ACCOUNT, demoInvoice('clean', SUPPLIER))).toMatchObject({
+      status: 'settled',
+    });
+    expect(await agent.pay(ACCOUNT, demoInvoice('changed_address', SUPPLIER))).toMatchObject({
+      status: 'held',
+      reason: 'address_mismatch',
+      txHash: null,
+    });
+  }, 30_000);
 });
