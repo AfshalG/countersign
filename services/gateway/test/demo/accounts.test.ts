@@ -189,6 +189,18 @@ describe('judge mode: setting the account up with its passkey', () => {
     expect(functionsSent()).toEqual(['setSupplier', 'approveOrder']);
   });
 
+  it('waits on a setup transaction sent before a crash instead of sending it again', async () => {
+    const { account } = await createDemoAccount(deps, key);
+    await store.signWithNextNonce(
+      AGENT,
+      0,
+      () => Promise.resolve({ raw: '0x02', hash: `0x${'ab'.repeat(32)}` }),
+      { purpose: `demo ${account} setPolicy` },
+    );
+    await setUpDemoAccount(deps, account, await signAll(account));
+    expect(functionsSent()).toEqual(['setSupplier', 'approveOrder']);
+  });
+
   it('says so for an unknown account, and for one still being created', async () => {
     expect(await refusal(setUpDemoAccount(deps, FACTORY, []))).toMatchObject({ status: 404 });
     const account = await chain.predictAccount(key.qx, key.qy);

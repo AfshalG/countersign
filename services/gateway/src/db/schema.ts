@@ -99,6 +99,22 @@ export const relayerNonces = pgTable('relayer_nonces', {
 });
 
 /**
+ * Relayer transactions that are not payments (judge-mode setup): stored with their nonce in the
+ * same database transaction, as payments store theirs on the request, so a restart re-sends them
+ * unchanged and no relayer is left stuck behind a nonce that was reserved but never sent.
+ */
+export const relayerTxs = pgTable('relayer_txs', {
+  hash: text('hash').primaryKey(),
+  relayer: text('relayer').notNull(),
+  nonce: integer('nonce').notNull(),
+  raw: text('raw').notNull(),
+  purpose: text('purpose').notNull(),
+  createdAt: at('created_at').notNull().defaultNow(),
+  finalAt: at('final_at'),
+  status: text('status').$type<'success' | 'reverted'>(),
+});
+
+/**
  * Accounts whose orders the gateway indexes (Slice 12). `indexedTo` is the last finalized block
  * whose order events have been applied; the indexer resumes from there after a restart.
  */
@@ -177,3 +193,4 @@ export type AccountRow = typeof accounts.$inferSelect;
 export type OrderRow = typeof orders.$inferSelect;
 export type ProposalRow = typeof proposals.$inferSelect;
 export type DemoAccountRow = typeof demoAccounts.$inferSelect;
+export type RelayerTxRow = typeof relayerTxs.$inferSelect;
