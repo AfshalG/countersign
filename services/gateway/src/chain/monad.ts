@@ -1,5 +1,12 @@
-import { encodeFunctionData, toHex, type Address, type Hex } from 'viem';
-import { orderVaultAbi } from '@countersign/chain';
+import {
+  decodeFunctionResult,
+  encodeFunctionData,
+  getAddress,
+  toHex,
+  type Address,
+  type Hex,
+} from 'viem';
+import { countersignAccountAbi, orderVaultAbi } from '@countersign/chain';
 import { decodeRefusal, type DecodedRefusal } from './refusals.js';
 import { rpc, RpcError } from './rpc.js';
 import type { Chain, Decision, PaymentCall, WebAuthnAuth } from './types.js';
@@ -81,6 +88,34 @@ export class MonadClient implements Chain, Sender, Receipts {
         return decodeRefusal(e.data);
       throw e;
     }
+  }
+
+  private async call(to: Address, data: Hex): Promise<Hex> {
+    return this.read<Hex>('eth_call', [{ from: this.simulator, to, data }, 'latest']);
+  }
+
+  async addressOnFile(account: Address, vault: Address): Promise<Address> {
+    const supplierId = decodeFunctionResult({
+      abi: orderVaultAbi,
+      functionName: 'supplierId',
+      data: await this.call(
+        vault,
+        encodeFunctionData({ abi: orderVaultAbi, functionName: 'supplierId' }),
+      ),
+    });
+    const supplier = decodeFunctionResult({
+      abi: countersignAccountAbi,
+      functionName: 'supplier',
+      data: await this.call(
+        account,
+        encodeFunctionData({
+          abi: countersignAccountAbi,
+          functionName: 'supplier',
+          args: [supplierId],
+        }),
+      ),
+    });
+    return getAddress(supplier.payTo);
   }
 
   async verifyOwnerDecision(

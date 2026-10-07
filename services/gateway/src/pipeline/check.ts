@@ -38,6 +38,22 @@ async function simulate(
 }
 
 /**
+ * What the contract's refusal shows the owner. For an address not on file, the address on file
+ * goes beside the invoice's (Slice 6 holds look-alikes so the owner can compare them, character by
+ * character); if it cannot be read, the payment is still held, with the invoice's address alone.
+ */
+async function evidenceOf(deps: CheckDeps, row: PaymentRequestRow, contract: string) {
+  if (contract !== 'PayToNotOnFile') return { contract };
+  const invoice = row.payTo as Address;
+  try {
+    const onFile = await deps.chain.addressOnFile(row.account as Address, row.vault as Address);
+    return { contract, payTo: { onFile, invoice } };
+  } catch {
+    return { contract, payTo: { invoice } };
+  }
+}
+
+/**
  * Checks one request, in the decision model's order (architecture, "The Decision Model"):
  *
  * 1. The contract's own rules. The vault checks every rule before any signature, so simulating
@@ -79,7 +95,7 @@ export async function checkOne(deps: CheckDeps, row: PaymentRequestRow): Promise
     await finish(refusal.status, {
       reason: refusal.reason,
       decidedBy: 'rule',
-      evidence: { contract: refusal.error },
+      evidence: await evidenceOf(deps, row, refusal.error),
       detail: { contract: refusal.error },
     });
     return;

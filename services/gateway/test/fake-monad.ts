@@ -48,6 +48,10 @@ export class FakeMonad implements Chain, Sender, Receipts {
     return Promise.resolve(undefined);
   }
 
+  addressOnFile(): Promise<Address> {
+    return Promise.resolve('0x90f9931B748B26763161a8191C178Fe425C25fEc');
+  }
+
   verifyOwnerDecision(): Promise<boolean> {
     return Promise.resolve(true);
   }

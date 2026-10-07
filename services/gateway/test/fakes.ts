@@ -14,6 +14,14 @@ export class FakeChain implements Chain {
   simulations = 0;
   /** False: the owner's passkey signatures are not the account owner's. */
   ownerKeyValid = true;
+  /** The supplier's address on file, as the account stores it; undefined makes the lookup fail. */
+  onFile: Address | undefined = '0x90f9931B748B26763161a8191C178Fe425C25fEc';
+
+  addressOnFile(): Promise<Address> {
+    return this.onFile === undefined
+      ? Promise.reject(new Error('eth_call failed'))
+      : Promise.resolve(this.onFile);
+  }
 
   verifyOwnerDecision(): Promise<boolean> {
     return Promise.resolve(this.ownerKeyValid);
