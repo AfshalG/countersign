@@ -96,6 +96,8 @@ Pinned in Slice 0 (6 Oct 2026, checked with Context7 and npm): Node 24 LTS, pnpm
 - **Parallel execution:** one vault per order. Payments must not write shared storage (no shared counters or registries); emit events instead.
 - **Fees are charged on the gas limit.** Set tight limits and simulate every payment before sending. A failed transaction still pays its fee.
 - **Relayers:** a pool of wallets. Track nonces ourselves; "submitted" is unconfirmed until a block contains it. Keep each wallet above the 10 MON reserve. Never give a relayer EIP-7702 delegation.
+- **One gateway per relayer set.** The hosted gateway (Railway project `countersign`, service `gateway`, deployed from `development`) and a local one share `RELAYER_PRIVATE_KEYS` but keep separate nonce counters in separate databases: never run both against testnet at once, or two transactions get the same nonce and a payment sticks. Stop the Railway service before running `pnpm --filter @countersign/gateway testnet-run`.
+- **Relayer gas** (Slice 6): about 0.027 MON per payment at a 100 gwei base fee; the pool reserves about 0.034 per payment in flight (the maximum fee) and gives a wallet only work it can pay for.
 - **Live stages:** `monadNewHeads` and `monadLogs` websocket subscriptions.
 - Chain behaviour comes from docs.monad.xyz, not memory.
 

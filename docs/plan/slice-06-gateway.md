@@ -2,7 +2,7 @@
 
 ## Status
 
-**BUILT (7 Oct 2026); the testnet run passed.** Deploying to Railway (manual step 1) waits on Afshal's go for its cost; the run used Postgres in Docker. Technical decisions made by Claude. Owner: Afshal (gateway, D6).
+**DONE (7 Oct 2026).** The testnet run passed, and the gateway is deployed on Railway (Afshal approved the Hobby plan, about $5–7 a month): `https://gateway-production-e17a.up.railway.app`. Technical decisions made by Claude. Owner: Afshal (gateway, D6).
 
 ## Goal
 
@@ -150,7 +150,9 @@ Run with `pnpm --filter @countersign/gateway testnet-run` (`services/gateway/scr
 | Held, then refused with the owner's passkey | Refused; nothing sent; the vault never paid it |
 | Totals | 20 payments, 20 transactions, exactly 9,400 USDC base units paid; 0.539 MON of gas (0.027 MON a payment at a 100 gwei base fee) |
 
-Not done here: manual step 1 on Railway (waits on the cost go-ahead). Runs of 50 and 200 belong to Slice 16; Spike 3 measured 200 in 5.4 s.
+**Step 1, hosted (7 Oct):** Railway project `countersign`: Postgres from Railway's template, and the `gateway` service built by Railpack from the repo root on `development` (`pnpm --filter @countersign/gateway start`; health check `/health`; restart on failure; no overlap between deploys, so two gateways never run at once; redeploys only when `services/gateway`, `packages` or the lockfile change). The first deploy built in about a minute; `/health` shows the database, the Monad socket (last head 194 ms ago) and all 8 relayers; `/v1` without the token answers 401. Secrets were set from `.env` with the Railway CLI, so their values never left the machine in plain text; the hosted gateway has its own service token (`GATEWAY_RAILWAY_SERVICE_TOKEN` in `.env`).
+
+Runs of 50 and 200 belong to Slice 16; Spike 3 measured 200 in 5.4 s.
 
 ### Findings, carried forward
 
@@ -160,6 +162,7 @@ Not done here: manual step 1 on Railway (waits on the cost go-ahead). Runs of 50
 4. **A look-alike address is held, not blocked**, as designed: the owner sees both addresses side by side (Slices 11 and 14). Over the cap is blocked.
 5. **Open:** the owner-approved payment took 3.9 s from send to finalized, against about 1.2 s for agent payments. Not explained yet (possibly an endpoint move after the 3 s stall). Watch in Slice 16's runs.
 6. The relayers hold about 0.26 MON after this run (from 0.88 plus a 0.24 top-up from the deployer): about 7 more payments. More MON is needed before Slice 16.
+7. **One gateway per relayer set.** The hosted and a local gateway share the relayer keys but not their nonce counters; running both would give two transactions the same nonce. Rule in CLAUDE.md; a separate relayer set for local runs once MON allows. → Slice 16.
 
 ## Commit
 
