@@ -549,6 +549,8 @@ export function createApp(deps: AppDeps) {
     },
   });
   app.get('/docs', Scalar({ url: '/openapi.json', pageTitle: 'Countersign gateway API' }));
+  // The bare address is the reference, not a 404.
+  app.get('/', (c) => c.redirect('/docs'));
 
   return app;
 }
