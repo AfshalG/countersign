@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { keccak256, toHex, type Address } from 'viem';
 import { generatePrivateKey } from 'viem/accounts';
+import { supplierId } from '@countersign/shared';
 import { Store } from '../src/db/store.js';
 import type { Database } from '../src/db/client.js';
 import { createApp } from '../src/app.js';
@@ -164,6 +165,16 @@ describe('proposals', () => {
 
 describe('the status page', () => {
   it('shows a held look-alike in plain words, with both addresses, without a token', async () => {
+    await store.upsertOrder({
+      vault: VAULT,
+      account: ACCOUNT,
+      orderId: keccak256(toHex('order for the page')),
+      supplierId: supplierId('kalibre-studio'),
+      orderHash: keccak256(toHex('order PDF')),
+      amount: '30000',
+      expiry: NOW + 86_400,
+      approvedBlock: 1,
+    });
     chain.rule = (_p, call) =>
       call.kind === 'pay' && call.checkerSig === '0x' ? 'PayToNotOnFile' : undefined;
     chain.onFile = '0x90f9931B748B26763161a8191C178Fe425C25fEd';
@@ -199,11 +210,51 @@ describe('the status page', () => {
     expect(html).toContain(
       'The invoice&#39;s payment address is not the supplier&#39;s address on file.',
     );
-    const text = html.replaceAll(/<\/?mark>/g, '');
+    const text = html.replaceAll(/<[^>]+>/g, '');
+    // Both addresses in full (shortening hides what an attacker changes), the difference marked.
     expect(text).toContain('0x90f9931B748B26763161a8191C178Fe425C25fEd');
     expect(text).toContain(SUPPLIER);
-    expect(html).toContain('<mark>d</mark>'); // the one character that differs stands out
+    expect(html).toContain('<mark>d</mark>');
     expect(html).toContain('0.001 USDC');
+    // Read like a receipt: the supplier by name, hex only in the technical details.
+    expect(html).toContain('Kalibre Studio');
+    const [visible] = html.split('<details');
+    expect(visible).not.toContain(request.id);
+    expect(html.split('<details')[1]).toContain(request.id);
+  });
+
+  it('shows a paid payment with its times and a link to the explorer, not its hash', async () => {
+    chain.rule = undefined;
+    const submitted = await post('/v1/payments', {
+      account: ACCOUNT,
+      vault: VAULT,
+      payment: {
+        amount: '1000',
+        invoiceHash: keccak256(toHex('INV-0046')),
+        payTo: SUPPLIER,
+        deadline: NOW + 3600,
+      },
+      agentSig: AGENT_SIG,
+    });
+    const { request } = (await submitted.json()) as { request: { id: string } };
+    const tx = `0x${'ab'.repeat(32)}`;
+    await store.transition(request.id, 'requested', 'checking');
+    await store.transition(request.id, 'checking', 'released', {
+      checkerSig: AGENT_SIG,
+      decidedBy: 'checker',
+    });
+    await store.transition(request.id, 'released', 'settling', { txHash: tx, sentAt: new Date() });
+    await store.transition(request.id, 'settling', 'settled', {
+      blockNumber: 7,
+      finalizedAt: new Date(),
+    });
+    const html = await (await app.request(`/p/${request.id}`)).text();
+    expect(html).toContain('Paid');
+    expect(html).toContain('View on the Monad explorer');
+    expect(html).toMatch(/UTC/);
+    // Shown as a link to the explorer, not as a hash a person has to read.
+    const visibleText = (html.split('<details')[0] ?? '').replaceAll(/<[^>]+>/g, '');
+    expect(visibleText).not.toContain(tx);
   });
 
   it('escapes what an agent wrote', async () => {

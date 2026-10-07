@@ -20,6 +20,7 @@ import type { ProposalDeps } from './owner/proposals.js';
 import type { PauseDeps } from './owner/pause.js';
 import { registerOwnerRoutes } from './api/owner.js';
 import { recoverAgent, type AgentDirectory } from './agents/identity.js';
+import { supplierNameOf } from './suppliers.js';
 import { registerAgentRoutes } from './api/agents.js';
 import type { PaymentRequestRow } from './db/schema.js';
 import type { StatusChange, Store } from './db/store.js';
@@ -575,13 +576,14 @@ export function createApp(deps: AppDeps) {
     const request = await store.get(id);
     if (request)
       return c.html(
-        paymentPage(
-          request,
-          deps.agents?.viewOf(request.agentAddress) ??
+        paymentPage(request, {
+          agent:
+            deps.agents?.viewOf(request.agentAddress) ??
             (request.agentAddress === null
               ? null
               : { address: request.agentAddress, agentId: null }),
-        ),
+          supplierName: await supplierNameOf(store, request.account, request.vault),
+        }),
       );
     const proposal = await store.getProposal(id);
     if (proposal) return c.html(proposalPage(proposal));
