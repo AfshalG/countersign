@@ -8,6 +8,8 @@ import { OUTCOME, PAYMENT_STATUSES } from '@countersign/shared';
 import type { Chain, WebAuthnAuth } from './chain/types.js';
 import type { Checker } from './checker.js';
 import { evaluate, SimulationUnavailable } from './pipeline/check.js';
+import { registerOrderRoutes, type Indexing } from './api/orders.js';
+import { paymentPage, proposalPage } from './api/status-page.js';
 import type { PaymentRequestRow } from './db/schema.js';
 import type { StatusChange, Store } from './db/store.js';
 import { requestId, runId } from './ids.js';
@@ -28,7 +30,11 @@ import {
 
 export type AppDeps = {
   store: Store;
-  chain: Pick<Chain, 'simulate' | 'verifyOwnerDecision' | 'addressOnFile'>;
+  chain: Pick<Chain, 'simulate' | 'verifyOwnerDecision' | 'addressOnFile' | 'orderState'>;
+  /** The order index (Slice 12); without it, registering an account answers 503. */
+  indexing?: Indexing;
+  /** Where people open status pages, e.g. https://gateway-production-e17a.up.railway.app. */
+  publicUrl?: string;
   /** The checker and its time limit, for checks with no payment (POST /v1/checks). */
   checker: Checker;
   chainId: number;
@@ -44,7 +50,10 @@ export type AppDeps = {
 const ms = (a: Date | null, b: Date | null) => (a && b ? b.getTime() - a.getTime() : null);
 const iso = (d: Date | null) => (d ? d.toISOString() : null);
 
-export function viewOf(row: PaymentRequestRow): z.infer<typeof paymentView> {
+export function viewOf(
+  row: PaymentRequestRow,
+  publicUrl = 'http://localhost:8787',
+): z.infer<typeof paymentView> {
   return {
     id: row.id,
     runId: row.runId,
@@ -73,6 +82,7 @@ export function viewOf(row: PaymentRequestRow): z.infer<typeof paymentView> {
       personMs: ms(row.checkedAt, row.decidedAt),
       settleMs: ms(row.sentAt, row.finalizedAt),
     },
+    statusUrl: `${publicUrl}/p/${row.id}`,
   };
 }
 
@@ -243,6 +253,8 @@ const health = createRoute({
 
 export function createApp(deps: AppDeps) {
   const { store, chain } = deps;
+  const publicUrl = (deps.publicUrl ?? 'http://localhost:8787').replace(/\/$/, '');
+  const view = (row: PaymentRequestRow) => viewOf(row, publicUrl);
   const app = new OpenAPIHono({
     // One error shape for every validation failure: typed, naming each field, never a stack trace.
     defaultHook: (result, c) => {
@@ -301,7 +313,7 @@ export function createApp(deps: AppDeps) {
       agentSig: body.agentSig as Hex,
       document: body.document,
     });
-    const result = { created: isNew, request: viewOf(request) };
+    const result = { created: isNew, request: view(request) };
     return isNew ? c.json(result, 201) : c.json(result, 200);
   });
 
@@ -391,7 +403,7 @@ export function createApp(deps: AppDeps) {
 
   app.openapi(getPayment, async (c) => {
     const row = await store.get(c.req.valid('param').id);
-    return row ? c.json(viewOf(row), 200) : c.json({ error: 'unknown_request' }, 404);
+    return row ? c.json(view(row), 200) : c.json({ error: 'unknown_request' }, 404);
   });
 
   app.openapi(getRun, async (c) => {
@@ -401,7 +413,7 @@ export function createApp(deps: AppDeps) {
     const byStatus = Object.fromEntries(
       PAYMENT_STATUSES.map((s) => [s, rows.filter((r) => r.status === s).length]),
     );
-    return c.json({ runId: id, size: rows.length, byStatus, requests: rows.map(viewOf) }, 200);
+    return c.json({ runId: id, size: rows.length, byStatus, requests: rows.map(view) }, 200);
   });
 
   app.openapi(approve, async (c) => {
@@ -428,7 +440,7 @@ export function createApp(deps: AppDeps) {
     if (!moved) return c.json({ error: 'not_held' }, 409);
     const after = await store.get(row.id);
     if (!after) return c.json({ error: 'unknown_request' }, 404);
-    return c.json(viewOf(after), 200);
+    return c.json(view(after), 200);
   });
 
   /** A person's refusal ends the agent's run (money rule 7). */
@@ -456,7 +468,7 @@ export function createApp(deps: AppDeps) {
     if (!moved) return c.json({ error: 'not_held' }, 409);
     const after = await store.get(row.id);
     if (!after) return c.json({ error: 'unknown_request' }, 404);
-    return c.json(viewOf(after), 200);
+    return c.json(view(after), 200);
   });
 
   // The feed is Server-Sent Events, so it is documented here and served by a plain route below.
@@ -513,6 +525,18 @@ export function createApp(deps: AppDeps) {
       }
     }),
   );
+
+  registerOrderRoutes(app, { store, chain, indexing: deps.indexing, publicUrl });
+
+  // A page a person can open from an agent's message; public, like the link in the message.
+  app.get('/p/:id', async (c) => {
+    const id = c.req.param('id');
+    const request = await store.get(id);
+    if (request) return c.html(paymentPage(request));
+    const proposal = await store.getProposal(id);
+    if (proposal) return c.html(proposalPage(proposal));
+    return c.html('<!doctype html><title>Not found</title><p>Nothing with that id.</p>', 404);
+  });
 
   // The reference: the document and a page that renders it. Both are public, like any API docs.
   app.doc31('/openapi.json', {

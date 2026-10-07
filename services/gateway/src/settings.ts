@@ -25,6 +25,9 @@ export function loadSettings(source?: Record<string, string | undefined>) {
         .regex(/^[A-Za-z0-9._~+/-]+=*$/),
       // The stand-in checker's key until the checker service exists (Slice 10). Testnet only.
       TEST_CHECKER_PRIVATE_KEY: privateKey,
+      // Where people open status pages (the links in agents' messages). On Railway:
+      // https://${{RAILWAY_PUBLIC_DOMAIN}}.
+      PUBLIC_URL: z.url(),
       PORT: z
         .string()
         .regex(/^\d{2,5}$/)

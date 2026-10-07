@@ -109,6 +109,10 @@ export const paymentView = z
     timings: z
       .object({ checkMs: nullableNumber, personMs: nullableNumber, settleMs: nullableNumber })
       .openapi({ description: 'Check, person and settlement times, kept apart, never summed' }),
+    statusUrl: z.string().openapi({
+      description:
+        'A page a person can open: the status, the reason in plain words, both addresses on a mismatch',
+    }),
   })
   .openapi('PaymentRequest');
 
@@ -157,3 +161,100 @@ export const apiError = z
 export const requestIdParam = z.object({
   id: z.string().openapi({ param: { name: 'id', in: 'path' } }),
 });
+
+// ---------- accounts, orders, proposals (Slice 12) ----------
+
+export const registerAccountBody = z
+  .object({
+    account: address,
+    fromBlock: z.number().int().nonnegative().optional().openapi({
+      description:
+        'Index orders from this block (the account’s creation block shows every order); default: from now',
+    }),
+    label: z.string().min(1).max(80).optional(),
+  })
+  .openapi('RegisterAccount');
+
+export const accountView = z
+  .object({
+    account: z.string(),
+    label: z.string().nullable(),
+    indexedTo: z
+      .number()
+      .openapi({ description: 'The last finalized block whose order events are applied' }),
+  })
+  .openapi('Account');
+
+export const orderView = z
+  .object({
+    orderId: z.string(),
+    vault: z.string(),
+    supplierId: z.string(),
+    payTo: z
+      .string()
+      .openapi({ description: "The supplier's address on file: the only address this order pays" }),
+    supplierActive: z.boolean(),
+    activeAfter: z
+      .number()
+      .openapi({ description: 'Unix seconds when the address on file can first be paid' }),
+    amount: z.string().openapi({ description: 'USDC base units set aside' }),
+    remaining: z.string().openapi({ description: 'USDC base units left, read from the chain now' }),
+    expiry: z.number(),
+    approvedBlock: z.number(),
+  })
+  .openapi('Order');
+
+export const ordersList = z
+  .object({ account: z.string(), indexedTo: z.number(), orders: z.array(orderView) })
+  .openapi('OpenOrders');
+
+export const accountParam = z.object({
+  account: address.openapi({ param: { name: 'account', in: 'path' } }),
+});
+
+export const proposalBody = z
+  .object({
+    account: address,
+    supplier: z.object({
+      name: z.string().min(1).max(120),
+      website: z
+        .url({ protocol: /^https$/ })
+        .optional()
+        .openapi({
+          description: 'Its address is checked against this site (Slice 15)',
+          example: 'https://kalibre.example',
+        }),
+      payTo: address.openapi({ description: 'The payment address as read from the quote' }),
+    }),
+    order: z.object({
+      amount: z.string().regex(/^[1-9]\d{0,77}$/, 'a positive whole number of USDC base units'),
+      expiry: z.number().int().positive().openapi({ description: 'Unix seconds' }),
+    }),
+    documentHash: bytes32.openapi({
+      description: 'keccak256 of the quote or contract the agent read',
+    }),
+    document: z.unknown().optional(),
+  })
+  .openapi('ProposeOrder');
+
+export const proposalView = z
+  .object({
+    id: z.string(),
+    account: z.string(),
+    status: z.enum(['pending', 'approved', 'refused', 'expired']),
+    supplierName: z.string(),
+    website: z.string().nullable(),
+    payTo: z.string(),
+    amount: z.string(),
+    expiry: z.number(),
+    documentHash: z.string(),
+    approvalUrl: z.string().openapi({
+      description: 'Where the owner reviews it; nothing changes until their passkey signs',
+    }),
+    createdAt: z.string(),
+  })
+  .openapi('Proposal');
+
+export const proposalCreated = z
+  .object({ created: z.boolean(), proposal: proposalView })
+  .openapi('ProposalSubmitted');

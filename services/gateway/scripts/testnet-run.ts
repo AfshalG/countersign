@@ -128,6 +128,7 @@ async function startGateway(label: string): Promise<void> {
       // The account's policy names this key as its checker (Slice 5).
       TEST_CHECKER_PRIVATE_KEY: env.SLICE5_CHECKER_PRIVATE_KEY,
       PORT: String(PORT),
+      PUBLIC_URL: BASE,
     },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
