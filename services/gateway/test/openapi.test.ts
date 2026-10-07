@@ -56,6 +56,7 @@ describe('the API reference', () => {
         '/v1/accounts/{account}/orders',
         '/v1/proposals',
         '/v1/proposals/{id}',
+        '/v1/approvals/{id}',
         '/v1/runs',
         '/v1/runs/{id}',
       ].sort(),
@@ -63,7 +64,9 @@ describe('the API reference', () => {
     expect(doc.components.securitySchemes.Bearer).toMatchObject({ type: 'http', scheme: 'bearer' });
     for (const [path, ops] of Object.entries(doc.paths))
       for (const op of Object.values(ops))
-        if (path.startsWith('/v1')) expect(op.security, path).toEqual([{ Bearer: [] }]);
+        // The approvals routes are the exception: the owner's passkey authorises them.
+        if (path.startsWith('/v1') && !path.startsWith('/v1/approvals'))
+          expect(op.security, path).toEqual([{ Bearer: [] }]);
   });
 
   it('sends the bare address to the reference instead of a 404', async () => {

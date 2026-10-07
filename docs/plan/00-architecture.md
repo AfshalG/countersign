@@ -475,16 +475,18 @@ CORE PIPELINE (a scripted agent pays a clean invoice, no prompt):
   Slice 8:   Rule checks + scripted agent: first end-to-end payment   TODO
 
 THE HOLD:
-  Slice 9:   Passkey owner: factory, suppliers, orders, pay once      TODO
+  Slice 9:   Passkey owner: factory, suppliers, orders, pay once      BUILDING (APPROVALS API)
   Slice 10:  Invoice check: own read, exact compare, guard model,     TODO
              scored on the set (catch rate, false holds); the
              checker spec, so anyone can run one (D33)
-  Slice 11:  Approver app: proposals, holds, feed, the diff           TODO
+  Slice 11:  Approver app: proposals, holds, feed, the diff           SHELL PUSHED (SOPHIE)
 
 AGENT DOOR:
   Slice 12:  Developer kit: TypeScript SDK, MCP server and web API    DONE (SDK RELEASED, MCP LIVE)
              (six tools incl. batch runs), quickstart docs (D33)
   Slice 13:  Sign-in from the agent app with one link                 TODO
+             (OAuth for grok.com, ChatGPT/dots, claude.ai: WorkOS AuthKit
+             recommended, waiting on Afshal's account)
   Slice 14:  Proposals and holds in the chat (every agent that        TODO
              connected in Spike 4) and on WhatsApp
 
@@ -495,11 +497,14 @@ DEPTH AND PROOF:
   Slice 18:  Audit record export                                      TODO
   Slice 19:  ERC-8004 agent identity; built right after Slice 12      TODO
              (D33: the track names the registry)
+             (+ an A2A door; agentWallet = the policy's agent key, no
+             redeploy: the A2A and ERC-8004 research)
   Slice 20:  Benchmark: four arms and the false-alarm rate            TODO
 
 SHIP:
   Slice 21:  Developer docs and evidence pack: README, quickstart,     TODO
              limits, deployed list
+             (done early: README security model, quickstart, llms.txt)
   Slice 22:  Demo, pitch story, video, another team integrating,      TODO
              submission
 ```
@@ -655,6 +660,7 @@ None of these has had an explicit yes, except that Afshal has said parallel exec
 | D32 | The contract is the boundary; the checker is a measured detector | Answering a critique (7 Oct): the contract makes paying the wrong party impossible; the checker catches the right party paid the wrong amount (padded, duplicate, wrong order), with a catch rate and false-hold rate measured from Slice 10 and published in Slice 20. Invoices are read as structured data first; a PDF is read from its text layer and its rendered page, and disagreement is a hold. The demo keeps the agent key on the agent's side. The pitch leads with the contract |
 | D33 | Countersign as an open primitive (Track 04) | 7 Oct, after reading the track's judging criteria (65% is about developers building on the entry): a developer kit (TypeScript SDK, MCP connector, web API, quickstart docs), a checker anyone can run (the owner sets the checker key), ERC-8004 agent identity right after the kit, one other Metropolis team integrating during the hackathon; the invoice flow is the reference app. Afshal: "change all the existing slices and other md files as needed" |
 | D34 | The name stays for now; the SDK ships as a GitHub release file | 7 Oct: another project has used "Countersign" since June 2026 (countersign.network: an off-chain, cross-vendor kill switch and spend guard for agent wallets; owns `@countersign` on npm; hosted service paused 18 Sep). Afshal: keep the name for the hackathon, decide after; Payseal is the preferred rename. The SDK is installed from a GitHub release tarball, not npm. The pitch's originality rests on what they do not do: the rule in the contract that holds the money, payee provenance, invoice checks. |
+| D35 | Sophie's API proposal, taken where it improves the plan | 7 Oct, from Sophie's `countersign-api.ts` and plan (Afshal: "damn good shit"). Taken: an approvals API for the phone (`GET /v1/approvals/:id` returns the summary, the differences and the exact typed data per action; `POST` takes the passkey assertion as the browser gives it, and the gateway derives the WebAuthn indexes and low-s), built next so the approver app works against the real gateway; `differences[]` (`field`, `onFile`, `onInvoice`) on every view; her invoice-input shape (`sourceUrl` the checker fetches itself, `fileBase64`, `claimed` fields) for Slice 10; website-proof states (`verified`, `not_listed`, `stale`, `unavailable`) and an `address_change` proposal for Slice 15; judge mode (a demo account for a new passkey, demo invoices) for Slices 21–22; the bypass moment in the demo (a correctly signed payment to another address reverts with `PayToNotOnFile`); the README's security model with evidence (done); checkpoints: a backup demo video Sat 10, a full run by someone who did not build it Sun 11, code frozen Mon 12 noon, submitted Tue 13 noon. Not taken: her EIP-712 names and `Payment` struct (they differ from the deployed contracts; `packages/shared` is the source, checked against Foundry fixtures), her reason names (the typed reasons already in use stay; the contract's error name in the evidence gives the detail), and `agentId` inside the signed payment (Slice 19 decides; it would mean redeploying the vaults). Cutting P1 on Fri 9 is Afshal's call, not adopted here |
 | — | Who builds | Sophie and Roshan are busy this week; Claude drafts and builds their slices, Afshal reviews. Ownership in D6 returns when they are free |
 
 ---

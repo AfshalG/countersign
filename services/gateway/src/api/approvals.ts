@@ -1,0 +1,356 @@
+import { createRoute, z, type OpenAPIHono } from '@hono/zod-openapi';
+import { hashTypedData, keccak256, stringToHex, type Address, type Hex } from 'viem';
+import {
+  decisionTypes,
+  formatUsdc,
+  OUTCOME,
+  paymentTypes,
+  REASON_TEXT,
+  vaultDomain,
+} from '@countersign/shared';
+import type { Chain, Decision, WebAuthnAuth } from '../chain/types.js';
+import type { PaymentRequestRow, ProposalRow } from '../db/schema.js';
+import type { Store } from '../db/store.js';
+import { paymentOf } from '../payment.js';
+import { HEADLINE } from './status-page.js';
+import { AssertionError, fromBrowser } from './webauthn.js';
+
+/**
+ * The owner's decisions on held payments (Slice 9, D35). The same checks back the service-token
+ * routes (`/v1/payments/{id}/approve`, `/refuse`) and the passkey routes (`/v1/approvals/{id}`):
+ * the vault checks the passkey (a simulated `payWithOwner`, or a `recordDecisionByOwner` call),
+ * so a wrong passkey costs nothing and changes nothing.
+ */
+
+export type DecisionDeps = {
+  store: Store;
+  chain: Pick<Chain, 'simulate' | 'verifyOwnerDecision'>;
+};
+
+type Refused = {
+  ok: false;
+  status: 404 | 409 | 422;
+  body: { error: string; status?: string; reason?: string; contract?: string };
+};
+export type DecisionResult = { ok: true; row: PaymentRequestRow } | Refused;
+
+/** Stored as JSON: bigints as strings. */
+export const storedAuth = (a: WebAuthnAuth) => ({
+  ...a,
+  challengeIndex: a.challengeIndex.toString(),
+  typeIndex: a.typeIndex.toString(),
+});
+
+async function heldRow(store: Store, id: string): Promise<PaymentRequestRow | Refused> {
+  const row = await store.get(id);
+  if (!row) return { ok: false, status: 404, body: { error: 'unknown_request' } };
+  if (row.status !== 'held')
+    return { ok: false, status: 409, body: { error: 'not_held', status: row.status } };
+  return row;
+}
+
+async function after(store: Store, id: string): Promise<DecisionResult> {
+  const row = await store.get(id);
+  return row ? { ok: true, row } : { ok: false, status: 404, body: { error: 'unknown_request' } };
+}
+
+/** Pays a held payment once, through `payWithOwner`, if the vault accepts the owner's passkey. */
+export async function payOnce(
+  deps: DecisionDeps,
+  id: string,
+  auth: WebAuthnAuth,
+): Promise<DecisionResult> {
+  const row = await heldRow(deps.store, id);
+  if ('ok' in row) return row;
+  const refusal = await deps.chain.simulate(row.vault as Address, paymentOf(row), {
+    kind: 'payWithOwner',
+    ownerAuth: auth,
+  });
+  if (refusal?.error === 'InvalidOwnerSignature')
+    return { ok: false, status: 422, body: { error: 'invalid_passkey' } };
+  if (refusal)
+    return {
+      ok: false,
+      status: 409,
+      body: { error: 'contract_refuses', reason: refusal.reason, contract: refusal.error },
+    };
+  const moved = await deps.store.transition(row.id, 'held', 'released', {
+    ownerAuth: storedAuth(auth),
+    decidedBy: 'user_once',
+    decidedAt: new Date(),
+  });
+  if (!moved) return { ok: false, status: 409, body: { error: 'not_held' } };
+  return after(deps.store, row.id);
+}
+
+/** Refuses a held payment if the owner's passkey signed this decision; a refusal ends the agent's run (money rule 7). */
+export async function refuseHeld(
+  deps: DecisionDeps,
+  id: string,
+  auth: WebAuthnAuth,
+  decision: { reasonHash: Hex; evidenceHash: Hex },
+): Promise<DecisionResult> {
+  const row = await heldRow(deps.store, id);
+  if ('ok' in row) return row;
+  const signed: Decision = {
+    invoiceHash: row.invoiceHash as Hex,
+    outcome: OUTCOME.refused,
+    ...decision,
+  };
+  if (!(await deps.chain.verifyOwnerDecision(row.vault as Address, signed, auth)))
+    return { ok: false, status: 422, body: { error: 'invalid_passkey' } };
+  const moved = await deps.store.transition(row.id, 'held', 'refused', {
+    reason: 'user_refused',
+    decidedBy: 'user_refused',
+    decidedAt: new Date(),
+    ownerAuth: storedAuth(auth),
+    detail: { decision },
+  });
+  if (!moved) return { ok: false, status: 409, body: { error: 'not_held' } };
+  return after(deps.store, row.id);
+}
+
+// ---------- the approvals view (what the phone shows and signs) ----------
+
+/** The refusal the approvals routes record: fixed, so the challenge shown is the one checked. */
+export const REFUSED_BY_OWNER = keccak256(stringToHex('refused by the owner'));
+const refusalOf = (row: PaymentRequestRow) => ({
+  reasonHash: REFUSED_BY_OWNER,
+  evidenceHash: row.id as Hex,
+});
+
+const typedAction = z.object({
+  challenge: z.string().openapi({
+    description: 'The EIP-712 digest the passkey signs as its WebAuthn challenge',
+  }),
+  typedData: z.unknown().openapi({
+    description: 'The typed data behind the challenge (bigints as strings), to show or re-check',
+  }),
+});
+
+export const approvalView = z
+  .object({
+    id: z.string(),
+    kind: z.enum(['payment', 'proposal']),
+    status: z.string(),
+    title: z.string(),
+    summary: z.record(z.string(), z.unknown()),
+    differences: z.array(
+      z.object({ field: z.string(), onFile: z.string(), onInvoice: z.string() }),
+    ),
+    actions: z.record(z.string(), typedAction).openapi({
+      description: 'For a held payment: pay_once and refuse. Empty once decided',
+    }),
+    statusUrl: z.string(),
+  })
+  .openapi('Approval');
+
+export function paymentApproval(
+  row: PaymentRequestRow,
+  chainId: number,
+  publicUrl: string,
+): z.infer<typeof approvalView> {
+  const evidence = (row.evidence ?? {}) as { payTo?: { onFile?: string; invoice?: string } };
+  const onFile = evidence.payTo?.onFile ?? null;
+  const payment = paymentOf(row);
+  const domain = vaultDomain(chainId, row.vault as Hex);
+  const decision = {
+    invoiceHash: payment.invoiceHash,
+    outcome: OUTCOME.refused,
+    ...refusalOf(row),
+  };
+  const actions =
+    row.status === 'held'
+      ? {
+          pay_once: {
+            challenge: hashTypedData({
+              domain,
+              types: paymentTypes,
+              primaryType: 'Payment',
+              message: payment,
+            }),
+            typedData: {
+              domain,
+              types: paymentTypes,
+              primaryType: 'Payment',
+              message: {
+                ...payment,
+                amount: payment.amount.toString(),
+                deadline: payment.deadline.toString(),
+              },
+            },
+          },
+          refuse: {
+            challenge: hashTypedData({
+              domain,
+              types: decisionTypes,
+              primaryType: 'Decision',
+              message: decision,
+            }),
+            typedData: { domain, types: decisionTypes, primaryType: 'Decision', message: decision },
+          },
+        }
+      : {};
+  return {
+    id: row.id,
+    kind: 'payment',
+    status: row.status,
+    title: HEADLINE[row.status] ?? row.status,
+    summary: {
+      amount: row.amount,
+      amountUsdc: formatUsdc(BigInt(row.amount)),
+      payTo: row.payTo,
+      addressOnFile: onFile,
+      reason: row.reason,
+      reasonText: row.reason ? REASON_TEXT[row.reason] : null,
+      account: row.account,
+      vault: row.vault,
+      invoiceHash: row.invoiceHash,
+      deadline: new Date(row.deadline * 1000).toISOString(),
+      txHash: row.txHash,
+    },
+    differences:
+      onFile && onFile.toLowerCase() !== row.payTo.toLowerCase()
+        ? [{ field: 'payTo', onFile, onInvoice: row.payTo }]
+        : [],
+    actions,
+    statusUrl: `${publicUrl}/p/${row.id}`,
+  };
+}
+
+/** A proposal's view; approving it on chain (setSupplier, approveOrder) is Slice 9 part 2. */
+export function proposalApproval(p: ProposalRow, publicUrl: string): z.infer<typeof approvalView> {
+  return {
+    id: p.id,
+    kind: 'proposal',
+    status: p.status,
+    title: 'A proposed supplier and order',
+    summary: {
+      supplierName: p.supplierName,
+      website: p.website,
+      payTo: p.payTo,
+      amount: p.amount,
+      amountUsdc: formatUsdc(BigInt(p.amount)),
+      expiry: new Date(p.expiry * 1000).toISOString(),
+      account: p.account,
+    },
+    differences: [],
+    actions: {},
+    statusUrl: `${publicUrl}/p/${p.id}`,
+  };
+}
+
+// ---------- routes ----------
+
+const json = <T extends z.ZodType>(schema: T, description: string) => ({
+  content: { 'application/json': { schema } },
+  description,
+});
+const apiError = z.object({
+  error: z.string(),
+  status: z.string().optional(),
+  message: z.string().optional(),
+});
+const idParam = z.object({ id: z.string().openapi({ param: { name: 'id', in: 'path' } }) });
+
+const getApproval = createRoute({
+  method: 'get',
+  path: '/v1/approvals/{id}',
+  tags: ['Owner'],
+  summary: 'What the owner’s phone shows and signs, for a held payment or a proposal',
+  description:
+    'No token: it shows only what is public on chain or in the agent’s message, and acting on it needs the owner’s passkey. CORS is open for the approver app.',
+  request: { params: idParam },
+  responses: { 200: json(approvalView, 'The approval'), 404: json(apiError, 'unknown_approval') },
+});
+
+const assertion = z
+  .object({
+    authenticatorData: z.string().min(1).max(2048).openapi({ description: 'Hex or base64url' }),
+    clientDataJSON: z
+      .string()
+      .min(1)
+      .max(4096)
+      .openapi({ description: 'The JSON string, or base64url' }),
+    signature: z
+      .union([z.object({ r: z.string(), s: z.string() }), z.string().min(1).max(512)])
+      .openapi({ description: '{ r, s } as hex (ox), or a DER signature as hex or base64url' }),
+  })
+  .openapi('PasskeyAssertion', { description: 'The assertion as the browser gives it' });
+
+const decide = createRoute({
+  method: 'post',
+  path: '/v1/approvals/{id}',
+  tags: ['Owner'],
+  summary: 'Decide with the owner’s passkey: pay once or refuse',
+  description:
+    'The passkey must have signed that action’s challenge (from the GET). It is checked by the vault itself before anything changes.',
+  request: {
+    params: idParam,
+    body: {
+      content: {
+        'application/json': {
+          schema: z.object({ action: z.enum(['pay_once', 'refuse']), assertion }),
+        },
+      },
+    },
+  },
+  responses: {
+    200: json(approvalView, 'Decided; a paid-once payment settles like any other'),
+    400: json(apiError, 'malformed or malformed_assertion'),
+    404: json(apiError, 'unknown_request'),
+    409: json(apiError, 'not_held, or contract_refuses'),
+    422: json(
+      apiError,
+      'invalid_passkey, or challenge_mismatch (the passkey signed another action)',
+    ),
+  },
+});
+
+export function registerApprovalRoutes(
+  app: OpenAPIHono,
+  deps: DecisionDeps & { chainId: number; publicUrl: string },
+): void {
+  const { store, chainId, publicUrl } = deps;
+
+  app.openapi(getApproval, async (c) => {
+    const id = c.req.valid('param').id;
+    const row = await store.get(id);
+    if (row) return c.json(paymentApproval(row, chainId, publicUrl), 200);
+    const proposal = await store.getProposal(id);
+    if (proposal) return c.json(proposalApproval(proposal, publicUrl), 200);
+    return c.json({ error: 'unknown_approval' }, 404);
+  });
+
+  app.openapi(decide, async (c) => {
+    const id = c.req.valid('param').id;
+    const body = c.req.valid('json');
+    const row = await store.get(id);
+    if (!row) return c.json({ error: 'unknown_request' }, 404);
+    if (row.status !== 'held') return c.json({ error: 'not_held', status: row.status }, 409);
+    const action = paymentApproval(row, chainId, publicUrl).actions[body.action];
+    if (!action) return c.json({ error: 'not_held', status: row.status }, 409);
+    let auth: WebAuthnAuth;
+    try {
+      auth = fromBrowser(body.assertion, action.challenge as Hex);
+    } catch (e) {
+      if (!(e instanceof AssertionError)) throw e;
+      return e.code === 'challenge_mismatch'
+        ? c.json({ error: e.code, message: e.message }, 422)
+        : c.json({ error: e.code, message: e.message }, 400);
+    }
+    const result =
+      body.action === 'pay_once'
+        ? await payOnce(deps, id, auth)
+        : await refuseHeld(deps, id, auth, refusalOf(row));
+    if (result.ok) return c.json(paymentApproval(result.row, chainId, publicUrl), 200);
+    switch (result.status) {
+      case 404:
+        return c.json(result.body, 404);
+      case 409:
+        return c.json(result.body, 409);
+      default:
+        return c.json(result.body, 422);
+    }
+  });
+}

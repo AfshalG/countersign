@@ -31,7 +31,7 @@ function marked(address: string, other: string): string {
   return out;
 }
 
-const HEADLINE: Record<string, string> = {
+export const HEADLINE: Record<string, string> = {
   requested: 'Received, not checked yet',
   checking: 'Being checked',
   held: 'Held for the owner',
