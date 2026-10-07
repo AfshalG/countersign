@@ -1,0 +1,31 @@
+{
+  "name": "@countersign/spike-04-connectors",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit",
+    "agent": "tsx agent/openrouter.ts",
+    "smoke": "tsx agent/smoke.ts"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/server": "2.3.1",
+    "mcp-handler": "2.2.0",
+    "next": "16.3.8",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "zod": "4.6.5"
+  },
+  "devDependencies": {
+    "@ai-sdk/mcp": "2.0.67",
+    "@openrouter/ai-sdk-provider": "3.1.0",
+    "@types/node": "24.19.1",
+    "@types/react": "19.3.0",
+    "ai": "7.0.128",
+    "tsx": "4.23.15",
+    "typescript": "6.0.3"
+  }
+}

@@ -9,6 +9,8 @@ export default tseslint.config(
       '**/dist/**',
       '**/coverage/**',
       '**/dependencies/**',
+      '**/.next/**',
+      '**/next-env.d.ts',
       'contracts/**',
       '**/*.config.ts',
       'eslint.config.js',

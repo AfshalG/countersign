@@ -37,3 +37,7 @@ spikes/*/broadcast/*/31337/
 # Vercel project links
 .vercel/
 spikes/*/broadcast/**/*.lock
+
+# Next.js build output
+**/.next/
+**/next-env.d.ts

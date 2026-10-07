@@ -1,0 +1,27 @@
+{
+  "//": "Self-contained settings for next build on Vercel, which uploads only this folder. Tests and the local agent scripts are type-checked by the repo's own typecheck (tsconfig.json), not here.",
+  "compilerOptions": {
+    "target": "ES2024",
+    "lib": ["ES2024", "DOM"],
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "jsx": "react-jsx",
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "skipLibCheck": true,
+    "isolatedModules": true,
+    "esModuleInterop": true,
+    "noEmit": true,
+    "incremental": false,
+    "allowJs": false,
+    "types": ["node"],
+    "resolveJsonModule": true,
+    "plugins": [
+      {
+        "name": "next"
+      }
+    ]
+  },
+  "include": ["app", "lib", "next-env.d.ts", ".next/types/**/*.ts", ".next/dev/types/**/*.ts"],
+  "exclude": ["**/*.test.ts", "agent"]
+}

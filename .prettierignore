@@ -7,3 +7,4 @@ dist/
 spikes/*/test/fixtures/
 spikes/*/broadcast/
 **/dependencies/
+**/.next/
