@@ -9,6 +9,7 @@
  * Writes results/run-<label>.json. Invoice IDs come from the label, so a label is used once.
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { createServer, type Server } from 'node:http';
 import { parseArgs } from 'node:util';
 import {
   createWalletClient,
@@ -47,6 +48,8 @@ import {
   vaultPaymentTypes,
   type OrderSet,
 } from './chain.js';
+import { nextEndpoint, stalledNonce } from './failover.js';
+import { walletNeed } from './funding.js';
 import { NonceAllocator } from './nonces.js';
 import { Pacer } from './pace.js';
 import { summarise, type TxRecord } from './report.js';
@@ -77,6 +80,7 @@ const { values } = parseArgs({
     count: { type: 'string', default: String(200) },
     policy: { type: 'string', default: 'ordered' },
     'dry-run': { type: 'boolean', default: false },
+    'simulate-dead-endpoint': { type: 'boolean', default: false },
   },
 });
 const arm = values.arm;
@@ -216,7 +220,10 @@ console.log(
 );
 
 const perWallet = relayers.map((_, w) => intents.filter((x) => x.wallet === w).length);
-const needs = perWallet.map((count) => BigInt(count) * gasLimit * maxFee + parseEther('0.01'));
+// In flight: a wallet sends about 7 a second and a transaction is in flight for about 3 blocks, so 20 is ample.
+const needs = perWallet.map((n) =>
+  walletNeed({ count: n, gasLimit, chargedPrice, maxFee, inFlight: 20, float: parseEther('0.01') }),
+);
 const balances = await Promise.all(relayers.map((r) => client.getBalance({ address: r.address })));
 const topUps = needs.map((need, w) =>
   need > (balances[w] as bigint) ? need - (balances[w] as bigint) + parseEther('0.02') : 0n,
@@ -296,6 +303,8 @@ type Rec = TxRecord & {
   error?: string;
   note?: string;
   resends: number;
+  needsSend: boolean;
+  lastAcceptedAt?: number | undefined;
   poolStatus?: string;
   finalizedApprox?: boolean;
 };
@@ -327,6 +336,7 @@ for (const intent of intents) {
     gasLimit,
     status: 'missing',
     resends: 0,
+    needsSend: true,
   });
 }
 const byHash = new Map(records.map((r) => [r.hash.toLowerCase(), r]));
@@ -439,32 +449,64 @@ await openSocket();
 
 // ---------- send ----------
 
-const sendPacer = new Pacer(ENDPOINTS.map((e) => e.sendsPerSecond));
-const endpointPacers = ENDPOINTS.map((e) => new Pacer([e.sendsPerSecond]));
+// --simulate-dead-endpoint replaces the first endpoint with a local one that accepts every
+// transaction and forwards none, as monadinfra did in the first one-account run; it tests failover.
+let endpoints: { url: string; sendsPerSecond: number }[] = [...ENDPOINTS];
+let deadServer: Server | undefined;
+if (values['simulate-dead-endpoint']) {
+  const server = createServer((req, res) => {
+    req.resume();
+    req.on('end', () => {
+      res.setHeader('content-type', 'application/json');
+      res.end(JSON.stringify({ jsonrpc: '2.0', id: 1, result: `0x${'00'.repeat(32)}` }));
+    });
+  });
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const address = server.address();
+  if (address === null || typeof address === 'string')
+    throw new Error('dead endpoint did not start');
+  endpoints = [
+    { url: `http://127.0.0.1:${String(address.port)}`, sendsPerSecond: 30 },
+    ...ENDPOINTS.slice(1),
+  ];
+  deadServer = server;
+}
+
+const sendPacer = new Pacer(endpoints.map((e) => e.sendsPerSecond));
+const endpointPacers = endpoints.map((e) => new Pacer([e.sendsPerSecond]));
+const host = (i: number) => new URL((endpoints[i] ?? ENDPOINTS[0]).url).host;
 const t0 = Date.now();
 const ALREADY_IN = /already known|known transaction|already imported|nonce too low/i;
 
-async function send(rec: Rec, isResend: boolean): Promise<void> {
+/** One transaction to one endpoint (or the soonest free one), retried on rate limits and network errors. */
+async function send(rec: Rec, pinned: number | undefined): Promise<void> {
   for (let attempt = 1; ; attempt++) {
-    const pinned = policy === 'ordered' ? rec.walletIndex % ENDPOINTS.length : undefined;
     const slot =
       pinned === undefined
         ? sendPacer.take(Date.now() - t0)
         : { index: pinned, at: (endpointPacers[pinned] as Pacer).take(Date.now() - t0).at };
     await sleep(slot.at - (Date.now() - t0));
-    const endpoint = ENDPOINTS[slot.index] ?? ENDPOINTS[0];
-    if (!isResend && attempt === 1) rec.sentAt = Date.now();
+    if (rec.sentAt === 0) rec.sentAt = Date.now();
     rec.attempts = (rec.attempts ?? 0) + 1;
     try {
-      await rpc<Hex>(endpoint.url, 'eth_sendRawTransaction', [rec.raw], 5_000);
-      rec.acceptedAt ??= Date.now();
-      rec.endpoint = new URL(endpoint.url).host;
+      await rpc<Hex>(
+        (endpoints[slot.index] ?? ENDPOINTS[0]).url,
+        'eth_sendRawTransaction',
+        [rec.raw],
+        5_000,
+      );
+      const now = Date.now();
+      rec.acceptedAt ??= now;
+      rec.lastAcceptedAt = now;
+      rec.endpoint = host(slot.index);
       return;
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
       if (e instanceof RpcError && e.kind === 'rpc') {
         if (ALREADY_IN.test(message)) {
-          rec.acceptedAt ??= Date.now();
+          const now = Date.now();
+          rec.acceptedAt ??= now;
+          rec.lastAcceptedAt = now;
           rec.note = message;
         } else rec.error = message;
         return;
@@ -478,43 +520,113 @@ async function send(rec: Rec, isResend: boolean): Promise<void> {
   }
 }
 
-// A transaction not in a finalized block 5 s after acceptance is checked in the pool and re-sent if the pool has lost it.
-const poolUrl = ENDPOINTS[0].url;
-const stuckCheck = setInterval(() => {
-  const now = Date.now();
-  const stuck = records
-    .filter(
-      (r) =>
-        r.acceptedAt !== undefined &&
-        r.block === undefined &&
-        r.error === undefined &&
-        now - r.acceptedAt > 5_000,
-    )
-    .slice(0, 8);
-  for (const rec of stuck) {
-    rpc<unknown>(poolUrl, 'txpool_statusByHash', [rec.hash])
-      .then((status) => {
-        rec.poolStatus = JSON.stringify(status).slice(0, 200);
-      })
-      .catch((e: unknown) => {
-        const message = e instanceof Error ? e.message : String(e);
-        rec.poolStatus = message.slice(0, 200);
-        if (/unknown tx hash/i.test(message)) {
-          rec.resends++;
-          void send(rec, true);
+// spread (kept to reproduce the first smoke test): a transaction not in a finalized block 5 s
+// after acceptance is checked in the pool and re-sent if the pool has lost it.
+const poolUrl = (endpoints[0] ?? ENDPOINTS[0]).url;
+const stuckCheck =
+  policy === 'spread'
+    ? setInterval(() => {
+        const now = Date.now();
+        const stuck = records
+          .filter(
+            (r) =>
+              r.acceptedAt !== undefined &&
+              r.block === undefined &&
+              r.error === undefined &&
+              now - r.acceptedAt > 5_000,
+          )
+          .slice(0, 8);
+        for (const rec of stuck) {
+          rpc<unknown>(poolUrl, 'txpool_statusByHash', [rec.hash])
+            .then((status) => {
+              rec.poolStatus = JSON.stringify(status).slice(0, 200);
+            })
+            .catch((e: unknown) => {
+              const message = e instanceof Error ? e.message : String(e);
+              rec.poolStatus = message.slice(0, 200);
+              if (/unknown tx hash/i.test(message)) {
+                rec.resends++;
+                void send(rec, undefined);
+              }
+            });
         }
-      });
-  }
-}, 2_000);
+      }, 2_000)
+    : undefined;
 
-if (policy === 'spread') await Promise.all(records.map((r) => send(r, false)));
-else
-  await Promise.all(
-    relayers.map(async (_, w) => {
-      // Records were created in nonce order, so each wallet's list is already ascending.
-      for (const rec of records.filter((r) => r.walletIndex === w)) await send(rec, false);
-    }),
-  );
+// ordered: each wallet is a lane that sends its lowest unsent nonce to its endpoint, one at a
+// time. If the lowest pending nonce is not in a finalized block 3 s after acceptance (p95 is
+// about 1.2 s), the lane moves to the next endpoint and re-sends its pending transactions in
+// order there; the endpoint it left is set aside for 30 s. Spike 3 saw an endpoint accept
+// transactions and never forward them.
+const STALL_MS = 3_000;
+const lanes = relayers.map((_, w) => ({
+  endpoint: w % endpoints.length,
+  lastMoveAt: 0,
+  moves: [] as { atMs: number; nonce: number; from: string; to: string }[],
+}));
+const setAsideUntil = endpoints.map(() => 0);
+const laneRecords = relayers.map((_, w) => records.filter((r) => r.walletIndex === w)); // ascending nonces
+
+async function runLane(w: number): Promise<void> {
+  const mine = laneRecords[w] ?? [];
+  const lane = lanes[w];
+  if (!lane) return;
+  while (!done) {
+    const next = mine.find((r) => r.needsSend && r.error === undefined);
+    if (next === undefined) {
+      if (mine.every((r) => r.block !== undefined || r.error !== undefined)) return;
+      await sleep(50);
+      continue;
+    }
+    next.needsSend = false; // cleared first, so a move during the send can queue it again
+    await send(next, lane.endpoint);
+  }
+}
+
+const watchdog =
+  policy === 'ordered'
+    ? setInterval(() => {
+        const now = Date.now();
+        lanes.forEach((lane, w) => {
+          const mine = laneRecords[w] ?? [];
+          const stalled = stalledNonce(
+            mine.map((r) => ({
+              nonce: r.nonce ?? 0,
+              lastAcceptedAt: r.lastAcceptedAt,
+              included: r.block !== undefined,
+              failed: r.error !== undefined,
+            })),
+            now,
+            STALL_MS,
+          );
+          if (stalled === undefined || now - lane.lastMoveAt < STALL_MS) return;
+          setAsideUntil[lane.endpoint] = now + 30_000;
+          const to = nextEndpoint(lane.endpoint, setAsideUntil, now);
+          lane.moves.push({
+            atMs: now - t0,
+            nonce: stalled,
+            from: host(lane.endpoint),
+            to: host(to),
+          });
+          lane.endpoint = to;
+          lane.lastMoveAt = now;
+          for (const r of mine) {
+            if (r.acceptedAt === undefined || r.block !== undefined || r.error !== undefined)
+              continue;
+            r.needsSend = true;
+            r.lastAcceptedAt = undefined;
+            r.resends++;
+          }
+        });
+      }, 250)
+    : undefined;
+
+let lanesDone: Promise<unknown> = Promise.resolve();
+if (policy === 'spread') await Promise.all(records.map((r) => send(r, undefined)));
+else {
+  lanesDone = Promise.all(relayers.map((_, w) => runLane(w)));
+  while (records.some((r) => r.acceptedAt === undefined && r.error === undefined)) await sleep(25);
+}
 const sendsDone = Date.now();
 console.log(`all sends returned after ${String(sendsDone - t0)} ms; waiting for Finalized`);
 
@@ -522,8 +634,11 @@ const settledOrFailed = () => records.every((r) => r.block !== undefined || r.er
 while (!settledOrFailed() && Date.now() - sendsDone < 120_000) await sleep(250);
 await processing;
 done = true;
-clearInterval(stuckCheck);
+if (stuckCheck) clearInterval(stuckCheck);
+if (watchdog) clearInterval(watchdog);
+await lanesDone;
 for (const ws of sockets) ws.close();
+deadServer?.close();
 
 // ---------- results ----------
 
@@ -544,6 +659,7 @@ const problems = {
   resends: records.reduce((a, r) => a + r.resends, 0),
   retries: records.reduce((a, r) => a + Math.max(0, (r.attempts ?? 0) - 1 - r.resends), 0),
   approximateTimes: records.filter((r) => r.finalizedApprox === true).length,
+  endpointMoves: lanes.reduce((a, l) => a + l.moves.length, 0),
   socketDrops,
 };
 
@@ -563,13 +679,16 @@ writeFileSync(
     gasLimit,
     baseFeeGwei: formatGwei(baseFee),
     maxFeeGwei: formatGwei(maxFee),
-    endpoints: ENDPOINTS.map((e) => ({
+    endpoints: endpoints.map((e) => ({
       host: new URL(e.url).host,
       sendsPerSecond: e.sendsPerSecond,
     })),
     summary,
     duplicates,
     problems,
+    endpointMoves: lanes
+      .map((l, w) => ({ wallet: (relayers[w] as PrivateKeyAccount).address, moves: l.moves }))
+      .filter((l) => l.moves.length > 0),
     // The signed transactions stay out of the results file; the hashes identify them.
     records: records.map((r) => Object.fromEntries(Object.entries(r).filter(([k]) => k !== 'raw'))),
   }),
