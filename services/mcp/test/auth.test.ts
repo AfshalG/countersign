@@ -8,6 +8,7 @@ import { generatePrivateKey } from 'viem/accounts';
 import { createServer } from '../lib/server';
 import { authorizationServer, discoveryDocument, protectedResource } from '../lib/discovery';
 import { authkitSettings, loadSettings } from '../lib/settings';
+import { registrationOf } from '../lib/agents';
 
 const MCP_TOKEN = 'mcp-test-token-0123456789abcdef';
 const ISSUER = 'https://countersign-test.authkit.app';
@@ -153,5 +154,22 @@ describe('sign-in settings and the well-known routes', () => {
       Promise.resolve(new Response('', { status: 500 })),
     );
     expect(bad.status).toBe(502);
+  });
+});
+
+describe('ERC-8004 registration files', () => {
+  it('serves each agent’s file in the ERC-8004 format, with its id and our doors', () => {
+    expect(registrationOf('countersign-hosted')).toMatchObject({
+      type: 'https://eips.ethereum.org/EIPS/eip-8004#registration-v1',
+      registrations: [
+        { agentId: 2066, agentRegistry: 'eip155:10143:0x8004A818BFB912233c491871b3d84c89A494BD9e' },
+      ],
+      services: [
+        { name: 'MCP', endpoint: 'https://countersign-mcp.vercel.app/api/mcp' },
+        { name: 'A2A' },
+      ],
+    });
+    expect(registrationOf('countersign-demo')?.registrations[0]?.agentId).toBe(2067);
+    expect(registrationOf('nobody')).toBeUndefined();
   });
 });

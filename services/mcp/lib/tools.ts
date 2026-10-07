@@ -96,7 +96,7 @@ export function describePayment(r: PaymentRequest): string {
   const amountUsdc = formatUsdc(BigInt(r.amount));
   switch (r.status) {
     case 'settled':
-      return `Paid ${amountUsdc} USDC to the supplier's address on file (${r.payTo}). Final on Monad; transaction ${r.tx.hash ?? 'unknown'}. Details: ${r.statusUrl}`;
+      return `Paid ${amountUsdc} USDC to the supplier's address on file (${r.payTo}). Final on Monad; transaction ${r.tx.hash ?? 'unknown'}.${r.agent?.agentId ? ` Signed by agent #${r.agent.agentId} in Monad's ERC-8004 registry.` : ''} Details: ${r.statusUrl}`;
     case 'held': {
       const onFile = onFileOf(r);
       return [
@@ -137,6 +137,7 @@ function paymentStructured(r: PaymentResult) {
     payTo: r.payTo,
     addressOnFile: onFileOf(r),
     txHash: r.tx.hash,
+    agentId: r.agent?.agentId ?? null,
     statusUrl: r.statusUrl,
   };
 }

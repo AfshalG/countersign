@@ -32,6 +32,8 @@ export const paymentRequests = pgTable(
     amount: numeric('amount', { precision: 78, scale: 0 }).notNull(),
     deadline: bigint('deadline', { mode: 'number' }).notNull(),
     agentSig: text('agent_sig').notNull(),
+    /** The address the agent's signature recovers to (Slice 19): its ERC-8004 agent, if registered. */
+    agentAddress: text('agent_address'),
     /** What the checker reads: the invoice's source or file reference and its fields. */
     document: jsonb('document'),
 
@@ -188,9 +190,22 @@ export const demoAccounts = pgTable('demo_accounts', {
   readyAt: at('ready_at'),
 });
 
+/**
+ * ERC-8004 agents the gateway names on payments (Slice 19): an agent's id in the Identity
+ * Registry and its `agentWallet`, the key that signs its payments, read from the chain when added
+ * and again when the gateway starts.
+ */
+export const agents = pgTable('agents', {
+  agentId: text('agent_id').primaryKey(),
+  registry: text('registry').notNull(),
+  wallet: text('wallet').notNull(),
+  addedAt: at('added_at').notNull().defaultNow(),
+});
+
 export type PaymentRequestRow = typeof paymentRequests.$inferSelect;
 export type AccountRow = typeof accounts.$inferSelect;
 export type OrderRow = typeof orders.$inferSelect;
 export type ProposalRow = typeof proposals.$inferSelect;
 export type DemoAccountRow = typeof demoAccounts.$inferSelect;
 export type RelayerTxRow = typeof relayerTxs.$inferSelect;
+export type AgentRow = typeof agents.$inferSelect;

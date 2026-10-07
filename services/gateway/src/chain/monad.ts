@@ -13,6 +13,7 @@ import {
   accountFactoryAbi,
   countersignAccountAbi,
   deployments,
+  identityRegistryAbi,
   orderVaultAbi,
   USDC,
 } from '@countersign/chain';
@@ -27,6 +28,8 @@ import type { Payment } from '../payment.js';
 import type { DemoChain } from '../demo/accounts.js';
 import type { ProposalChain } from '../owner/proposals.js';
 import type { PauseChain } from '../owner/pause.js';
+import type { IdentityChain } from '../agents/identity.js';
+import { IDENTITY_REGISTRY_TESTNET } from '@countersign/shared';
 
 type Endpoint = { url: string; sendsPerSecond: number; readsPerSecond: number };
 
@@ -50,7 +53,7 @@ const ORDER_EVENTS: Hex[] = (['OrderApproved', 'OrderClosed'] as const).map(
  * JSON-RPC error code 3 with the named error's selector as data, which decodeRefusal reads.
  */
 export class MonadClient
-  implements Chain, Sender, Receipts, LogSource, DemoChain, ProposalChain, PauseChain
+  implements Chain, Sender, Receipts, LogSource, DemoChain, ProposalChain, PauseChain, IdentityChain
 {
   private readonly reads: Pacer;
   private readonly started = Date.now();
@@ -165,6 +168,28 @@ export class MonadClient
     });
     if (/^0x0{40}$/i.test(s.payTo)) return null; // never set
     return { payTo: getAddress(s.payTo), active: s.active, activeAfter: Number(s.activeAfter) };
+  }
+
+  /** ERC-8004: an agent's wallet in the Identity Registry; rejects if the agent does not exist. */
+  async agentWallet(agentId: bigint): Promise<Address> {
+    // getAgentWallet answers zero for an id never minted; ownerOf is what rejects it.
+    await this.call(
+      IDENTITY_REGISTRY_TESTNET,
+      encodeFunctionData({ abi: identityRegistryAbi, functionName: 'ownerOf', args: [agentId] }),
+    );
+    const out = await this.call(
+      IDENTITY_REGISTRY_TESTNET,
+      encodeFunctionData({
+        abi: identityRegistryAbi,
+        functionName: 'getAgentWallet',
+        args: [agentId],
+      }),
+    );
+    return decodeFunctionResult({
+      abi: identityRegistryAbi,
+      functionName: 'getAgentWallet',
+      data: out,
+    });
   }
 
   async paused(account: Address): Promise<boolean> {

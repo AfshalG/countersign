@@ -109,6 +109,20 @@ export const paymentView = z
     timings: z
       .object({ checkMs: nullableNumber, personMs: nullableNumber, settleMs: nullableNumber })
       .openapi({ description: 'Check, person and settlement times, kept apart, never summed' }),
+    agent: z
+      .object({
+        address: z
+          .string()
+          .openapi({ description: 'The address the agent’s signature recovers to' }),
+        agentId: nullableString.openapi({
+          description: 'Its ERC-8004 agent id, if that address is a registered agent’s wallet',
+        }),
+        registry: nullableString.openapi({
+          example: 'eip155:10143:0x8004A818BFB912233c491871b3d84c89A494BD9e',
+        }),
+      })
+      .nullable()
+      .openapi({ description: 'Which agent signed this payment (ERC-8004, Slice 19)' }),
     statusUrl: z.string().openapi({
       description:
         'A page a person can open: the status, the reason in plain words, both addresses on a mismatch',

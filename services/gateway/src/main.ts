@@ -2,7 +2,7 @@ import { serve } from '@hono/node-server';
 import { formatEther, type Address } from 'viem';
 import { privateKeyToAccount, privateKeyToAddress } from 'viem/accounts';
 import { deployments, ENDPOINTS } from '@countersign/chain';
-import { REASONS, type Reason } from '@countersign/shared';
+import { IDENTITY_REGISTRY_TESTNET, REASONS, type Reason } from '@countersign/shared';
 import { createApp } from './app.js';
 import { TestChecker } from './checker.js';
 import { FinalityTracker } from './chain/finality.js';
@@ -12,6 +12,7 @@ import { connect } from './db/client.js';
 import { Store } from './db/store.js';
 import { RelayerPool } from './relay/pool.js';
 import { WalletFunder } from './demo/funder.js';
+import { AgentDirectory } from './agents/identity.js';
 import { judgeMode, loadSettings } from './settings.js';
 import { Workers } from './workers.js';
 
@@ -119,7 +120,20 @@ const owner = {
   publicUrl: settings.PUBLIC_URL,
 };
 
+// ERC-8004 agents named on payments (Slice 19), each re-read from the registry at start.
+const agents = new AgentDirectory(monad, IDENTITY_REGISTRY_TESTNET, chainId);
+await agents.load(store);
+console.log(
+  `agents named on payments: ${
+    agents
+      .list()
+      .map((a) => `#${a.agentId}`)
+      .join(', ') || 'none'
+  }`,
+);
+
 const app = createApp({
+  agents,
   ...(demo ? { demo } : {}),
   proposals: owner,
   pause: owner,

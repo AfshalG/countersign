@@ -9,6 +9,7 @@ import {
 import type { Db } from './client.js';
 import {
   accounts,
+  agents,
   demoAccounts,
   orders,
   paymentEvents,
@@ -17,6 +18,7 @@ import {
   proposals,
   runs,
   type AccountRow,
+  type AgentRow,
   type DemoAccountRow,
   type DemoStatus,
   type OrderRow,
@@ -35,6 +37,8 @@ export type NewRequest = {
   amount: bigint;
   deadline: number;
   agentSig: Hex;
+  /** Recovered from the agent's signature (Slice 19); null if it does not recover. */
+  agentAddress?: Address | null;
   document?: unknown;
 };
 
@@ -116,6 +120,7 @@ export class Store {
           amount: r.amount.toString(),
           deadline: r.deadline,
           agentSig: r.agentSig,
+          agentAddress: r.agentAddress ?? null,
           document: r.document ?? null,
           status: 'requested',
         })
@@ -389,6 +394,25 @@ export class Store {
     if (!row) throw new Error(`no nonce reserved for ${address}`);
     // pg returns int4 as a JS number; next_nonce is int4.
     return row.nonce;
+  }
+
+  // ---------- ERC-8004 agents (Slice 19) ----------
+
+  async upsertAgent(a: { agentId: string; registry: string; wallet: Address }): Promise<AgentRow> {
+    const [row] = await this.db
+      .insert(agents)
+      .values(a)
+      .onConflictDoUpdate({
+        target: agents.agentId,
+        set: { wallet: a.wallet, registry: a.registry },
+      })
+      .returning();
+    if (!row) throw new Error(`agent ${a.agentId} was not stored`);
+    return row;
+  }
+
+  async listAgents(): Promise<AgentRow[]> {
+    return this.db.select().from(agents).orderBy(asc(agents.agentId));
   }
 
   // ---------- relayer transactions that are not payments ----------

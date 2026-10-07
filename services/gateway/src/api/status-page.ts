@@ -76,7 +76,10 @@ function row(label: string, value: string): string {
   return `<dt>${escape(label)}</dt><dd>${value}</dd>`;
 }
 
-export function paymentPage(r: PaymentRequestRow): string {
+export function paymentPage(
+  r: PaymentRequestRow,
+  agent: { address: string; agentId: string | null } | null = null,
+): string {
   const headline = HEADLINE[r.status] ?? r.status;
   const reason = r.reason ? REASON_TEXT[r.reason] : undefined;
   const evidence = (r.evidence ?? {}) as { payTo?: { onFile?: string; invoice?: string } };
@@ -96,6 +99,14 @@ export function paymentPage(r: PaymentRequestRow): string {
       ? row(
           'Transaction',
           `<a href="${escape(`${explorer}/tx/${r.txHash}`)}" rel="noreferrer"><code>${escape(r.txHash)}</code></a>`,
+        )
+      : '',
+    agent
+      ? row(
+          'Paid by agent',
+          agent.agentId === null
+            ? `<code>${escape(agent.address)}</code>`
+            : `#${escape(agent.agentId)} in Monad's ERC-8004 Identity Registry (its wallet <code>${escape(agent.address)}</code> signed this payment)`,
         )
       : '',
     row('Request', `<code>${escape(r.id)}</code>`),
