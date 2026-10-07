@@ -2,7 +2,7 @@
 
 ## Status
 
-**BUILDING (7 Oct 2026).** Part A (ERC-8004 identity) DONE on testnet; Part B (the A2A door) next. Technical decisions made by Claude (Afshal, 7 Oct: decide technical choices; go slice by slice).
+**DONE (7 Oct 2026).** Part A (ERC-8004 identity) and Part B (the A2A door) live on testnet.
 
 ## Goal
 
@@ -78,7 +78,25 @@ Register both agents on testnet; a payment through the hosted gateway shows the 
 2. **No reverse lookup in the registry** (wallet to agent id): the gateway keeps the agents it names and re-reads each wallet at start. An agent builder adds their agent with `POST /v1/agents`. → Slice 21.
 3. **Payments before this slice have no recorded agent** (the column is new); only new ones show it.
 
+## Results, part B (7 Oct 2026, live)
+
+`pnpm --filter @countersign/mcp-server a2a-smoke` against `https://countersign-mcp.vercel.app`, with the A2A project's own client (`@a2a-js/sdk` 1.3.0):
+
+| Step | Result |
+|---|---|
+| The Agent Card | read by the client; JSON-RPC interfaces for A2A 1.0 and 0.3; six skills |
+| `list_open_orders` | `TASK_STATE_COMPLETED`, the orders as a data part |
+| `pay_invoice` to a look-alike (same first six and last four characters) | `TASK_STATE_AUTH_REQUIRED`: "Held; nothing was paid", both addresses, the owner's approval link; signed by agent #2066 (shown on the status page) |
+| Tests | 358, including 7 A2A tests through the official client (card, no token, orders, a settled payment, a hold, plain text, bad arguments) |
+
+### Findings, carried forward (part B)
+
+4. **A caller that omits `A2A-Version` speaks 0.3** (the spec's default): the card declares JSON-RPC 1.0 and 0.3, and 0.3 calls go to the SDK's legacy transport. → Slice 21 (docs).
+5. **Tasks live in memory** (`InMemoryTaskStore`) on a serverless function: `GetTask` may not find a task after the function restarts. Every answer already carries the outcome (and the status link), so nothing depends on it. → Later, a Postgres task store if an A2A client polls.
+6. **Streaming is not offered** (`capabilities.streaming: false`): every skill answers in seconds.
+7. **"Paid by agent" on a held payment was wrong** (seen in the live walkthrough): the status page now says "Sent by agent" until the payment settles.
+
 ## Next
 
-Part B (the A2A door), then Slice 7.
+Slice 7 (the supplier portal and the demo documents).
 

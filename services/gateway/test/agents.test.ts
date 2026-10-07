@@ -118,6 +118,20 @@ describe('which agent signed a payment (ERC-8004)', () => {
     expect(earlier.agent.agentId).toBe('2066');
   });
 
+  it('says on the status page which agent sent it, and only says "paid" once it is', async () => {
+    const a = app();
+    await a.request('/v1/agents', {
+      method: 'POST',
+      headers: auth,
+      body: JSON.stringify({ agentId: '2066' }),
+    });
+    const view = await submit(a, 'INV-5');
+    const html = await (await a.request(`/p/${view.id}`)).text();
+    expect(html).toContain('Sent by agent');
+    expect(html).not.toContain('Paid by agent');
+    expect(html).toContain('#2066');
+  });
+
   it('refuses an agent id that does not exist, and lists the agents it knows', async () => {
     const a = app();
     const missing = await a.request('/v1/agents', {

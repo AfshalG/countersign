@@ -15,6 +15,7 @@ This file is kept in step with the code: when a feature lands or an API changes,
 | 7 Oct | **Demo invoices are live (feature 7, step 6):** the demo agent pays a clean, a changed-address or an amount-hold invoice into your own account; your Face ID decides the held ones |
 | 7 Oct | **Approving proposals is live (feature 2):** add the supplier and open the order with two Face ID signatures, or refuse with one. Removed from "Coming next"                       |
 | 7 Oct | **The stop button is live (feature 9):** pause and unpause the account with Face ID. Removed from "Coming next"                                                                    |
+| 7 Oct | Every payment names the agent that sent it (ERC-8004 id); agents on A2A can connect too (feature 6)                                                                                |
 
 ## What the product is, in one paragraph
 
@@ -86,6 +87,8 @@ An agent can hand over a whole run (up to 500 invoices). The owner watches them 
 For judges and developers: how to connect an agent to Countersign.
 
 - MCP server: `https://countersign-mcp.vercel.app/api/mcp`. claude.ai, Grok and ChatGPT connect by adding it as a custom connector and signing in (Google, Microsoft, GitHub, Apple or email); Claude Code and Codex can also use a token.
+- A2A (Google's Agent2Agent protocol): the Agent Card at `https://countersign-mcp.vercel.app/.well-known/agent-card.json`; a held payment comes back as an `auth-required` task with the approval link.
+- Every payment names the agent that sent it (`agent.agentId`, its ERC-8004 id: 2066 is Countersign's hosted agent, 2067 judge mode's demo agent). Show it on the payment's record (feature 3).
 - SDK and quickstart: `docs/developers/quickstart.md`, `packages/sdk/README.md`. API reference: `https://gateway-production-e17a.up.railway.app/docs`.
 
 ### 7. Your own account (judge mode)
