@@ -1,6 +1,10 @@
 # Countersign Architecture v3
 
-**Status: v3.6, 7 Oct 2026.** v3.6: every slice file is checked against all earlier slices, and each slice's findings are carried forward into later slices and this file.
+**Status: v3.8, 7 Oct 2026.** v3.8 carries the Slice 3 and 4 research forward: Monad's real gas and pool rules, MCP's new protocol and SDK v2, pause-and-ask only in Claude Code and Codex, WhatsApp's 24-hour rule.
+
+**v3.7, 7 Oct 2026.** (Afshal: "go ahead"): Spike 4 tests one Countersign connector from Grok, Claude Code, Codex and Muse, plus an OpenRouter test agent (D30); held payments can also reach the person on WhatsApp (D31).
+
+**v3.6, 7 Oct 2026.** every slice file is checked against all earlier slices, and each slice's findings are carried forward into later slices and this file.
 
 **v3.5, 6 Oct 2026.** Nothing is cut for time; all 23 slices are in the entry.
 
@@ -127,8 +131,8 @@ From `research/2026-10-01-how-ai-agents-pay-report.md` (research workspace). One
 | Claude | Open, as a remote MCP server. The fallback for the demo |
 | OpenAI Agents API | Open for a developer's own agent. Whether a consumer dot can use it is not documented |
 | Grok Bot custom plugin | Open on paper, needs a paid plan, untested |
-| Muse | Possible through a custom connector, untested; the connector directory is gated |
-| Instinct | Closed. No API or MCP support |
+| Muse | Its connector list is fixed, but given a remote MCP server's URL it writes its own connector with the official MCP library; Spike 4 tests it |
+| Instinct | Closed to tools: no API or MCP. People use it on WhatsApp and iMessage. Countersign meets its users there through WhatsApp approval requests (D31), not by plugging into Instinct |
 
 All of these pay by card through Stripe Link by default. On that rail Countersign can only advise. Enforcement applies when the payment is USDC on Monad.
 
@@ -172,8 +176,8 @@ A company's inbox gets dozens of invoices at once, several agents may work on it
 | **1. Intake** | Sending invoices one tool call at a time is slow | A batch tool, `pay_invoices`: the agent hands over a whole run and gets a run id. The gateway queues it (D15) |
 | **2. The checker** | About 1.5 s per check, mostly the model; 200 in a row would take minutes | Checks run in parallel under a cap sized to the model provider's rate limit. Code-only checks (supplier, address, amount, duplicate) run first; obvious mismatches are held without waiting for the model (D16) |
 | **3. Several agents at once** | Two agents, or a retry, submit the same invoice | Same order and invoice give the same request id and the same result; each vault refuses an invoice it already paid. Tested with agents firing at once (Spike 3, Slice 16) |
-| **4. Sending to Monad** | One wallet's transactions queue by nonce; the public RPC allows 25 requests a second | A pool of sending wallets, and a private RPC endpoint (QuickNode perk) (D17) |
-| **5. Monad itself** | Payments touching the same data are re-run one after another | One vault per order (D13). Two payments to the same supplier in one block still conflict; correct, slower; Spike 3 measures it |
+| **4. Sending to Monad** | One wallet's transactions queue by nonce (a stuck one holds up the rest); the public testnet RPC allows 50 requests a second (25 for estimates and calls); each wallet's in-flight gas is capped at min(10 MON, its balance) | A pool of sending wallets; gas limits hard-coded per operation; sends spread across endpoints. D17's private endpoint is reconsidered in Slice 3: free private tiers are slower than the public one |
+| **5. Monad itself** | A transaction whose reads were changed by an earlier one in the block is re-executed before it commits (at most once more, usually cheaply). It costs time, not gas | One vault per order (D13) keeps payments on separate balances. Two payments to the same supplier in one block still conflict. Spike 3 measures how much this matters; Monad itself calls parallel execution an implementation detail |
 | **6. The person** | 15 held payments means 15 prompts, and people stop reading | Batch review: holds grouped by reason, "refuse all duplicates" in one step. One screen-lock signature over a reviewed list is a stretch, because it changes what the contract checks (D18) |
 | **7. Seeing it** | Hundreds of payments a minute and no way to follow them | The payment run board (D20) |
 
@@ -221,9 +225,10 @@ A company's inbox gets dozens of invoices at once, several agents may work on it
 
 | Channel | Mechanism | When it works |
 |---|---|---|
-| **In the agent chat** | The MCP server pauses the call and asks, with a link to the approval page | The agent app supports pause-and-ask and a person is present |
+| **In the agent chat** | Every held result carries the approval link in its text. Where the agent app supports pause-and-ask (today Claude Code and Codex, over a sessionful connection), the server also pauses and asks with the same link (Spike 4 research, 7 Oct) | Always shows the link; the pause works only in clients that support it. Tools never wait on a person: Codex cuts tools off at 60 s, claude.ai at 240 s |
 | **Approver app** | Notification, then Face ID on the approval sheet | The web app is installed on the home screen |
-| **Approval page** | A plain link, opened anywhere | Always; the other two lead here |
+| **WhatsApp** (D31) | A message from Countersign's WhatsApp number with a button that opens the approval page | The person has opted in to WhatsApp messages; works whichever agent prepared the payment. iMessage has no comparable public sending API, so it is not offered |
+| **Approval page** | A plain link, opened anywhere | Always; the other channels lead here |
 
 **Phones first.** Approving is done mostly on phones (iPhone and Android), with the laptop second. A passkey uses whatever unlocks the device: Face ID, a fingerprint, face unlock, Touch ID or Windows Hello. It is a web app, so no App Store or Gatekeeper is involved; passkeys need the app on HTTPS.
 
@@ -416,7 +421,7 @@ Each slice file lists what was re-checked before it was written.
 **Context7**
 - `/websites/openzeppelin_contracts_5_x`: `WebAuthn.verify`, `P256.verify`, `SignerWebAuthn`. Checked 26 Sep.
 - `/wevm/viem`: `createWebAuthnCredential`, `toWebAuthnAccount`, `watchContractEvent`. Checked 27 Sep.
-- `/modelcontextprotocol/typescript-sdk`: `createMcpHandler`, `McpServer.registerTool`, `requireBearerAuth`; pause-and-ask through `ctx.mcpReq.elicitInput` in form and URL modes, with `createElicitationCompletionNotifier`; default wait 60 seconds, extendable. Checked 1–2 Oct.
+- MCP (re-checked 7 Oct, Slice 4): **a new protocol revision, 2026-07-28** (stateless, multi-round-trip input instead of server-sent elicitation, CIMD instead of DCR) and **SDK v2** (`@modelcontextprotocol/server` 2.3.1; Context7 `/websites/ts_sdk_modelcontextprotocol_io_v2`): `McpServer.registerTool`, `createMcpHandler` (stateless), a sessionful transport for 2025-era clients, `ctx.mcpReq.elicitInput` (reaches 2025-era clients only over a sessionful connection), `requireBearerAuth`; a full authorization server only in `server-legacy`. Earlier v1 notes (`@modelcontextprotocol/sdk`, checked 1–2 Oct) are superseded.
 - `/websites/typesafe_ai_sdk_javascript`: `TypeSafeClient`, `systemOne({ state, questions })`, explicit `timeout`. Checked 27 Sep.
 - `/websites/primuslabs_xyz`, `/websites/hono_dev`. Checked 27 Sep.
 - Not yet checked: OpenZeppelin `Clones`, Playwright, Foundry fuzz settings, Drizzle, the Next.js PWA setup, the MCP OAuth server pieces, a PDF text extractor, xAI's connector and remote MCP docs. Each is checked in the slice that first uses it.
@@ -441,7 +446,8 @@ SPIKES (throwaway code, real answers):
   Slice 2:   Primus proof of a supplier's address file, on testnet    DONE
   Slice 3:   200 payments: order vaults vs one account, relayers,     TODO
              several agents at once, private RPC
-  Slice 4:   Grok's custom connector reaches a test MCP server        TODO
+  Slice 4:   One test MCP server reached from Grok, Claude Code,      TODO
+             Codex and Muse; an OpenRouter test agent across models
 
 CORE PIPELINE (a scripted agent pays a clean invoice, no prompt):
   Slice 5:   Account and order vaults: policy, suppliers, pay, log    TODO
@@ -458,7 +464,8 @@ THE HOLD:
 AGENT DOOR:
   Slice 12:  MCP server and web API: six tools incl. batch runs       TODO
   Slice 13:  Sign-in from the agent app with one link                 TODO
-  Slice 14:  Proposals and holds in the chat; Grok, then Claude       TODO
+  Slice 14:  Proposals and holds in the chat (every agent that        TODO
+             connected in Spike 4) and on WhatsApp
 
 DEPTH AND PROOF:
   Slice 15:  Supplier address attestation wired in, or the fallback   TODO
@@ -499,7 +506,7 @@ SHIP:
 | 1. Passkey on chain | The owner is a passkey, checked by the precompile | OpenZeppelin's pure-Solidity check, which costs more gas |
 | 2. Primus on testnet | Adding a supplier shows proof that its own website lists the address | The approver confirms the address by hand; the sheet says "not verified" |
 | 3. Payment run | Vaults clearly beat one account: the contract uses per-order vaults, we size the relayer pool, and we publish the measured time for 200 | We find out what still conflicts before Slice 5 is written, and publish only what we measured |
-| 4. Grok connector | The demo runs in Grok, and we note which plan it needs | The demo runs in Claude; Grok is mentioned as next, not shown |
+| 4. One connector, many agents | The demo runs in Grok and in each other agent that connects (Claude Code, Codex, Muse); we note each one's plan, sign-in method and pause-and-ask support | Any agent that cannot connect is listed with the reason; the demo runs in those that can, with Claude as the floor |
 
 **The demo documents** (built in Slice 7, reused by the benchmark)
 
@@ -557,10 +564,11 @@ After a slice is built, two sections are added: **What was built** and **Adapted
 |---|---|---|
 | Monad testnet RPC | Gateway, contracts | Chain access; a private endpoint from the QuickNode perk for the relayers |
 | Circle testnet USDC | Account, supplier portal | The money |
-| OpenRouter | Checker | Jev, and the fallback model |
+| OpenRouter | Checker; the test agent | Jev and the fallback model; one test agent that runs the same scenarios on GPT, Claude, Grok, Gemini, Llama and others |
+| WhatsApp Business Cloud API (Meta) | Approval requests | Sends a held payment's approval link to the person on WhatsApp (D31) |
 | Primus | Attestation | Proof of a supplier's address file |
 | ERC-8004 registries | Agent identity | Who the paying agent is |
-| Grok (grok.com) and Claude | The demo | The agents people already use, connected through the MCP server |
+| Grok, Claude (and Claude Code), Codex, Muse | The demo | The agents people already use, each connected to the same MCP server |
 | Vercel | Approver app, supplier portal | Hosting |
 | Railway | Gateway, checker, MCP server, Postgres | Hosting |
 
@@ -592,7 +600,7 @@ None of these has had an explicit yes, except that Afshal has said parallel exec
 | D8 | Remote and pushes | Push to `development` and feature branches only, never to `main` |
 | D9 | Scope | **Locked 6 Oct (v3.4):** every payment a business's AI agent makes in stablecoins (supplier invoices, online orders, paid services) checked against what the business approved. Invoices are the main example and the benchmark; online orders shown too; x402 paid services a stretch goal; consumer card shopping out. (Was: supplier invoices only) |
 | D10 | Invoice format | Web page and plain text first. PDF once a text extractor has been checked in Slice 10 |
-| D11 | Demo agent | Grok through its custom connector, if Spike 4 works; Claude otherwise |
+| D11 | Demo agent | Superseded by D30 (7 Oct): the demo runs in every agent that connects in Spike 4 (Grok, Claude Code, Codex, Muse), with Claude as the floor. (Was: Grok if Spike 4 works, Claude otherwise) |
 | D12 | Model and first users | B2B, sold self-serve. Small teams that use an agent and pay overseas contractors and suppliers. Finance teams are where it goes next |
 | D13 | Parallel payments | One vault per approved order; the account-wide daily limit is dropped. Afshal: "parallel execution is needed" |
 
@@ -616,6 +624,8 @@ None of these has had an explicit yes, except that Afshal has said parallel exec
 | D27 | The model can only hold | Code decides "clear" against owner-signed records; the model's answers can only add a hold; the checker signs only when every code check passes |
 | D28 | Waiting period | New suppliers and changed addresses receive money only after an owner-set wait (48 hours by default), with a notification; it cannot be skipped from the app |
 | D29 | First-payment cap | The first few payments to a new address are capped lower than usual |
+| D30 | One connector, many agents | Spike 4 tests one Countersign MCP server from Grok, Claude Code, Codex and Muse, and builds an OpenRouter test agent that runs the same scenarios across several models (also used by the benchmark in Slice 20). Instinct cannot take tools and is not connected |
+| D31 | WhatsApp approvals | Held payments and proposals can be sent to the person on WhatsApp as a link-button message (`cta_url`) to the approval page; the passkey still signs on the page. WhatsApp allows free-form messages only within 24 hours of the person's last message, so the person messages Countersign once to connect, and an approved template with a URL button (review up to 24 h, submitted early) covers the rest. Built with Slice 14. iMessage is not offered (Apple requires an approved provider) |
 | — | Who builds | Sophie and Roshan are busy this week; Claude drafts and builds their slices, Afshal reviews. Ownership in D6 returns when they are free |
 
 ---

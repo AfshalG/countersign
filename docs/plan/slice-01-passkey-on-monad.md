@@ -39,7 +39,7 @@ So the open questions are narrower: does a **fresh signature from a real passkey
 | OpenZeppelin 5.7.0 source (`P256.sol`, `WebAuthn.sol`, installed in Slice 0) | `WebAuthn.verify(challenge, auth, qx, qy, requireUV)`; the `WebAuthnAuth` struct (`r`, `s`, `challengeIndex`, `typeIndex`, `authenticatorData`, `clientDataJSON`). **`P256.verify` silently falls back to Solidity when the precompile is missing**; `verifyNative` reverts instead. **Signatures with `s` above N/2 are rejected.** It does not check origin, RP ID or the signature counter |
 | Monad docs, Precompiles page | `0x0100` is P256 verification per EIP-7951 (same address and interface as RIP-7212). **Gas: 6,900.** Monad supports every Ethereum precompile up to the Fusaka fork |
 | Monad docs, Testnet page | Chain 10143; faucet `https://faucet.monad.xyz`; explorers MonadVision (`testnet.monadvision.com`) and Monadscan. Testnet reset 16 Dec 2025 |
-| Monad docs, Opcode Pricing (through Context7) | Not for this slice, but important for Slices 3 and 5: contract creation costs 160,000 gas plus 1,200 per deployed byte, and a new storage slot costs 127,900. Recheck on the page in Slice 3 |
+| Monad docs, Opcode Pricing (through Context7) | ~~Contract creation 160,000 gas plus 1,200 per byte; new slot 127,900~~: **stale Context7 snapshot, corrected 7 Oct** (see Results). Current: Ethereum creation pricing; new slot 27,900 on a page's first touch |
 | Context7 `/wevm/ox` and the ox 1.8.5 source | `WebAuthnP256.createCredential`, `sign` (returns `metadata` with `authenticatorData`, `clientDataJSON`, `challengeIndex`, `typeIndex`, and `signature` `{r, s}`), `getSignPayload`, `verify`; `P256.randomPrivateKey`, `getPublicKey`, `sign`. **ox already flips high-s browser signatures to low-s** (`parseAsn1Signature`), which OpenZeppelin needs |
 | npm | ox 1.8.5, viem 2.57.3 |
 
@@ -150,6 +150,8 @@ Probe `0xa0b9d0408af2fd0d2b164fdd97757dc6029b7e97`, deployed for 1,478,657 gas. 
 
 **Correction for later slices:** the deploy cost (1.48M gas for about 5 KB of code) does not fit the "1,200 gas per byte, 160,000 per creation" figures quoted from Context7 above, which would give roughly 6M. Those figures look outdated. Spike 3 measures vault creation directly.
 
+**Resolved (7 Oct, Slice 3 research):** Monad prices contract creation as Ethereum does (32,000 base, 200 gas per deployed byte; measured live at about 201.6 per byte), which matches the 1.48M gas. The 160,000 + 1,200/byte figure was an early draft Monad dropped (v0.11.3 changelog) that Context7 still serves. A new storage slot costs 27,900 on its page's first touch, 17,100 after, not 127,900.
+
 ## Verdict
 
 **The spike works.** The owner of a Countersign account is a passkey, checked through Monad's P256 precompile with user verification required. Slices 5 and 9 build on `WebAuthn.verify` (decision S1-5's three-way probe proved the precompile path). The Solidity fallback is not needed.
@@ -173,7 +175,7 @@ Slice 2: a Primus proof of a supplier's address file, on testnet.
 
 ## Notes for later slices
 
-- **Slice 5 and Spike 3 (cost of one vault per order):** at Monad's prices, creating a contract costs 160,000 gas plus 1,200 per byte, and each new storage slot 127,900. A minimal clone is 45 bytes, so a vault costs roughly 214,000 gas before its own storage is written. Fees are charged on the gas limit, not gas used. Spike 3 should measure the real cost per order, because it bears on D13.
+- **Slice 5 and Spike 3 (cost of one vault per order):** ~~160,000 gas plus 1,200 per byte~~ (stale Context7 figure; corrected 7 Oct). Creation is priced as on Ethereum (32,000 plus 200 per byte), and a new storage slot costs 27,900 on its page's first touch. Spike 3 measures a vault's real cost. Fees are still charged on the gas limit.
 - **Slices 9 and 11:** a passkey is bound to the site's domain. Passkeys made on the spike's Vercel URL won't work on the real app's domain, so the app domain should be fixed early.
 
 ## Decisions for Afshal in this slice
