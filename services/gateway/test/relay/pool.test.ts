@@ -3,7 +3,7 @@ import { parseTransaction, type Hex } from 'viem';
 import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
 import { Store } from '../../src/db/store.js';
 import type { Database } from '../../src/db/client.js';
-import { RelayerPool, type Signed } from '../../src/relay/pool.js';
+import { NoRelayerFunds, RelayerPool, type Signed } from '../../src/relay/pool.js';
 import { freshDatabase, truncate } from '../db/helpers.js';
 import { FakeSender, VAULT, waitFor } from '../fakes.js';
 
@@ -16,6 +16,23 @@ const key1 = generatePrivateKey();
 const keys = [key0, key1];
 const addresses = keys.map((k) => privateKeyToAccount(k).address);
 const address0 = privateKeyToAccount(key0).address;
+const address1 = privateKeyToAccount(key1).address;
+/** 266,000 gas at the fake's 127.5 gwei maximum fee: what a wallet must hold to send one payment. */
+const PAY_COST = 266_000n * 127_500_000_000n;
+
+function newPool(poolKeys: Hex[], balanceRefreshMs?: number) {
+  return new RelayerPool({
+    keys: poolKeys,
+    store,
+    sender,
+    chainId: 10143,
+    endpoints: 3,
+    stallMs: 150,
+    tickMs: 20,
+    ...(balanceRefreshMs === undefined ? {} : { balanceRefreshMs }),
+  });
+}
+const payTx = { to: VAULT, data: '0x12345678' as Hex, gas: 266_000n };
 
 beforeAll(async () => {
   database = await freshDatabase();
@@ -122,6 +139,66 @@ describe('relayer pool', () => {
     await new Promise((r) => setTimeout(r, 300));
     expect(sender.sent.filter((x) => x.raw === s.raw)).toHaveLength(1);
     expect(pool.pending()).toBe(0);
+  });
+
+  it('never signs with a wallet that cannot cover the transaction’s maximum gas cost', async () => {
+    pool.stop();
+    sender.balances.set(address0.toLowerCase(), PAY_COST - 1n);
+    pool = newPool(keys);
+    await pool.start();
+    for (let i = 0; i < 3; i++) expect((await pool.sign(payTx)).relayer).toBe(address1);
+  });
+
+  it('when loads are equal, signs with the wallet that has the most left', async () => {
+    pool.stop();
+    sender.balances.set(address0.toLowerCase(), 5n * PAY_COST);
+    sender.balances.set(address1.toLowerCase(), 50n * PAY_COST);
+    pool = newPool(keys);
+    await pool.start();
+    const s = await pool.sign(payTx);
+    pool.enqueue(s);
+    pool.included(s.hash);
+    // Both wallets are idle again; the richer one is chosen, not the first in the list.
+    expect((await pool.sign(payTx)).relayer).toBe(address1);
+  });
+
+  it('reserves each signed transaction’s cost, counts what was spent, and refuses when no wallet can pay', async () => {
+    pool.stop();
+    sender.balances.set(address0.toLowerCase(), 2n * PAY_COST);
+    sender.balances.set(address1.toLowerCase(), 0n);
+    pool = newPool(keys);
+    await pool.start();
+    const a = await pool.sign(payTx);
+    const b = await pool.sign(payTx);
+    expect([a.relayer, b.relayer]).toEqual([address0, address0]);
+    await expect(pool.sign(payTx)).rejects.toBeInstanceOf(NoRelayerFunds);
+    pool.enqueue(a);
+    pool.included(a.hash); // its gas is spent, not returned
+    await expect(pool.sign(payTx)).rejects.toBeInstanceOf(NoRelayerFunds);
+    sender.balances.set(address1.toLowerCase(), 10n * PAY_COST); // topped up
+    await pool.refreshBalances();
+    expect((await pool.sign(payTx)).relayer).toBe(address1);
+  });
+
+  it('holds a transaction refused for low balance, then sends it again unchanged once the wallet is funded', async () => {
+    pool.stop();
+    let funded = false;
+    sender.reply = () =>
+      funded ? 'accepted' : { error: 'Signer had insufficient balance', retry: false };
+    pool = newPool([key0], 100);
+    await pool.start();
+    const s = await pool.sign(payTx);
+    sender.balances.set(address0.toLowerCase(), PAY_COST - 1n); // the chain now says it cannot pay
+    pool.enqueue(s);
+    await waitFor(() => sender.sent.length >= 1);
+    await waitFor(() => pool.starved().includes(address0));
+    await new Promise((r) => setTimeout(r, 250));
+    expect(sender.sent).toHaveLength(1); // not hammered while the wallet is short
+    funded = true;
+    sender.balances.set(address0.toLowerCase(), 10n * PAY_COST);
+    await waitFor(() => sender.sent.length >= 2, 2_000);
+    expect(sender.sent[1]?.raw).toBe(s.raw); // the same nonce and hash: it can never pay twice
+    expect(pool.starved()).toEqual([]);
   });
 
   it('treats "already known" as accepted, and retries a transient failure', async () => {

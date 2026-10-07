@@ -89,6 +89,8 @@ const app = createApp({
       })),
     ),
     moves: pool.moves().length,
+    // Wallets a node refused for low balance; their payments wait until they are topped up.
+    starved: pool.starved(),
   }),
 });
 const server = serve({ fetch: app.fetch, port: settings.PORT }, (info) => {

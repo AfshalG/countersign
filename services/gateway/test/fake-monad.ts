@@ -78,6 +78,11 @@ export class FakeMonad implements Chain, Sender, Receipts {
     return Promise.resolve(this.confirmed.get(address.toLowerCase()) ?? 0);
   }
 
+  /** 10 MON for every wallet: the fake chain never runs a relayer dry. */
+  balanceOf(): Promise<bigint> {
+    return Promise.resolve(10n ** 19n);
+  }
+
   fees(): Promise<{ maxFeePerGas: bigint; maxPriorityFeePerGas: bigint }> {
     return Promise.resolve({
       maxFeePerGas: 127_500_000_000n,

@@ -10,9 +10,10 @@ import type { Payment } from '../payment.js';
 
 type Endpoint = { url: string; sendsPerSecond: number; readsPerSecond: number };
 
+// A paced slot can already be due (negative wait); Node warns on negative timeouts, so clamp.
 const sleep = (ms: number) =>
   new Promise<void>((resolve) => {
-    setTimeout(resolve, ms);
+    setTimeout(resolve, Math.max(0, ms));
   });
 
 const ALREADY_IN = /already known|known transaction|already imported|nonce too low/i;

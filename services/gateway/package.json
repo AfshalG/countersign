@@ -7,7 +7,8 @@
     "typecheck": "tsc --noEmit",
     "dev": "tsx src/main.ts",
     "start": "tsx src/main.ts",
-    "db:generate": "drizzle-kit generate"
+    "db:generate": "drizzle-kit generate",
+    "testnet-run": "tsx scripts/testnet-run.ts"
   },
   "dependencies": {
     "@countersign/chain": "workspace:*",

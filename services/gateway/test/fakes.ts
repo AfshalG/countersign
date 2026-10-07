@@ -60,6 +60,8 @@ export class FakeSender implements Sender {
   sent: { endpoint: number; raw: Hex; at: number }[] = [];
   blackHoles = new Set<number>();
   chainNonces = new Map<string, number>();
+  /** MON in wei per wallet (lower-case address); 10 MON when not set. */
+  balances = new Map<string, bigint>();
   reply: (endpoint: number, raw: Hex) => SendOutcome = () => 'accepted';
 
   send(endpoint: number, raw: Hex): Promise<SendOutcome> {
@@ -69,6 +71,10 @@ export class FakeSender implements Sender {
 
   nonceOf(address: Address): Promise<number> {
     return Promise.resolve(this.chainNonces.get(address.toLowerCase()) ?? 0);
+  }
+
+  balanceOf(address: Address): Promise<bigint> {
+    return Promise.resolve(this.balances.get(address.toLowerCase()) ?? 10n ** 19n);
   }
 
   fees(): Promise<{ maxFeePerGas: bigint; maxPriorityFeePerGas: bigint }> {
