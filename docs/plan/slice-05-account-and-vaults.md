@@ -2,7 +2,7 @@
 
 ## Status
 
-**DECIDED (7 Oct 2026); plan ready, build after Spike 3.** Technical decisions made by Claude (Afshal, 7 Oct). Owner: Afshal (contracts). The vault-per-order shape depends on Spike 3's measurement; if Spike 3 shows vaults give no benefit, the vault logic moves into the account (see "If Spike 3 says otherwise").
+**BUILT (7 Oct 2026); deployed and exercised on Monad testnet.** 105 Foundry tests (unit, fuzz at 5,000 runs in CI, invariants over 256 runs of 128 actions) and the shared EIP-712 types checked in TypeScript; every manual step passed on testnet except the phone's passkey, which moves to Slice 9 (see "Adapted from spec"). Spike 3 kept the vault-per-order shape (S3-7). Owner: Afshal (contracts); Claude built.
 
 ## Goal
 
@@ -11,7 +11,7 @@ The core contracts: an **account** owned by a passkey that holds a company's USD
 ## Prerequisites
 
 - Slices 0–4 done (Spike 4 open for apps Afshal doesn't have; nothing here depends on it).
-- **Spike 3 measured** (vaults against one account) before the contract code is written. Blocked on testnet MON and USDC from the faucets.
+- **Spike 3 measured** (vaults against one account) before the contract code is written. Done 7 Oct: vaults kept for isolation (S3-7).
 - Testnet USDC for the testnet deployment.
 
 ## Cross-checked (7 Oct 2026)
@@ -132,12 +132,59 @@ packages/shared/src/                  EIP-712 type definitions for Payment and e
 6. Pay a held payment once with the passkey from the Slice 1 phone page.
 7. Record gas for each operation, for Slice 6's hard-coded limits.
 
-## Results (filled in after the build)
+## Results (7 Oct 2026)
 
-| Measure | Value |
+**Deployed on Monad testnet (chain 10143):** `AccountFactory` `0x094250cCC1dDBd8530e4FC9A1C900db3D0D9EB5f`, `CountersignAccount` template `0x282cf7AD04f666C1b704B91f1911C8A21c705f02`, `OrderVault` template `0x9950941673E7479c5b20c8603cC24981c386A59D`. Test account `0xE890B35be32F04032B502Dc4Dc2db8062aD6d603` (software passkey), its order vault `0xbd19BbE40044a3175A3213D8408a434b882CADF4`, paying the demo supplier "Kalibre Studio" at `0x90f9…5fEc`. Script: `contracts/script/Slice05Testnet.s.sol`; every transaction is in `contracts/broadcast/`.
+
+**Manual steps on testnet**
+
+| Step | Result |
 |---|---|
-| Gas: create account / approve order (create + fund vault) / pay / payWithOwner | |
-| Invariant runs and depth | |
+| 1. Deploy; create an account for a test passkey; fund it with 0.01 USDC | Passed |
+| 2. Add Kalibre Studio; a payment inside the waiting period is refused | Refused: `AddressNotYetActive` (2-minute wait for the test) |
+| 3. Approve an order of 0.005 USDC; pay 0.001 with agent and checker | Paid; 0.004 left in the order |
+| 4. The same invoice again; a look-alike address | Refused: `AlreadyPaid`; `PayToNotOnFile` |
+| 5. Pause; a payment; withdraw; unpause | Payment refused (`AccountPaused`); withdraw worked while paused |
+| 6. A held payment paid once with the passkey | Paid with the software passkey (`payWithOwner`), the checker's hold recorded first (`DecisionRecorded`); again: `AlreadyPaid`; another passkey: `InvalidOwnerSignature`. **The phone's passkey moves to Slice 9** |
+| 7. Gas per operation | Below |
+
+Refusals were checked by simulation against live testnet state, so they cost nothing.
+
+**Gas on Monad** (receipts report the gas limit as `gasUsed`; execution is the limit less the 8% margin)
+
+| Operation | Gas limit charged | Execution (about) | MON at 102 gwei |
+|---|---|---|---|
+| Deploy factory and both templates | 5,600,378 | 5,185,535 | 0.571 |
+| `createAccount` | 197,928 | 183,267 | 0.020 |
+| `setPolicy` (passkey) | 153,729 | 142,342 | 0.016 |
+| `setSupplier` (passkey) | 104,685 | 96,931 | 0.011 |
+| `approveOrder` (create and fund a vault) | 296,416 | 274,459 | 0.030 |
+| `pay` (agent and checker; first payment to the supplier) | 265,911 | 246,214 | 0.027 |
+| `payWithOwner` (passkey; supplier paid before) | 231,197 | 214,071 | 0.024 |
+| `recordDecision` (checker) | 93,967 | 87,006 | 0.010 |
+| `pause` / `unpause` | 88,185 / 71,664 | 81,653 / 66,356 | 0.009 / 0.007 |
+| `withdraw` (passkey) | 152,199 | 140,925 | 0.016 |
+
+A product payment costs about 50% more gas than Spike 3's bare vault payment (246k against 164k), because it also reads the account's policy, supplier record and pause flag (another contract and its template, several storage pages: Monad's cold-access pricing). The local EVM figures (`test/Gas.t.sol`: pay 150k) are a regression baseline only.
+
+| Tests | Value |
+|---|---|
+| Foundry tests | 105: unit (one per rule and named error), 16 fuzz (5,000 runs each in CI), 5 invariants (256 runs × 128 actions in CI), EIP-712 fixture, gas |
+| Invariant non-vacuity | A fixed 400-step session makes 70 orders, 18 agent-and-checker payments, 7 owner payments, 19 closes and 5 sweeps with every invariant holding |
+| TypeScript | 10 EIP-712 digests in `packages/shared` match the contracts exactly |
+| `forge lint` | Clean (block-timestamp and reentrancy-events excluded in `foundry.toml`, reasons written there) |
+
+## Adapted from spec
+
+- **The vault's amount is immutable too.** Clone arguments are account, supplier, order hash, expiry **and amount**; storage keeps `spent` (remaining = amount − spent), `paid` and `closed`. Opening an order writes no vault storage and the vault has no initialiser or privileged setup call at all (the plan had `remaining` in storage).
+- **An account's address commits to its passkey and its starting waiting period** (`createAccount(qx, qy, waitingPeriod, salt)`), so whoever creates it first can only create exactly the account the owner expects. Accounts start with no agent or checker key: nothing pays until the owner sets a policy. `createAccount` returns the existing account if called again.
+- **The waiting period has a maximum, 30 days** (found while reviewing the linter's warnings). A decrease waits out the current period, so an unbounded period set by a tricked owner could have locked supplier changes for good.
+- **Policy checks:** agent and checker keys must both be set and must differ (one key signing both halves would turn two signatures into one); the new-address cap may not exceed the cap; the policy may not already have expired.
+- **The owner's path obeys the same rules**, including the pause: the stop button stops the owner's payments too. A payment's agent path also refuses an unset or expired policy (`PolicyNotSet`, `PolicyExpired`).
+- **Decisions:** `recordDecision` (checker's ECDSA) and `recordDecisionByOwner` (passkey) are separate functions; `Decision` is (invoice hash, outcome 1–3, reason hash, evidence hash).
+- **Events are emitted before their USDC transfers** (checks, effects, then the transfer).
+- **Step 6 with the phone moves to Slice 9.** Paying with the phone's passkey needs the phone's key as an account owner and a page that signs each owner action, which is Slice 9's flow (passkey owner: suppliers, orders, pay once). Slice 5 proved `payWithOwner` on testnet with a software passkey through the same `WebAuthn.verify`; Slice 1 proved iPhone, Android and Mac assertions pass that check on Monad.
+- **Tests read the clock with `vm.getBlockTimestamp()`**: under `via_ir`, `block.timestamp` can be reused across `vm.warp` (Foundry lint).
 
 ## Commit
 
