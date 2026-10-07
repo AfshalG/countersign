@@ -134,6 +134,8 @@ describe('the SDK against the gateway', () => {
       wait,
     });
     expect(again.id).toBe(first.id);
+    expect(first.duplicate).toBe(false);
+    expect(again.duplicate).toBe(true);
     expect([...monad.paid.values()]).toEqual([1]);
   });
 

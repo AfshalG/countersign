@@ -116,6 +116,12 @@ export type Invoice = {
   document?: unknown;
 };
 
+/**
+ * What `pay` returns: the request, and whether it was already there. A resent invoice (the same
+ * supplier and number) is the first request again, not a new payment: `duplicate` is then true.
+ */
+export type PaymentResult = PaymentRequest & { duplicate: boolean };
+
 export type PayInput = {
   /** An order from `orders()`, or its id. */
   order: Order | Hex;

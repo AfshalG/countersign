@@ -137,6 +137,19 @@ describe('pay', () => {
     expect(signer).toBe(privateKeyToAccount(agentKey).address);
   });
 
+  it('says when a payment is the same invoice sent again (nothing new paid)', async () => {
+    const gateway = fakeGateway((call) =>
+      call.method === 'POST'
+        ? { status: 200, body: { created: false, request: view('settled') } }
+        : { status: 200, body: view('settled') },
+    );
+    const result = await client(gateway).pay({
+      order,
+      invoice: { number: 'INV-0042', amount: '12.50', payTo: PAY_TO },
+    });
+    expect(result.duplicate).toBe(true);
+  });
+
   it('waits for the outcome when asked: settled, held or blocked', async () => {
     let polls = 0;
     const gateway = fakeGateway((call) => {

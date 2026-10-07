@@ -25,6 +25,7 @@ import type {
   Order,
   PayInput,
   PaymentRequest,
+  PaymentResult,
   Proposal,
   Run,
   RunView,
@@ -144,15 +145,18 @@ export class Countersign {
    * Pays an invoice against an order. The same invoice (supplier and number) is the same request,
    * however often it is sent. With `wait`, returns once it is settled, held or blocked.
    */
-  async pay(input: PayInput & { wait?: boolean | WaitOptions }): Promise<PaymentRequest> {
+  async pay(input: PayInput & { wait?: boolean | WaitOptions }): Promise<PaymentResult> {
     const body = await this.submission(input);
-    const { request } = await this.request<{ request: RawRequest }>('POST', '/v1/payments', {
-      account: this.account,
-      ...body,
-    });
+    const { request, created } = await this.request<{ request: RawRequest; created: boolean }>(
+      'POST',
+      '/v1/payments',
+      { account: this.account, ...body },
+    );
+    const duplicate = !created;
     const first = withText(request);
-    if (input.wait === undefined || input.wait === false) return first;
-    return this.waitFor(first.id, input.wait === true ? {} : input.wait, first);
+    if (input.wait === undefined || input.wait === false) return { ...first, duplicate };
+    const latest = await this.waitFor(first.id, input.wait === true ? {} : input.wait, first);
+    return { ...latest, duplicate };
   }
 
   /** The same check as `pay`, with nothing paid or stored: would it settle, be held or blocked? */

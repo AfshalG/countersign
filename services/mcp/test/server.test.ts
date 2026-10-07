@@ -18,6 +18,7 @@ const TX = `0x${'ab'.repeat(32)}`;
 /** A scripted gateway: one order; a payment to the address on file settles, any other is held. */
 const sent: { path: string; body: unknown }[] = [];
 const requests = new Map<string, Record<string, unknown>>();
+const byInvoice = new Map<string, Record<string, unknown>>();
 function gateway(input: Parameters<typeof fetch>[0], init?: RequestInit): Promise<Response> {
   const url = new URL(
     typeof input === 'string' ? input : input instanceof URL ? input.href : input.url,
@@ -80,9 +81,13 @@ function gateway(input: Parameters<typeof fetch>[0], init?: RequestInit): Promis
     });
   if (url.pathname === '/v1/payments' && init?.method === 'POST') {
     const payTo = (body?.payment as { payTo: string }).payTo;
+    const invoice = (body?.payment as { invoiceHash: string }).invoiceHash;
+    const earlier = byInvoice.get(invoice);
+    if (earlier) return reply(200, { created: false, request: earlier });
     const id = `0x${String(requests.size + 1).padStart(64, '0')}`;
     const v = view(id, payTo, payTo.toLowerCase() !== ON_FILE.toLowerCase());
     requests.set(id, v);
+    byInvoice.set(invoice, v);
     return reply(201, { created: true, request: v });
   }
   if (url.pathname === '/v1/checks')
@@ -220,6 +225,17 @@ describe('the MCP server', () => {
     };
     expect(payment.payment.amount).toBe('12500000');
     expect(payment.agentSig).toMatch(/^0x[0-9a-f]{130}$/);
+  });
+
+  it('says plainly when an invoice was sent before: nothing new paid', async () => {
+    const args = { orderId: ORDER_ID, invoiceNumber: 'INV-0099', amount: '12.50', payTo: ON_FILE };
+    const first = await call('pay_invoice', args);
+    const again = await call('pay_invoice', args);
+    expect(first.structuredContent).toMatchObject({ duplicate: false });
+    expect(again.structuredContent).toMatchObject({ duplicate: true });
+    expect(textOf(again)).toMatch(
+      /^This is the same invoice as an earlier request .*nothing new was paid/,
+    );
   });
 
   it('holds a look-alike and tells the agent not to retry around it', async () => {

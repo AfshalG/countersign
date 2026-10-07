@@ -5,6 +5,7 @@ import {
   type Countersign,
   type Order,
   type PaymentRequest,
+  type PaymentResult,
 } from '@countersign/sdk';
 
 /**
@@ -52,6 +53,7 @@ const paymentOut = z.object({
   addressOnFile: z.string().nullable(),
   txHash: z.string().nullable(),
   statusUrl: z.string(),
+  duplicate: z.boolean(),
 });
 
 type ToolResult = {
@@ -114,8 +116,19 @@ export function describePayment(r: PaymentRequest): string {
   }
 }
 
-function paymentStructured(r: PaymentRequest) {
+/**
+ * A resent invoice (the same supplier and number) is the earlier request, not a new payment. Said
+ * first and plainly, because an agent otherwise counts it as paid twice (Slice 12 testnet run).
+ */
+export function describeResult(r: PaymentResult): string {
+  return r.duplicate
+    ? `This is the same invoice as an earlier request (same supplier and invoice number): nothing new was paid. The earlier request: ${describePayment(r)}`
+    : describePayment(r);
+}
+
+function paymentStructured(r: PaymentResult) {
   return {
+    duplicate: r.duplicate,
     id: r.id,
     status: r.status,
     reason: r.reason,
@@ -240,7 +253,7 @@ export function createTools(cs: Countersign, options: { waitMs?: number } = {}) 
       handler: async (args: InvoiceArgs): Promise<ToolResult> => {
         try {
           const r = await cs.pay({ ...payInput(args), wait: { timeoutMs: waitMs, pollMs: 250 } });
-          return text(describePayment(r), paymentStructured(r));
+          return text(describeResult(r), paymentStructured(r));
         } catch (e) {
           return failure(e);
         }

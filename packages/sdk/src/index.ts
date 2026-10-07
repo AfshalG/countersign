@@ -6,6 +6,7 @@ export type {
   Order,
   PayInput,
   PaymentRequest,
+  PaymentResult,
   PaymentStatus,
   Proposal,
   Run,
