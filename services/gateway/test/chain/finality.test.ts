@@ -122,6 +122,27 @@ describe('finality', () => {
     expect((await store.get(b.id))?.status).toBe('settled');
   });
 
+  it('tells whoever waits on a transaction that is not a payment once it is final (judge setup)', async () => {
+    const hash = keccak256(toHex('createAccount for a judge'));
+    let included: Hex | undefined;
+    const watched = new FinalityTracker({
+      store,
+      receipts: source,
+      pool: { included: (h: Hex) => (included = h) },
+    });
+    const waiting = watched.waitFinal(hash, 5_000);
+    receipts.set(500, [{ transactionHash: hash, status: 'success' }]);
+    await watched.onHead(head(500, '0xb500', 'Voted', 1)); // not final yet: still waiting
+    await watched.onHead(head(500, '0xb500', 'Finalized', 2));
+    await expect(waiting).resolves.toEqual({ status: 'success', blockNumber: 500 });
+    expect(included).toBe(hash); // its relayer lane stops tracking it
+  });
+
+  it('gives up waiting after the timeout, without losing the transaction', async () => {
+    const hash = keccak256(toHex('never mined'));
+    await expect(tracker.waitFinal(hash, 50)).rejects.toThrow(/not final/);
+  });
+
   it('ignores receipts that are not ours', async () => {
     const { id } = await settling('INV-mine');
     receipts.set(400, [{ transactionHash: keccak256(toHex('someone else')), status: 'success' }]);

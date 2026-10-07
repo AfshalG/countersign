@@ -15,6 +15,13 @@
       "when": 1791391601589,
       "tag": "0001_orders_and_proposals",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1791409135677,
+      "tag": "0002_demo_accounts",
+      "breakpoints": true
     }
   ]
 }

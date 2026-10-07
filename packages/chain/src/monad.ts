@@ -49,4 +49,10 @@ export const GAS_LIMITS = {
   pay: 266_000n,
   payWithOwner: 232_000n,
   recordDecision: 94_000n,
+  // Judge mode's account setup (Slice 9 part 4), from Slice 5's testnet broadcast: 197,928,
+  // 153,729, 104,685 and 296,429 gas used.
+  createAccount: 214_000n,
+  setPolicy: 166_000n,
+  setSupplier: 114_000n,
+  approveOrder: 320_000n,
 } as const;

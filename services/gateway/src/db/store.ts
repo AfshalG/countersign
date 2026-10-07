@@ -9,12 +9,15 @@ import {
 import type { Db } from './client.js';
 import {
   accounts,
+  demoAccounts,
   orders,
   paymentEvents,
   paymentRequests,
   proposals,
   runs,
   type AccountRow,
+  type DemoAccountRow,
+  type DemoStatus,
   type OrderRow,
   type PaymentRequestRow,
   type ProposalRow,
@@ -374,6 +377,51 @@ export class Store {
     if (!row) throw new Error(`no nonce reserved for ${address}`);
     // pg returns int4 as a JS number; next_nonce is int4.
     return row.nonce;
+  }
+
+  // ---------- judge mode's demo accounts (Slice 9 part 4) ----------
+
+  async getDemoAccount(account: Address): Promise<DemoAccountRow | undefined> {
+    const [row] = await this.db
+      .select()
+      .from(demoAccounts)
+      .where(eq(demoAccounts.account, account));
+    return row;
+  }
+
+  /** Records a new demo account as `creating`; recording it again returns the first record. */
+  async createDemoAccount(input: {
+    account: Address;
+    qx: Hex;
+    qy: Hex;
+    plan: unknown;
+  }): Promise<DemoAccountRow> {
+    await this.db
+      .insert(demoAccounts)
+      .values({ ...input, status: 'creating' })
+      .onConflictDoNothing();
+    const row = await this.getDemoAccount(input.account);
+    if (!row) throw new Error(`demo account ${input.account} was not recorded`);
+    return row;
+  }
+
+  async setDemoStatus(account: Address, status: DemoStatus): Promise<DemoAccountRow> {
+    const [row] = await this.db
+      .update(demoAccounts)
+      .set({ status, ...(status === 'ready' ? { readyAt: new Date() } : {}) })
+      .where(eq(demoAccounts.account, account))
+      .returning();
+    if (!row) throw new Error(`no demo account ${account}`);
+    return row;
+  }
+
+  /** How many demo accounts were created since then (the daily limit). */
+  async demoAccountsSince(since: Date): Promise<number> {
+    const [row] = await this.db
+      .select({ n: sql<number>`count(*)::int` })
+      .from(demoAccounts)
+      .where(gt(demoAccounts.createdAt, since));
+    return row?.n ?? 0;
   }
 
   // ---------- accounts and their orders (Slice 12) ----------
