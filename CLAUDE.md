@@ -5,6 +5,8 @@
 
 An AI agent reads a supplier invoice and drafts the payment. Countersign's checker compares the invoice with the purchase order the company approved. A match is paid from that order's vault on Monad and is final about 0.6 seconds later. Anything that differs (a changed address, a padded amount, a duplicate, a hijacked agent) is held, and a person decides with Face ID. The rule lives in the contract, so it holds whichever agent prepared the payment.
 
+**An open primitive (D33, Track 04).** Developers build on it: an agent builder gives its agent a Countersign account through the SDK or the MCP connector instead of a card or a wallet key; a wallet can offer an agent mode; anyone can run a checker, because the owner sets the checker key. The invoice flow (supplier portal, approver app) is the reference app built on it. Developer experience is judged: every public interface gets docs and an example.
+
 **Two layers (D32).** The contract is the security boundary: paying the wrong party is impossible, whoever signs (proved on testnet in Slice 5, no model involved). The checker is a detector for the right supplier billed the wrong amount (padded, duplicate, wrong order), published with its catch rate and false-hold rate. Lead with the contract; never present the checker as a guarantee.
 
 **Pitch line:** "Your agent can prepare the payment. It should not be the only one who signs it."
@@ -39,6 +41,7 @@ countersign/
 ├── packages/
 │   ├── shared/          Payment state, reason codes, EIP-712 types, zod schemas
 │   ├── chain/           viem clients, ABIs, Monad config
+│   ├── sdk/             TypeScript SDK for developers (Slice 12, D33)
 │   └── db/              Drizzle schema and migrations
 ├── bench/               The invoice set and the four benchmark arms
 ├── spikes/              Throwaway code from Slices 1–4. Never imported by product code
