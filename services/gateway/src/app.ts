@@ -1,20 +1,22 @@
 import { OpenAPIHono, createRoute, z } from '@hono/zod-openapi';
 import { Scalar } from '@scalar/hono-api-reference';
 import { bearerAuth } from 'hono/bearer-auth';
+import { except } from 'hono/combine';
+import { cors } from 'hono/cors';
 import { HTTPException } from 'hono/http-exception';
 import { streamSSE } from 'hono/streaming';
-import type { Address, Hex } from 'viem';
-import { OUTCOME, PAYMENT_STATUSES } from '@countersign/shared';
+import type { Hex } from 'viem';
+import { PAYMENT_STATUSES } from '@countersign/shared';
 import type { Chain, WebAuthnAuth } from './chain/types.js';
 import type { Checker } from './checker.js';
 import { evaluate, SimulationUnavailable } from './pipeline/check.js';
 import { registerOrderRoutes, type Indexing } from './api/orders.js';
 import { paymentPage, proposalPage } from './api/status-page.js';
 import { llmsFullTxt, llmsTxt } from './api/llms.js';
+import { payOnce, refuseHeld, registerApprovalRoutes } from './api/approvals.js';
 import type { PaymentRequestRow } from './db/schema.js';
 import type { StatusChange, Store } from './db/store.js';
 import { requestId, runId } from './ids.js';
-import { paymentOf } from './payment.js';
 import {
   address,
   apiError,
@@ -94,12 +96,6 @@ const toAuth = (a: z.output<typeof ownerAuth>): WebAuthnAuth => ({
   typeIndex: a.typeIndex,
   authenticatorData: a.authenticatorData as Hex,
   clientDataJSON: a.clientDataJSON,
-});
-/** Stored as JSON: bigints as strings. */
-const storedAuth = (a: WebAuthnAuth) => ({
-  ...a,
-  challengeIndex: a.challengeIndex.toString(),
-  typeIndex: a.typeIndex.toString(),
 });
 
 // ---------- routes (each one validated and documented from the same schemas) ----------
@@ -291,15 +287,19 @@ export function createApp(deps: AppDeps) {
     return db ? c.json({ ok: true, db, ...extra }, 200) : c.json({ ok: false, db, ...extra }, 503);
   });
 
+  // The approver app calls the approvals routes from the phone's browser, on another origin.
+  // No cookies, no token: the owner's passkey is the authorisation.
   app.use(
-    '/v1/*',
-    bearerAuth({
-      token: deps.token,
-      noAuthenticationHeader: { message: { error: 'unauthorized' } },
-      invalidAuthenticationHeader: { message: { error: 'unauthorized' } },
-      invalidToken: { message: { error: 'unauthorized' } },
-    }),
+    '/v1/approvals/*',
+    cors({ origin: '*', allowMethods: ['GET', 'POST', 'OPTIONS'], allowHeaders: ['content-type'] }),
   );
+  const requireToken = bearerAuth({
+    token: deps.token,
+    noAuthenticationHeader: { message: { error: 'unauthorized' } },
+    invalidAuthenticationHeader: { message: { error: 'unauthorized' } },
+    invalidToken: { message: { error: 'unauthorized' } },
+  });
+  app.use('/v1/*', except('/v1/approvals/*', requireToken));
 
   app.openapi(submitPayment, async (c) => {
     const body = c.req.valid('json');
@@ -418,58 +418,43 @@ export function createApp(deps: AppDeps) {
   });
 
   app.openapi(approve, async (c) => {
-    const row = await store.get(c.req.valid('param').id);
-    if (!row) return c.json({ error: 'unknown_request' }, 404);
-    if (row.status !== 'held') return c.json({ error: 'not_held', status: row.status }, 409);
-    const auth = toAuth(c.req.valid('json').ownerAuth);
-    const refusal = await chain.simulate(row.vault as Address, paymentOf(row), {
-      kind: 'payWithOwner',
-      ownerAuth: auth,
-    });
-    if (refusal?.error === 'InvalidOwnerSignature')
-      return c.json({ error: 'invalid_passkey' }, 422);
-    if (refusal)
-      return c.json(
-        { error: 'contract_refuses', reason: refusal.reason, contract: refusal.error },
-        409,
-      );
-    const moved = await store.transition(row.id, 'held', 'released', {
-      ownerAuth: storedAuth(auth),
-      decidedBy: 'user_once',
-      decidedAt: new Date(),
-    });
-    if (!moved) return c.json({ error: 'not_held' }, 409);
-    const after = await store.get(row.id);
-    if (!after) return c.json({ error: 'unknown_request' }, 404);
-    return c.json(view(after), 200);
+    const result = await payOnce(
+      { store, chain },
+      c.req.valid('param').id,
+      toAuth(c.req.valid('json').ownerAuth),
+    );
+    if (result.ok) return c.json(view(result.row), 200);
+    switch (result.status) {
+      case 404:
+        return c.json(result.body, 404);
+      case 409:
+        return c.json(result.body, 409);
+      default:
+        return c.json(result.body, 422);
+    }
   });
 
   /** A person's refusal ends the agent's run (money rule 7). */
   app.openapi(refuse, async (c) => {
-    const row = await store.get(c.req.valid('param').id);
-    if (!row) return c.json({ error: 'unknown_request' }, 404);
-    if (row.status !== 'held') return c.json({ error: 'not_held', status: row.status }, 409);
     const body = c.req.valid('json');
-    const auth = toAuth(body.ownerAuth);
-    const signed = {
-      invoiceHash: row.invoiceHash as Hex,
-      outcome: OUTCOME.refused,
-      reasonHash: body.decision.reasonHash as Hex,
-      evidenceHash: body.decision.evidenceHash as Hex,
-    };
-    if (!(await chain.verifyOwnerDecision(row.vault as Address, signed, auth)))
-      return c.json({ error: 'invalid_passkey' }, 422);
-    const moved = await store.transition(row.id, 'held', 'refused', {
-      reason: 'user_refused',
-      decidedBy: 'user_refused',
-      decidedAt: new Date(),
-      ownerAuth: storedAuth(auth),
-      detail: { decision: body.decision },
-    });
-    if (!moved) return c.json({ error: 'not_held' }, 409);
-    const after = await store.get(row.id);
-    if (!after) return c.json({ error: 'unknown_request' }, 404);
-    return c.json(view(after), 200);
+    const result = await refuseHeld(
+      { store, chain },
+      c.req.valid('param').id,
+      toAuth(body.ownerAuth),
+      {
+        reasonHash: body.decision.reasonHash as Hex,
+        evidenceHash: body.decision.evidenceHash as Hex,
+      },
+    );
+    if (result.ok) return c.json(view(result.row), 200);
+    switch (result.status) {
+      case 404:
+        return c.json(result.body, 404);
+      case 409:
+        return c.json(result.body, 409);
+      default:
+        return c.json(result.body, 422);
+    }
   });
 
   // The feed is Server-Sent Events, so it is documented here and served by a plain route below.
@@ -528,6 +513,7 @@ export function createApp(deps: AppDeps) {
   );
 
   registerOrderRoutes(app, { store, chain, indexing: deps.indexing, publicUrl });
+  registerApprovalRoutes(app, { store, chain, chainId: deps.chainId, publicUrl });
 
   // A page a person can open from an agent's message; public, like the link in the message.
   app.get('/p/:id', async (c) => {
