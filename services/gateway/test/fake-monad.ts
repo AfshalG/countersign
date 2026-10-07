@@ -22,6 +22,8 @@ import type { Sender, SendOutcome } from '../src/relay/pool.js';
  */
 export class FakeMonad implements Chain, Sender, Receipts {
   readonly paid = new Map<string, number>();
+  /** The supplier's address on file: the vault refuses any other (PayToNotOnFile). */
+  onFile: Address = '0x90f9931B748B26763161a8191C178Fe425C25fEc';
   readonly sentHashes = new Set<Hex>();
   onHead: (head: Head) => void = () => undefined;
   private readonly confirmed = new Map<string, number>();
@@ -41,11 +43,30 @@ export class FakeMonad implements Chain, Sender, Receipts {
     payment: Payment,
     call: PaymentCall,
   ): Promise<DecodedRefusal | undefined> {
-    const refuse = (errorName: 'InvalidCheckerSignature' | 'AlreadyPaid') =>
+    const refuse = (errorName: 'InvalidCheckerSignature' | 'AlreadyPaid' | 'PayToNotOnFile') =>
       Promise.resolve(decodeRefusal(encodeErrorResult({ abi: orderVaultAbi, errorName })));
+    if (payment.payTo.toLowerCase() !== this.onFile.toLowerCase()) return refuse('PayToNotOnFile');
     if ((this.paid.get(payment.invoiceHash) ?? 0) > 0) return refuse('AlreadyPaid');
     if (call.kind === 'pay' && call.checkerSig === '0x') return refuse('InvalidCheckerSignature');
     return Promise.resolve(undefined);
+  }
+
+  orderState(): Promise<{
+    remaining: bigint;
+    payTo: Address;
+    supplierActive: boolean;
+    activeAfter: number;
+  }> {
+    return Promise.resolve({
+      remaining: 30_000n,
+      payTo: '0x90f9931B748B26763161a8191C178Fe425C25fEc',
+      supplierActive: true,
+      activeAfter: 0,
+    });
+  }
+
+  addressOnFile(): Promise<Address> {
+    return Promise.resolve(this.onFile);
   }
 
   verifyOwnerDecision(): Promise<boolean> {

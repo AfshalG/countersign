@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray, isNull, sql } from 'drizzle-orm';
+import { and, asc, eq, gt, inArray, isNull, lt, sql } from 'drizzle-orm';
 import type { Address, Hex } from 'viem';
 import {
   canTransition,
@@ -7,7 +7,18 @@ import {
   type Reason,
 } from '@countersign/shared';
 import type { Db } from './client.js';
-import { paymentEvents, paymentRequests, runs, type PaymentRequestRow } from './schema.js';
+import {
+  accounts,
+  orders,
+  paymentEvents,
+  paymentRequests,
+  proposals,
+  runs,
+  type AccountRow,
+  type OrderRow,
+  type PaymentRequestRow,
+  type ProposalRow,
+} from './schema.js';
 
 export type NewRequest = {
   id: Hex;
@@ -363,5 +374,73 @@ export class Store {
     if (!row) throw new Error(`no nonce reserved for ${address}`);
     // pg returns int4 as a JS number; next_nonce is int4.
     return row.nonce;
+  }
+
+  // ---------- accounts and their orders (Slice 12) ----------
+
+  /** Registers an account for indexing from `fromBlock`; registering it again changes nothing. */
+  async registerAccount(address: Address, fromBlock: number, label?: string): Promise<AccountRow> {
+    await this.db
+      .insert(accounts)
+      .values({ address, indexedTo: fromBlock - 1, label: label ?? null })
+      .onConflictDoNothing();
+    const [row] = await this.db.select().from(accounts).where(eq(accounts.address, address));
+    if (!row) throw new Error(`account ${address} was not registered`);
+    return row;
+  }
+
+  async listAccounts(): Promise<AccountRow[]> {
+    return this.db.select().from(accounts).orderBy(asc(accounts.address));
+  }
+
+  /** Moves an account's indexed block forward, never back. */
+  async setIndexedTo(address: Address, block: number): Promise<void> {
+    await this.db
+      .update(accounts)
+      .set({ indexedTo: block })
+      .where(and(eq(accounts.address, address), lt(accounts.indexedTo, block)));
+  }
+
+  /** From an OrderApproved event; applying the same event twice changes nothing. */
+  async upsertOrder(order: Omit<OrderRow, 'closed'>): Promise<void> {
+    await this.db.insert(orders).values(order).onConflictDoNothing();
+  }
+
+  async closeOrder(vault: Address): Promise<void> {
+    await this.db.update(orders).set({ closed: true }).where(eq(orders.vault, vault));
+  }
+
+  /** Open orders: not closed, not expired. */
+  async openOrders(account: Address, nowSeconds: number): Promise<OrderRow[]> {
+    return this.db
+      .select()
+      .from(orders)
+      .where(
+        and(eq(orders.account, account), eq(orders.closed, false), gt(orders.expiry, nowSeconds)),
+      )
+      .orderBy(asc(orders.approvedBlock));
+  }
+
+  // ---------- proposals (Slice 12) ----------
+
+  /** The same (account, document) is one proposal: the second call returns the first. */
+  async createProposal(
+    p: Omit<ProposalRow, 'status' | 'createdAt' | 'decidedAt'>,
+  ): Promise<{ proposal: ProposalRow; created: boolean }> {
+    const inserted = await this.db
+      .insert(proposals)
+      .values({ ...p, status: 'pending' })
+      .onConflictDoNothing()
+      .returning();
+    const first = inserted[0];
+    if (first) return { proposal: first, created: true };
+    const existing = await this.getProposal(p.id);
+    if (!existing) throw new Error(`proposal ${p.id} vanished`);
+    return { proposal: existing, created: false };
+  }
+
+  async getProposal(id: string): Promise<ProposalRow | undefined> {
+    const [row] = await this.db.select().from(proposals).where(eq(proposals.id, id));
+    return row;
   }
 }

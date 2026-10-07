@@ -86,3 +86,14 @@ describe('contract refusals', () => {
     expect(refusalFor('SomethingNew')).toEqual({ status: 'held', reason: 'checker_unavailable' });
   });
 });
+
+describe('reason wording', () => {
+  it('says every reason in plain words, without contract names', async () => {
+    const { REASONS, REASON_TEXT } = await import('../src/payment-state.js');
+    for (const reason of REASONS) {
+      const text = REASON_TEXT[reason];
+      expect(text.length, reason).toBeGreaterThan(10);
+      expect(text, reason).not.toMatch(/[A-Z][a-z]+[A-Z][A-Za-z]*/); // no PayToNotOnFile-style names
+    }
+  });
+});

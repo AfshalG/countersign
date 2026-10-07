@@ -25,6 +25,14 @@ export interface Chain {
     payment: Payment,
     call: PaymentCall,
   ): Promise<DecodedRefusal | undefined>;
+  /** What is left in an order, and its supplier's record, read live. */
+  orderState(
+    account: Address,
+    vault: Address,
+    supplierId: Hex,
+  ): Promise<{ remaining: bigint; payTo: Address; supplierActive: boolean; activeAfter: number }>;
+  /** The address the account has on file for the vault's supplier (what the vault will pay). */
+  addressOnFile(account: Address, vault: Address): Promise<Address>;
   /** Whether the owner's passkey signed this decision for this vault (an eth_call of recordDecisionByOwner). */
   verifyOwnerDecision(vault: Address, decision: Decision, auth: WebAuthnAuth): Promise<boolean>;
   /** A transaction's receipt once it is in a finalized block; null if it is not (yet). */

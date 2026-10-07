@@ -1,0 +1,17 @@
+# Vercel CLI uploads (services/mcp is built from the repo root, as a pnpm workspace).
+# An allow-list: only what the MCP server's build needs leaves this machine. Never .env.
+/*
+!/package.json
+!/pnpm-lock.yaml
+!/pnpm-workspace.yaml
+!/tsconfig.base.json
+!/packages
+!/services
+!/spikes
+**/node_modules
+**/.next
+**/dist
+**/.vercel
+**/.env
+**/.env.*
+services/gateway/results

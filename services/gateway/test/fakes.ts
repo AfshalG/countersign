@@ -14,6 +14,30 @@ export class FakeChain implements Chain {
   simulations = 0;
   /** False: the owner's passkey signatures are not the account owner's. */
   ownerKeyValid = true;
+  /** The supplier's address on file, as the account stores it; undefined makes the lookup fail. */
+  onFile: Address | undefined = '0x90f9931B748B26763161a8191C178Fe425C25fEc';
+
+  /** What is left in each vault's order (30,000 base units unless set). */
+  remaining = new Map<string, bigint>();
+
+  orderState(
+    _account: Address,
+    vault: Address,
+  ): Promise<{ remaining: bigint; payTo: Address; supplierActive: boolean; activeAfter: number }> {
+    if (this.onFile === undefined) return Promise.reject(new Error('eth_call failed'));
+    return Promise.resolve({
+      remaining: this.remaining.get(vault.toLowerCase()) ?? 30_000n,
+      payTo: this.onFile,
+      supplierActive: true,
+      activeAfter: 0,
+    });
+  }
+
+  addressOnFile(): Promise<Address> {
+    return this.onFile === undefined
+      ? Promise.reject(new Error('eth_call failed'))
+      : Promise.resolve(this.onFile);
+  }
 
   verifyOwnerDecision(): Promise<boolean> {
     return Promise.resolve(this.ownerKeyValid);

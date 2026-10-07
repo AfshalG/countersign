@@ -18,6 +18,7 @@ export {
   FINAL_STATUSES,
   PAYMENT_STATUSES,
   REASONS,
+  REASON_TEXT,
   canTransition,
   isFinal,
   refusalFor,
@@ -27,3 +28,5 @@ export {
   type Reason,
   type Refusal,
 } from './payment-state.js';
+export { USDC_DECIMALS, formatUsdc, usdc } from './amounts.js';
+export { invoiceHash, normalizeInvoiceNumber, supplierId } from './invoice.js';

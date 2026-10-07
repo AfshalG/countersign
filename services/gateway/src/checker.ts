@@ -4,7 +4,13 @@ import type { Reason } from '@countersign/shared';
 import type { PaymentRequestRow } from './db/schema.js';
 import { paymentTypedData, type Payment } from './payment.js';
 
-export type CheckInput = { request: PaymentRequestRow; payment: Payment; chainId: number };
+export type CheckInput = {
+  request: PaymentRequestRow;
+  payment: Payment;
+  chainId: number;
+  /** A check with no payment (POST /v1/checks): answer, but never sign. */
+  dryRun?: boolean;
+};
 
 export type CheckResult =
   | { verdict: 'release'; checkerSig: Hex; evidence: unknown }
@@ -40,6 +46,8 @@ export class TestChecker implements Checker {
     const reason = this.holdIf?.(input);
     if (reason !== undefined)
       return { verdict: 'hold', reason, evidence: { checker: 'test', reason } };
+    if (input.dryRun === true)
+      return { verdict: 'release', checkerSig: '0x', evidence: { checker: 'test', dryRun: true } };
     const account = privateKeyToAccount(this.key);
     const checkerSig = await account.signTypedData(
       paymentTypedData(this.chainId, input.request.vault as Address, input.payment),

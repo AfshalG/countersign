@@ -482,7 +482,7 @@ THE HOLD:
   Slice 11:  Approver app: proposals, holds, feed, the diff           TODO
 
 AGENT DOOR:
-  Slice 12:  Developer kit: TypeScript SDK, MCP server and web API    TODO
+  Slice 12:  Developer kit: TypeScript SDK, MCP server and web API    DONE (SDK RELEASED, MCP LIVE)
              (six tools incl. batch runs), quickstart docs (D33)
   Slice 13:  Sign-in from the agent app with one link                 TODO
   Slice 14:  Proposals and holds in the chat (every agent that        TODO
@@ -654,6 +654,7 @@ None of these has had an explicit yes, except that Afshal has said parallel exec
 | D31 | WhatsApp approvals | Held payments and proposals can be sent to the person on WhatsApp as a link-button message (`cta_url`) to the approval page; the passkey still signs on the page. WhatsApp allows free-form messages only within 24 hours of the person's last message, so the person messages Countersign once to connect, and an approved template with a URL button (review up to 24 h, submitted early) covers the rest. Built with Slice 14. iMessage is not offered (Apple requires an approved provider) |
 | D32 | The contract is the boundary; the checker is a measured detector | Answering a critique (7 Oct): the contract makes paying the wrong party impossible; the checker catches the right party paid the wrong amount (padded, duplicate, wrong order), with a catch rate and false-hold rate measured from Slice 10 and published in Slice 20. Invoices are read as structured data first; a PDF is read from its text layer and its rendered page, and disagreement is a hold. The demo keeps the agent key on the agent's side. The pitch leads with the contract |
 | D33 | Countersign as an open primitive (Track 04) | 7 Oct, after reading the track's judging criteria (65% is about developers building on the entry): a developer kit (TypeScript SDK, MCP connector, web API, quickstart docs), a checker anyone can run (the owner sets the checker key), ERC-8004 agent identity right after the kit, one other Metropolis team integrating during the hackathon; the invoice flow is the reference app. Afshal: "change all the existing slices and other md files as needed" |
+| D34 | The name stays for now; the SDK ships as a GitHub release file | 7 Oct: another project has used "Countersign" since June 2026 (countersign.network: an off-chain, cross-vendor kill switch and spend guard for agent wallets; owns `@countersign` on npm; hosted service paused 18 Sep). Afshal: keep the name for the hackathon, decide after; Payseal is the preferred rename. The SDK is installed from a GitHub release tarball, not npm. The pitch's originality rests on what they do not do: the rule in the contract that holds the money, payee provenance, invoice checks. |
 | — | Who builds | Sophie and Roshan are busy this week; Claude drafts and builds their slices, Afshal reviews. Ownership in D6 returns when they are free |
 
 ---

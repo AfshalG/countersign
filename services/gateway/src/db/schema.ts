@@ -1,6 +1,7 @@
 import {
   bigint,
   bigserial,
+  boolean,
   index,
   integer,
   jsonb,
@@ -97,4 +98,64 @@ export const relayerNonces = pgTable('relayer_nonces', {
   nextNonce: integer('next_nonce').notNull(),
 });
 
+/**
+ * Accounts whose orders the gateway indexes (Slice 12). `indexedTo` is the last finalized block
+ * whose order events have been applied; the indexer resumes from there after a restart.
+ */
+export const accounts = pgTable('accounts', {
+  address: text('address').primaryKey(),
+  label: text('label'),
+  indexedTo: bigint('indexed_to', { mode: 'number' }).notNull(),
+  registeredAt: at('registered_at').notNull().defaultNow(),
+});
+
+/**
+ * Orders the accounts approved, from `OrderApproved` and `OrderClosed` events. What is left in an
+ * order and its supplier's address on file are read from the chain when asked, never stored, so
+ * they cannot go stale.
+ */
+export const orders = pgTable(
+  'orders',
+  {
+    vault: text('vault').primaryKey(),
+    account: text('account').notNull(),
+    orderId: text('order_id').notNull(),
+    supplierId: text('supplier_id').notNull(),
+    orderHash: text('order_hash').notNull(),
+    /** USDC base units set aside for the order (uint256 as a decimal string). */
+    amount: numeric('amount', { precision: 78, scale: 0 }).notNull(),
+    expiry: bigint('expiry', { mode: 'number' }).notNull(),
+    closed: boolean('closed').notNull().default(false),
+    approvedBlock: bigint('approved_block', { mode: 'number' }).notNull(),
+  },
+  (t) => [index('orders_account_idx').on(t.account, t.closed)],
+);
+
+export const PROPOSAL_STATUSES = ['pending', 'approved', 'refused', 'expired'] as const;
+export type ProposalStatus = (typeof PROPOSAL_STATUSES)[number];
+
+/**
+ * A supplier and an order an agent proposed from a quote it read (money rule 8: nothing changes
+ * until the owner's passkey signs). The id is derived from (account, document hash), so the same
+ * quote proposed twice is one proposal.
+ */
+export const proposals = pgTable('proposals', {
+  id: text('id').primaryKey(),
+  account: text('account').notNull(),
+  supplierName: text('supplier_name').notNull(),
+  website: text('website'),
+  /** The payment address as the agent read it; the website check (Slice 15) confirms it or not. */
+  payTo: text('pay_to').notNull(),
+  amount: numeric('amount', { precision: 78, scale: 0 }).notNull(),
+  expiry: bigint('expiry', { mode: 'number' }).notNull(),
+  documentHash: text('document_hash').notNull(),
+  document: jsonb('document'),
+  status: text('status').$type<ProposalStatus>().notNull(),
+  createdAt: at('created_at').notNull().defaultNow(),
+  decidedAt: at('decided_at'),
+});
+
 export type PaymentRequestRow = typeof paymentRequests.$inferSelect;
+export type AccountRow = typeof accounts.$inferSelect;
+export type OrderRow = typeof orders.$inferSelect;
+export type ProposalRow = typeof proposals.$inferSelect;

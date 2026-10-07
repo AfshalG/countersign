@@ -17,6 +17,36 @@ export const PAYMENT_STATUSES = [
 ] as const;
 export type PaymentStatus = (typeof PAYMENT_STATUSES)[number];
 
+/**
+ * Each reason in plain words, for people: the status page, the agent's tool text, the SDK's
+ * messages. One place, so every face says the same thing. (`Record<Reason, …>` makes a new reason
+ * without words a type error.)
+ */
+export const REASON_TEXT: Record<Reason, string> = {
+  malformed:
+    'The payment was not well formed (an amount of zero, a deadline passed, or a bad agent signature).',
+  over_limit:
+    'The amount is over a limit the owner set: per payment, for a newly added address, or what is left in the order.',
+  order_closed: 'The order is closed or has expired.',
+  supplier_unknown: 'The supplier is not on file.',
+  supplier_inactive: 'The owner has switched this supplier off.',
+  address_mismatch: "The invoice's payment address is not the supplier's address on file.",
+  address_not_yet_active: "The supplier's address on file is new and still in its waiting period.",
+  supplier_mismatch: "The invoice is from a different supplier than the order's.",
+  items_mismatch: "The invoice's items differ from the order's.",
+  amount_mismatch: "The invoice's amount differs from what the order allows.",
+  duplicate_invoice: 'This invoice has already been paid.',
+  document_layers_differ: "The PDF's text and its rendered page disagree.",
+  checker_unavailable: 'The checker did not answer in time, so the payment waits for a person.',
+  checker_unsure: 'The checker could not tell, so the payment waits for a person.',
+  paused: 'The owner has paused the account.',
+  policy_inactive: "The account's rules are not set or have expired.",
+  user_refused: 'The owner refused it.',
+  expired: 'It was not decided before its deadline.',
+  reverted: 'The transaction failed on chain; no money moved.',
+  dropped: 'The transaction never reached a block; no money moved.',
+};
+
 export const FINAL_STATUSES = [
   'settled',
   'blocked',

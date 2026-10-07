@@ -6,6 +6,7 @@ import { REASONS, type Reason } from '@countersign/shared';
 import { createApp } from './app.js';
 import { TestChecker } from './checker.js';
 import { FinalityTracker } from './chain/finality.js';
+import { OrderIndexer } from './chain/indexer.js';
 import { MonadClient } from './chain/monad.js';
 import { connect } from './db/client.js';
 import { Store } from './db/store.js';
@@ -48,16 +49,29 @@ const pool = new RelayerPool({
     console.error(`endpoint refused ${hash}: ${error}`);
   },
 });
-const tracker = new FinalityTracker({ store, receipts: monad, pool });
+const indexer = new OrderIndexer({ store, source: monad });
+const tracker = new FinalityTracker({
+  store,
+  receipts: monad,
+  pool,
+  onFinalizedBlock: (blockNumber, logs) => indexer.onBlock(blockNumber, logs),
+});
+const catchUp = () => {
+  indexer.catchUp().catch((e: unknown) => {
+    console.error(`indexer catch-up: ${e instanceof Error ? e.message : String(e)}`);
+  });
+};
+const checker = new TestChecker(settings.TEST_CHECKER_PRIVATE_KEY, chainId, (input) =>
+  testHold(input.request.document),
+);
+const CHECKER_TIMEOUT_MS = 2_000;
 const workers = new Workers({
   store,
   chain: monad,
-  checker: new TestChecker(settings.TEST_CHECKER_PRIVATE_KEY, chainId, (input) =>
-    testHold(input.request.document),
-  ),
+  checker,
   pool,
   chainId,
-  checkerTimeoutMs: 2_000,
+  checkerTimeoutMs: CHECKER_TIMEOUT_MS,
   leaseMs: 30_000,
   checkConcurrency: 8,
   sendConcurrency: 8,
@@ -70,6 +84,9 @@ console.log(
   `recovered: ${String(recovered.settled)} settled from receipts, ${String(recovered.resent)} re-sent`,
 );
 workers.start();
+// Accounts behind (just registered, or the gateway was down) are brought up to date in windows.
+catchUp();
+const catchUpTimer = setInterval(catchUp, 15_000);
 const heads = monad.subscribeHeads((head) => {
   void tracker.onHead(head);
 });
@@ -78,6 +95,11 @@ tracker.startPolling(1_000);
 const app = createApp({
   store,
   chain: monad,
+  checker,
+  chainId,
+  checkerTimeoutMs: CHECKER_TIMEOUT_MS,
+  indexing: { latestFinalized: () => monad.latestFinalized(), catchUp: () => indexer.catchUp() },
+  publicUrl: settings.PUBLIC_URL,
   token: settings.GATEWAY_SERVICE_TOKEN,
   health: async () => ({
     chainId,
@@ -105,6 +127,7 @@ function shutdown(signal: string) {
   workers.stop();
   pool.stop();
   tracker.stopPolling();
+  clearInterval(catchUpTimer);
   heads.close();
   server.close(() => {
     database.pool

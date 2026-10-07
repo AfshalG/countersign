@@ -79,6 +79,35 @@ describe('the check step', () => {
     expect(checker.calls).toBe(0);
   });
 
+  it('records the address on file beside the invoice’s, so the owner can compare them', async () => {
+    chain.rule = (_p, call) =>
+      call.kind === 'pay' && call.checkerSig === '0x' ? 'PayToNotOnFile' : undefined;
+    chain.onFile = '0x90f9931B748B26763161a8191C178Fe425C25fEd';
+    const request = await submit('INV-lookalike');
+    await run(new TestChecker(checkerKey, CHAIN_ID), request);
+    const row = await store.get(request.id);
+    expect(row?.status).toBe('held');
+    expect(row?.evidence).toMatchObject({
+      contract: 'PayToNotOnFile',
+      payTo: { onFile: '0x90f9931B748B26763161a8191C178Fe425C25fEd', invoice: SUPPLIER },
+    });
+  });
+
+  it('still holds an address not on file when the address on file cannot be read', async () => {
+    chain.rule = (_p, call) =>
+      call.kind === 'pay' && call.checkerSig === '0x' ? 'PayToNotOnFile' : undefined;
+    chain.onFile = undefined;
+    const request = await submit('INV-lookup-fails');
+    await run(new TestChecker(checkerKey, CHAIN_ID), request);
+    const row = await store.get(request.id);
+    expect(row?.status).toBe('held');
+    expect(row?.reason).toBe('address_mismatch');
+    expect(row?.evidence).toMatchObject({
+      contract: 'PayToNotOnFile',
+      payTo: { invoice: SUPPLIER },
+    });
+  });
+
   it('blocks what nobody should pay (over what is left in the order)', async () => {
     chain.rule = () => 'OverRemaining';
     const request = await submit('INV-over');
