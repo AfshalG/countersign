@@ -8,7 +8,7 @@ import {
   type Address,
   type Hex,
 } from 'viem';
-import { accountFactoryAbi } from '@countersign/chain';
+import { accountFactoryAbi, countersignAccountAbi } from '@countersign/chain';
 import type { Store } from '../../src/db/store.js';
 import type { DemoChain, DemoDeps } from '../../src/demo/accounts.js';
 
@@ -23,6 +23,13 @@ export class FakeDemoChain implements DemoChain {
   nonces = new Map<string, bigint>();
   usdc = new Map<string, bigint>();
   invalidKey = false;
+  /** Suppliers on file, by account and supplier id (lower case). */
+  suppliers = new Map<string, { payTo: Address; active: boolean; activeAfter: number }>();
+  /** Each account's owner passkey. */
+  ownerKeys = new Map<string, { qx: Hex; qy: Hex }>();
+  waitingPeriod = 0;
+  /** An error name every dry run of an account call returns (e.g. InsufficientBalance). */
+  accountRefusal: string | undefined;
   ownerKeyValid = true;
   dryRuns = 0;
   predictAccount(qx: Hex, qy: Hex): Promise<Address> {
@@ -42,13 +49,26 @@ export class FakeDemoChain implements DemoChain {
   }
   /** Receipts the chain has for transactions whose wait timed out. */
   final = new Map<string, { status: 'success' | 'reverted'; blockNumber: number }>();
+  supplierOf(account: Address, supplierId: Hex) {
+    return Promise.resolve(
+      this.suppliers.get(`${account.toLowerCase()}:${supplierId.toLowerCase()}`) ?? null,
+    );
+  }
+  ownerKey(account: Address) {
+    const key = this.ownerKeys.get(account.toLowerCase());
+    return key ? Promise.resolve(key) : Promise.reject(new Error('no such account'));
+  }
+  effectiveWaitingPeriod() {
+    return Promise.resolve(this.waitingPeriod);
+  }
   finalizedReceipt(hash: Hex) {
     return Promise.resolve(this.final.get(hash) ?? null);
   }
   dryRun(to: Address): Promise<string | undefined> {
     this.dryRuns++;
     if (to === FACTORY) return Promise.resolve(this.invalidKey ? 'InvalidOwnerKey' : undefined);
-    return Promise.resolve(this.ownerKeyValid ? undefined : 'InvalidOwnerSignature');
+    if (!this.ownerKeyValid) return Promise.resolve('InvalidOwnerSignature');
+    return Promise.resolve(this.accountRefusal);
   }
 }
 
@@ -86,6 +106,11 @@ export function demoDeps(store: Store) {
         } else {
           const key = tx.to.toLowerCase();
           chain.nonces.set(key, (chain.nonces.get(key) ?? 0n) + 1n);
+          const call = decodeFunctionData({ abi: countersignAccountAbi, data: tx.data });
+          if (call.functionName === 'setSupplier') {
+            const [id, payTo, active] = call.args as unknown as [Hex, Address, boolean];
+            chain.suppliers.set(`${key}:${id.toLowerCase()}`, { payTo, active, activeAfter: 0 });
+          }
         }
         return { relayer: AGENT, nonce: n, raw: '0x02', hash: keccak256(toHex(`tx ${String(n)}`)) };
       },
