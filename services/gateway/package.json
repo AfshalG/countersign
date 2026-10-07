@@ -24,6 +24,7 @@
     "zod": "4.6.5"
   },
   "devDependencies": {
+    "@countersign/sdk": "workspace:*",
     "@scalar/openapi-parser": "0.29.11",
     "@types/pg": "8.23.1",
     "drizzle-kit": "0.31.11",

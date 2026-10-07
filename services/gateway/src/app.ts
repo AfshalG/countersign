@@ -480,7 +480,7 @@ export function createApp(deps: AppDeps) {
     security: secured,
     responses: {
       200: {
-        description: 'One `status` event per change: { id, runId, from, to, reason, at }',
+        description: 'One `status` event per change: { requestId, runId, from, to, reason }',
         content: { 'text/event-stream': { schema: z.string() } },
       },
     },

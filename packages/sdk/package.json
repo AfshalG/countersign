@@ -1,0 +1,51 @@
+{
+  "name": "@countersign/sdk",
+  "version": "0.1.0",
+  "description": "Give an AI agent a Countersign account: it pays approved suppliers, within approved orders, on Monad; anything else waits for the owner.",
+  "license": "MIT",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AfshalG/countersign.git",
+    "directory": "packages/sdk"
+  },
+  "keywords": [
+    "ai-agents",
+    "agent-payments",
+    "stablecoins",
+    "usdc",
+    "monad",
+    "mcp"
+  ],
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "publishConfig": {
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "import": "./dist/index.js"
+      }
+    },
+    "types": "./dist/index.d.ts"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "tsdown"
+  },
+  "dependencies": {
+    "viem": "^2.57.3"
+  },
+  "devDependencies": {
+    "@countersign/shared": "workspace:*",
+    "tsdown": "0.23.0"
+  }
+}
