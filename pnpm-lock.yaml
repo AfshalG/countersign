@@ -196,6 +196,37 @@ importers:
         specifier: 5.0.3
         version: 5.0.3(@types/node@24.19.1)(@vitest/coverage-v8@5.0.3)(vite@8.3.2(@types/node@24.19.1)(esbuild@0.28.2)(tsx@4.23.15)(yaml@2.9.1))
 
+  apps/approver:
+    dependencies:
+      '@countersign/sdk':
+        specifier: workspace:*
+        version: link:../../packages/sdk
+      '@countersign/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
+      next:
+        specifier: 16.3.8
+        version: 16.3.8(@types/node@24.19.1)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
+      ox:
+        specifier: 1.8.5
+        version: 1.8.5(typescript@6.0.3)
+      react:
+        specifier: 19.3.0
+        version: 19.3.0
+      react-dom:
+        specifier: 19.3.0
+        version: 19.3.0(react@19.3.0)
+      viem:
+        specifier: 2.57.3
+        version: 2.57.3(typescript@6.0.3)(zod@4.6.5)
+    devDependencies:
+      '@types/node':
+        specifier: 24.19.1
+        version: 24.19.1
+      '@types/react':
+        specifier: 19.3.0
+        version: 19.3.0
+
   packages/chain:
     dependencies:
       viem:
