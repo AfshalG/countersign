@@ -18,7 +18,7 @@ Self-serve accounts arrive with the passkey app (Slice 9). Until then, message u
 ## 2a. The SDK
 
 ```bash
-npm i https://github.com/AfshalG/countersign/releases/download/sdk-v0.1.0/countersign-sdk-0.1.0.tgz
+npm i https://github.com/AfshalG/countersign/releases/download/sdk-v0.1.1/countersign-sdk-0.1.1.tgz
 ```
 
 [`examples/pay-an-invoice`](../../examples/pay-an-invoice) is a complete script: it lists your open orders and pays one invoice of 0.001 USDC, waiting until it is settled at Monad's Finalized stage.

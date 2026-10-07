@@ -3,7 +3,7 @@
 Give an AI agent a Countersign account. The account is a contract on Monad that pays only the suppliers the owner approved, at their addresses on file, within approved orders. Your agent pays inside those rules with no click; anything else is held for the owner, with the reason in plain words and a link.
 
 ```bash
-npm i https://github.com/AfshalG/countersign/releases/download/sdk-v0.1.0/countersign-sdk-0.1.0.tgz
+npm i https://github.com/AfshalG/countersign/releases/download/sdk-v0.1.1/countersign-sdk-0.1.1.tgz
 ```
 
 Works with npm, pnpm, yarn and bun; Node 22+, Bun, Deno and edge runtimes. One dependency: viem.

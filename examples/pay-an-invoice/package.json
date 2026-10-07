@@ -6,6 +6,6 @@
     "start": "node index.mjs"
   },
   "dependencies": {
-    "@countersign/sdk": "https://github.com/AfshalG/countersign/releases/download/sdk-v0.1.0/countersign-sdk-0.1.0.tgz"
+    "@countersign/sdk": "https://github.com/AfshalG/countersign/releases/download/sdk-v0.1.1/countersign-sdk-0.1.1.tgz"
   }
 }
