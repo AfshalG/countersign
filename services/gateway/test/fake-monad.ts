@@ -160,7 +160,12 @@ export class FakeMonad implements Chain, Sender, Receipts {
 
   private execute(raw: Hex): 'success' | 'reverted' {
     const tx = parseTransaction(raw);
-    const call = decodeFunctionData({ abi: orderVaultAbi, data: tx.data ?? '0x' });
+    let call;
+    try {
+      call = decodeFunctionData({ abi: orderVaultAbi, data: tx.data ?? '0x' });
+    } catch {
+      return 'success'; // not a vault call (judge-mode setup, a factory call): it simply runs
+    }
     if (call.functionName !== 'pay' && call.functionName !== 'payWithOwner') return 'success';
     const invoice = (call.args[0] as { invoiceHash: Hex }).invoiceHash;
     const times = this.paid.get(invoice) ?? 0;

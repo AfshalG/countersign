@@ -11,6 +11,7 @@ import {
   DEMO_SALT,
   DEMO_WAITING_PERIOD,
   demoPlan,
+  SETUP_ACTIONS,
   setupAction,
   setupCall,
   type DemoPlan,
@@ -168,11 +169,22 @@ async function finalOf(
   return hash;
 }
 
-async function sendAndWait(deps: DemoDeps, to: Address, data: Hex, gas: bigint, what: string) {
-  const signed = await deps.pool.sign({ to, data, gas });
-  const waiting = deps.finality.waitFinal(signed.hash, deps.finalTimeoutMs ?? 60_000);
+/**
+ * Sends one setup transaction through a relayer, stored with its nonce under `purpose` (Slice 6's
+ * crash safety: a restart re-sends it unchanged). If a transaction for this purpose is already on
+ * its way (sent before a restart), this waits on it instead of sending a second one.
+ */
+async function sendAndWait(deps: DemoDeps, to: Address, data: Hex, gas: bigint, purpose: string) {
+  const timeout = deps.finalTimeoutMs ?? 60_000;
+  const pending = await deps.store.pendingRelayerTx(purpose);
+  if (pending) {
+    const hash = pending.hash as Hex;
+    return finalOf(deps, hash, deps.finality.waitFinal(hash, timeout), purpose);
+  }
+  const signed = await deps.pool.sign({ to, data, gas }, { purpose });
+  const waiting = deps.finality.waitFinal(signed.hash, timeout);
   deps.pool.enqueue(signed);
-  return finalOf(deps, signed.hash, waiting, what);
+  return finalOf(deps, signed.hash, waiting, purpose);
 }
 
 /**
@@ -216,7 +228,13 @@ export function createDemoAccount(deps: DemoDeps, key: { qx: Hex; qy: Hex }) {
     }
 
     if (!(await deps.chain.hasCode(account)))
-      await sendAndWait(deps, deps.factory, create, GAS_LIMITS.createAccount, 'createAccount');
+      await sendAndWait(
+        deps,
+        deps.factory,
+        create,
+        GAS_LIMITS.createAccount,
+        `demo ${account} createAccount`,
+      );
     const balance = await deps.chain.usdcBalance(account);
     if (balance < DEMO_FUNDING) {
       const hash = await deps.funder.sendUsdc(account, DEMO_FUNDING - balance);
@@ -276,7 +294,13 @@ export function setUpDemoAccount(deps: DemoDeps, account: Address, assertions: u
             action: index,
             contract: refusal,
           });
-        await sendAndWait(deps, account, data, SETUP_GAS[index], `setup action ${String(index)}`);
+        await sendAndWait(
+          deps,
+          account,
+          data,
+          SETUP_GAS[index],
+          `demo ${account} ${SETUP_ACTIONS[index]}`,
+        );
       }
     } catch (e) {
       await deps.store.setDemoStatus(account, 'awaiting_passkey');

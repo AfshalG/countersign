@@ -180,11 +180,16 @@ export class RelayerPool {
   }
 
   /**
-   * Signs a transaction with the next nonce of the least-loaded wallet that can pay for it. With
-   * `requestId`, the signed transaction is stored on that request in the same database transaction
-   * as the nonce. Throws NoRelayerFunds when no wallet can pay; the request stays released.
+   * Signs a transaction with the next nonce of the least-loaded wallet that can pay for it. The
+   * signed transaction is stored in the same database transaction as the nonce: on its payment
+   * request, or for any other transaction in relayer_txs with its purpose, so a restart can send
+   * it again and no nonce is left unsent. Throws NoRelayerFunds when no wallet can pay.
    */
-  async sign(tx: { to: Address; data: Hex; gas: bigint }, requestId?: string): Promise<Signed> {
+  async sign(
+    tx: { to: Address; data: Hex; gas: bigint },
+    /** A payment's request id, or the purpose of another transaction (stored for recovery). */
+    attach?: string | { purpose: string },
+  ): Promise<Signed> {
     const { maxFeePerGas, maxPriorityFeePerGas } = await this.fees();
     const cost = tx.gas * maxFeePerGas;
     // Picked and reserved with no await in between, so concurrent signs cannot overcommit a wallet.
@@ -209,7 +214,7 @@ export class RelayerPool {
           });
           return { raw, hash: keccak256(raw) };
         },
-        requestId,
+        attach,
       );
       return {
         relayer: lane.account.address,

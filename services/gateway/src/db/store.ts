@@ -12,6 +12,7 @@ import {
   demoAccounts,
   orders,
   paymentEvents,
+  relayerTxs,
   paymentRequests,
   proposals,
   runs,
@@ -19,6 +20,7 @@ import {
   type DemoAccountRow,
   type DemoStatus,
   type OrderRow,
+  type RelayerTxRow,
   type PaymentRequestRow,
   type ProposalRow,
 } from './schema.js';
@@ -329,8 +331,10 @@ export class Store {
     address: Address,
     chainNonce: number,
     sign: (nonce: number) => Promise<T>,
-    requestId?: string,
+    /** A payment's request id, or the purpose of a transaction that is not a payment. */
+    attach?: string | { purpose: string },
   ): Promise<T & { nonce: number }> {
+    const requestId = typeof attach === 'string' ? attach : undefined;
     return this.db.transaction(async (tx) => {
       const result = await tx.execute<{ nonce: number }>(sql`
         insert into relayer_nonces (address, next_nonce) values (${address.toLowerCase()}, ${chainNonce + 1})
@@ -360,6 +364,14 @@ export class Store {
         if (attached.length === 0)
           throw new Error(`request ${requestId} is no longer waiting to be sent`);
       }
+      if (typeof attach === 'object')
+        await tx.insert(relayerTxs).values({
+          hash: signed.hash,
+          relayer: address,
+          nonce: row.nonce,
+          raw: signed.raw,
+          purpose: attach.purpose,
+        });
       return { ...signed, nonce: row.nonce };
     });
   }
@@ -377,6 +389,43 @@ export class Store {
     if (!row) throw new Error(`no nonce reserved for ${address}`);
     // pg returns int4 as a JS number; next_nonce is int4.
     return row.nonce;
+  }
+
+  // ---------- relayer transactions that are not payments ----------
+
+  async pendingRelayerTxs(): Promise<RelayerTxRow[]> {
+    return this.db
+      .select()
+      .from(relayerTxs)
+      .where(isNull(relayerTxs.finalAt))
+      .orderBy(asc(relayerTxs.createdAt));
+  }
+
+  /** The latest transaction for this purpose not yet final, if any. */
+  async pendingRelayerTx(purpose: string): Promise<RelayerTxRow | undefined> {
+    const [row] = await this.db
+      .select()
+      .from(relayerTxs)
+      .where(and(eq(relayerTxs.purpose, purpose), isNull(relayerTxs.finalAt)))
+      .orderBy(sql`${relayerTxs.createdAt} desc`)
+      .limit(1);
+    return row;
+  }
+
+  /** Those of these hashes that are relayer transactions still waiting to be final. */
+  async pendingRelayerTxsByHash(hashes: string[]): Promise<RelayerTxRow[]> {
+    if (hashes.length === 0) return [];
+    return this.db
+      .select()
+      .from(relayerTxs)
+      .where(and(inArray(sql`lower(${relayerTxs.hash})`, hashes), isNull(relayerTxs.finalAt)));
+  }
+
+  async markRelayerTxFinal(hash: string, status: 'success' | 'reverted'): Promise<void> {
+    await this.db
+      .update(relayerTxs)
+      .set({ finalAt: new Date(), status })
+      .where(and(eq(relayerTxs.hash, hash), isNull(relayerTxs.finalAt)));
   }
 
   // ---------- judge mode's demo accounts (Slice 9 part 4) ----------

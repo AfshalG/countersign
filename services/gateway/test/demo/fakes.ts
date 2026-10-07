@@ -65,7 +65,18 @@ export function demoDeps(store: Store) {
     store,
     chain,
     pool: {
-      sign: async (tx) => {
+      sign: async (tx, attach) => {
+        if (typeof attach === 'object')
+          await store.signWithNextNonce(
+            AGENT,
+            n,
+            (nonce) =>
+              Promise.resolve({
+                raw: '0x02',
+                hash: keccak256(toHex(`tx ${String(nonce)} ${attach.purpose}`)),
+              }),
+            attach,
+          );
         n++;
         sent.push(tx);
         if (tx.to === FACTORY) {
@@ -80,7 +91,13 @@ export function demoDeps(store: Store) {
       },
       enqueue: () => undefined,
     },
-    finality: { waitFinal: () => Promise.resolve({ status: 'success', blockNumber: 1_001 }) },
+    // As the real tracker does: the transaction is final, and no longer pending.
+    finality: {
+      waitFinal: async (hash) => {
+        await store.markRelayerTxFinal(hash, 'success');
+        return { status: 'success', blockNumber: 1_001 };
+      },
+    },
     funder: {
       sendUsdc: (to, amount) => {
         funded.push({ to, amount });

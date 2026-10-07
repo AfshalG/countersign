@@ -133,4 +133,29 @@ describe('end to end, against a small fake Monad', () => {
     expect(monad.paid.size).toBe(200);
     expect([...monad.paid.values()].every((n) => n === 1)).toBe(true);
   }, 60_000);
+
+  it('a transaction that is not a payment, signed just before a crash, is sent after the restart: no relayer is left stuck behind its nonce', async () => {
+    monad.start(20);
+    const first = await startGateway();
+    // Judge-mode setup reserves a relayer nonce for every relayer; the process dies before sending.
+    const setup: Hex[] = [];
+    for (let i = 0; i < relayerKeys.length; i++) {
+      const signed = await first.pool.sign(
+        { to: ACCOUNT, data: '0x12345678', gas: 100_000n },
+        { purpose: `demo setup ${String(i)}` },
+      );
+      setup.push(signed.hash);
+    }
+    first.workers.stop();
+    first.pool.stop();
+    monad.onHead = () => undefined;
+    expect(await store.pendingRelayerTxs()).toHaveLength(relayerKeys.length);
+
+    await startGateway(); // recovers from the database alone
+    const ids = await submitRun(40); // enough to give every relayer work
+    await waitFor(async () => (await statuses(ids)).every((s) => s === 'settled'), 30_000);
+    for (const hash of setup)
+      expect(await monad.finalizedReceipt(hash)).toMatchObject({ status: 'success' });
+    await waitFor(async () => (await store.pendingRelayerTxs()).length === 0, 5_000);
+  }, 60_000);
 });

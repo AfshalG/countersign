@@ -11,6 +11,7 @@ This file is kept in step with the code: when a feature lands or an API changes,
 | 7 Oct | First version. Approvals API live; sample approvals below; sign-in for agent apps built (WorkOS, waiting on the account)                                                   |
 | 7 Oct | A hold for an address that is not on file offers only **refuse** (`summary.payOnce: "address_not_on_file"`): the contract never pays a new address, not even for the owner |
 | 7 Oct | Sign-in for agent apps is live: claude.ai, Grok and ChatGPT can connect to the MCP server by signing in (feature 6)                                                        |
+| 7 Oct | **Judge mode is live (feature 7):** any phone's new passkey gets its own testnet account, so your own Face ID works end to end. The "Coming next" list is renumbered       |
 
 ## What the product is, in one paragraph
 
@@ -23,7 +24,7 @@ A business lets an AI agent (Grok, Claude, ChatGPT and dots, Muse) pay its suppl
 - **When two addresses differ, show both in full** and make the different characters easy to see. The attack is a look-alike address, and the short `0x1234…abcd` form hides exactly the part an attacker changes.
 - **Plain words for reasons**: use `reasonText` from the API (or `REASON_TEXT` in `@countersign/shared`), not the code (`address_mismatch`).
 - **Refuse is a safe, equal choice**, never a small grey link. A refusal stops the agent's run.
-- **There is no "pay the new address anyway".** The contract pays only the supplier's address on file, even with the owner's passkey. A changed address can only be refused; paying a new address means changing the supplier's address first (feature 7), which then waits out a waiting period.
+- **There is no "pay the new address anyway".** The contract pays only the supplier's address on file, even with the owner's passkey. A changed address can only be refused; paying a new address means changing the supplier's address first (feature 8), which then waits out a waiting period.
 - **Never put the gateway's service token in the browser.** The approvals routes need no token (the passkey is the authorisation). Routes marked _token_ are called from this app's server (Next.js route handlers) with `GATEWAY_TOKEN` from the environment.
 
 ## Live now: build these
@@ -38,13 +39,13 @@ What the owner sees when a payment is held: what it is, why it was held, the dif
 - After paying: poll `GET /v1/approvals/{id}` until `settled`, then link the transaction: `https://testnet.monadexplorer.com/tx/{txHash}`.
 - Sample (held, the invoice's address is not the one on file: `differences[]` filled, only `refuse` offered): `https://gateway-production-e17a.up.railway.app/v1/approvals/0xcfe2b4280875a01f90ea59c7d5d963b63594b8c0b9629ad4e453e9f20516625c`
 - Sample (held for its amount, address on file: `pay_once` and `refuse` offered): `…/v1/approvals/0xa5a1f6754338df015835ae6697e72a14217ac1b643cdbe8091b63c987baf7a0a`
-- **Testing with your own phone:** the samples belong to the demo account, whose owner passkey is a test key, so your Face ID gets `422 invalid_passkey`. That is correct, and it proves the passkey check works. The full flow with your own phone comes with feature 9 (an account for your passkey).
+- **Testing with your own phone:** the samples belong to the demo account, whose owner passkey is a test key, so your Face ID gets `422 invalid_passkey`. That is correct, and it proves the passkey check works. For your own phone end to end, create your own account (feature 7).
 
 ### 2. A proposed supplier and order (view now, approve soon)
 
 When an agent reads a supplier's quote, it can only _propose_ the supplier and the order; nothing is real until the owner approves.
 
-- `GET /v1/approvals/{id}` with `kind: "proposal"`: `summary` has `supplierName`, `website`, `payTo`, `amountUsdc`, `expiry`. `actions` is empty until feature 7 lands.
+- `GET /v1/approvals/{id}` with `kind: "proposal"`: `summary` has `supplierName`, `website`, `payTo`, `amountUsdc`, `expiry`. `actions` is empty until feature 8 lands.
 - Sample (pending): `…/v1/approvals/0xb4ce00179b493b9590a242fb8fd0309a5fc1140584945a57358414efca8aea1b`
 
 ### 3. A payment's record (the proof)
@@ -75,15 +76,28 @@ For judges and developers: how to connect an agent to Countersign.
 - MCP server: `https://countersign-mcp.vercel.app/api/mcp`. claude.ai, Grok and ChatGPT connect by adding it as a custom connector and signing in (Google, Microsoft, GitHub, Apple or email); Claude Code and Codex can also use a token.
 - SDK and quickstart: `docs/developers/quickstart.md`, `packages/sdk/README.md`. API reference: `https://gateway-production-e17a.up.railway.app/docs`.
 
+### 7. Your own account (judge mode)
+
+Anyone, a judge or you, gets their own testnet account from their phone's passkey and tries the whole flow with their own Face ID. Nothing to install, no wallet, no MON.
+
+1. **Create a passkey** on the phone (`WebAuthnP256.createCredential` from `ox`, as in `spikes/01-passkey`, or `navigator.credentials.create`). It must be **P-256** (`pubKeyCredParams: [{ type: 'public-key', alg: -7 }]`) with **user verification required**; the contract refuses anything else.
+2. `POST /v1/demo/accounts` (no token) with `{ "publicKey": { "x": "0x…", "y": "0x…" } }`, or `{ "publicKey": { "spki": "<base64url>" } }` as `response.getPublicKey()` gives it. About 3 s: the account is created and funded with 0.01 USDC. The same passkey always gets the same account.
+3. The answer has `actions`: three things to sign, in order, each with a `summary` in plain words ("Add Kalibre Studio as a supplier, paid only at 0x90f9…", "Open an order with Kalibre Studio for 0.005 USDC") and the `challenge` to sign. That is three Face ID prompts; show each summary as you ask.
+4. `POST /v1/demo/accounts/{account}/setup` with `{ "assertions": [a1, a2, a3] }`, each in the same shape as for approvals. About 3.5 s; the answer has `status: "ready"` and the `order`.
+5. `GET /v1/demo/accounts/{account}` shows where it is at any time (`awaiting_passkey`, `setting_up`, `ready`).
+
+- Errors: `400 invalid_public_key` or `malformed_assertion`, `404`, `409 not_created` or `contract_refuses`, `422 challenge_mismatch` (signed in the wrong order) or `invalid_passkey`, `429 demo_limit` (10 new accounts a day).
+- Say on screen that demo accounts have **no waiting period** for new suppliers, so they can pay at once; real accounts wait 48 hours.
+- Next (lands here soon): buttons that have the demo agent pay an invoice into _your_ account (a clean one, a changed address, an amount over the order), so your own Face ID decides the holds.
+
 ## Coming next: design now, the API lands here
 
-| #   | Feature                      | What the screen does                                                                                                         | API (when it lands)                                       |
-| --- | ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------- |
-| 7   | Approve a proposal           | Approve a proposed supplier and order: two passkey signatures in a row (add the supplier, then fund the order)               | `actions.approve` on the proposal's approval              |
-| 8   | Pause and unpause            | The stop button: stop all payments from the account at once, and start again                                                 | approval-style actions, signed with the passkey           |
-| 9   | Judge mode: your own account | Create a passkey on the phone, get an account with test USDC and a demo order, then try the whole flow with your own Face ID | `POST /v1/demo/account` with the new passkey's public key |
-| 10  | Supplier demo site           | A separate supplier's site (Kalibre Studio) that issues quotes and invoices, clean and doctored, and shows "paid" arriving   | Slice 7                                                   |
-| 11  | Audit record                 | Download a payment's record for an auditor                                                                                   | Slice 18                                                  |
+| #   | Feature            | What the screen does                                                                                                       | API (when it lands)                             |
+| --- | ------------------ | -------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
+| 8   | Approve a proposal | Approve a proposed supplier and order: two passkey signatures in a row (add the supplier, then fund the order)             | `actions.approve` on the proposal's approval    |
+| 9   | Pause and unpause  | The stop button: stop all payments from the account at once, and start again                                               | approval-style actions, signed with the passkey |
+| 10  | Supplier demo site | A separate supplier's site (Kalibre Studio) that issues quotes and invoices, clean and doctored, and shows "paid" arriving | Slice 7                                         |
+| 11  | Audit record       | Download a payment's record for an auditor                                                                                 | Slice 18                                        |
 
 ## Where to look in the repo
 

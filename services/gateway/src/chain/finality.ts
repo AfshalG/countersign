@@ -146,6 +146,13 @@ export class FinalityTracker {
     if (receipts.length === 0) return;
 
     const byHash = new Map(receipts.map((r) => [r.transactionHash.toLowerCase(), r]));
+    // Relayer transactions that are not payments: final now, whoever is (or is not) waiting.
+    for (const tx of await this.deps.store.pendingRelayerTxsByHash([...byHash.keys()])) {
+      const receipt = byHash.get(tx.hash.toLowerCase());
+      if (!receipt) continue;
+      await this.deps.store.markRelayerTxFinal(tx.hash, receipt.status);
+      this.deps.pool.included(receipt.transactionHash);
+    }
     for (const [key, done] of [...this.waiters]) {
       const receipt = byHash.get(key);
       if (!receipt) continue;

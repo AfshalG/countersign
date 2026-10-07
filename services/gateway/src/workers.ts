@@ -102,6 +102,22 @@ export class Workers {
       });
       resent++;
     }
+    // The same for relayer transactions that are not payments (judge-mode setup).
+    for (const tx of await this.o.store.pendingRelayerTxs()) {
+      const receipt = await this.o.chain.finalizedReceipt(tx.hash as Hex);
+      if (receipt) {
+        await this.o.store.markRelayerTxFinal(tx.hash, receipt.status);
+        this.o.pool.included(tx.hash as Hex);
+        continue;
+      }
+      this.o.pool.adopt({
+        relayer: tx.relayer as Address,
+        nonce: tx.nonce,
+        raw: tx.raw as Hex,
+        hash: tx.hash as Hex,
+      });
+      resent++;
+    }
     return { settled, resent };
   }
 
