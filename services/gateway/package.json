@@ -14,7 +14,8 @@
     "top-up": "tsx scripts/top-up.ts",
     "fund-demo-wallet": "tsx scripts/fund-demo-wallet.ts",
     "judge-smoke": "tsx scripts/judge-smoke.ts",
-    "proposal-smoke": "tsx scripts/proposal-smoke.ts"
+    "proposal-smoke": "tsx scripts/proposal-smoke.ts",
+    "pause-smoke": "tsx scripts/pause-smoke.ts"
   },
   "dependencies": {
     "@countersign/chain": "workspace:*",

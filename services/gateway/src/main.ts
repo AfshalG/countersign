@@ -109,8 +109,8 @@ const demo = judge && {
   agentPrivateKey: judge.agentKey,
 };
 
-// Approving proposed suppliers and orders with the passkey (Slice 9 part 2).
-const proposals = {
+// The owner's passkey actions: approving proposals (Slice 9 part 2) and the stop button (part 3).
+const owner = {
   store,
   chain: monad,
   pool,
@@ -121,7 +121,8 @@ const proposals = {
 
 const app = createApp({
   ...(demo ? { demo } : {}),
-  proposals,
+  proposals: owner,
+  pause: owner,
   store,
   chain: monad,
   checker,

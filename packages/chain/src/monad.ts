@@ -55,4 +55,7 @@ export const GAS_LIMITS = {
   setPolicy: 166_000n,
   setSupplier: 114_000n,
   approveOrder: 320_000n,
+  // The stop button (Slice 9 part 3): 88,185 and 71,664 gas in Slice 5's broadcast.
+  pause: 96_000n,
+  unpause: 80_000n,
 } as const;

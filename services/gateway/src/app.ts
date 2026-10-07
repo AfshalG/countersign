@@ -17,6 +17,8 @@ import { payOnce, refuseHeld, registerApprovalRoutes } from './api/approvals.js'
 import { registerDemoRoutes } from './api/demo.js';
 import type { DemoDeps } from './demo/accounts.js';
 import type { ProposalDeps } from './owner/proposals.js';
+import type { PauseDeps } from './owner/pause.js';
+import { registerOwnerRoutes } from './api/owner.js';
 import type { PaymentRequestRow } from './db/schema.js';
 import type { StatusChange, Store } from './db/store.js';
 import { requestId, runId } from './ids.js';
@@ -53,6 +55,8 @@ export type AppDeps = {
   demo?: DemoDeps;
   /** Approving proposals with the passkey (Slice 9 part 2); without it they show nothing to sign. */
   proposals?: ProposalDeps;
+  /** The stop button (Slice 9 part 3); without it its routes do not exist. */
+  pause?: PauseDeps;
 };
 
 // ---------- views ----------
@@ -303,13 +307,14 @@ export function createApp(deps: AppDeps) {
   });
   app.use('/v1/approvals/*', browserCors);
   if (deps.demo) app.use('/v1/demo/*', browserCors);
+  if (deps.pause) app.use('/v1/owner/*', browserCors);
   const requireToken = bearerAuth({
     token: deps.token,
     noAuthenticationHeader: { message: { error: 'unauthorized' } },
     invalidAuthenticationHeader: { message: { error: 'unauthorized' } },
     invalidToken: { message: { error: 'unauthorized' } },
   });
-  app.use('/v1/*', except(['/v1/approvals/*', '/v1/demo/*'], requireToken));
+  app.use('/v1/*', except(['/v1/approvals/*', '/v1/demo/*', '/v1/owner/*'], requireToken));
 
   app.openapi(submitPayment, async (c) => {
     const body = c.req.valid('json');
@@ -531,6 +536,7 @@ export function createApp(deps: AppDeps) {
     ...(deps.proposals ? { proposals: deps.proposals } : {}),
   });
   if (deps.demo) registerDemoRoutes(app, deps.demo, { token: deps.token, publicUrl });
+  if (deps.pause) registerOwnerRoutes(app, deps.pause);
 
   // A page a person can open from an agent's message; public, like the link in the message.
   app.get('/p/:id', async (c) => {

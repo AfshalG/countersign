@@ -26,6 +26,7 @@ import { Pacer } from '../relay/pace.js';
 import type { Payment } from '../payment.js';
 import type { DemoChain } from '../demo/accounts.js';
 import type { ProposalChain } from '../owner/proposals.js';
+import type { PauseChain } from '../owner/pause.js';
 
 type Endpoint = { url: string; sendsPerSecond: number; readsPerSecond: number };
 
@@ -48,7 +49,9 @@ const ORDER_EVENTS: Hex[] = (['OrderApproved', 'OrderClosed'] as const).map(
  * 20/s; Spike 3), and retried on rate limits and network errors. Contract refusals come back as
  * JSON-RPC error code 3 with the named error's selector as data, which decodeRefusal reads.
  */
-export class MonadClient implements Chain, Sender, Receipts, LogSource, DemoChain, ProposalChain {
+export class MonadClient
+  implements Chain, Sender, Receipts, LogSource, DemoChain, ProposalChain, PauseChain
+{
   private readonly reads: Pacer;
   private readonly started = Date.now();
   private socketOpen = false;
@@ -162,6 +165,14 @@ export class MonadClient implements Chain, Sender, Receipts, LogSource, DemoChai
     });
     if (/^0x0{40}$/i.test(s.payTo)) return null; // never set
     return { payTo: getAddress(s.payTo), active: s.active, activeAfter: Number(s.activeAfter) };
+  }
+
+  async paused(account: Address): Promise<boolean> {
+    const out = await this.call(
+      account,
+      encodeFunctionData({ abi: countersignAccountAbi, functionName: 'paused' }),
+    );
+    return decodeFunctionResult({ abi: countersignAccountAbi, functionName: 'paused', data: out });
   }
 
   async effectiveWaitingPeriod(account: Address): Promise<number> {

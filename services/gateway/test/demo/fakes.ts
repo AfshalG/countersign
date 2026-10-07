@@ -28,6 +28,11 @@ export class FakeDemoChain implements DemoChain {
   /** Each account's owner passkey. */
   ownerKeys = new Map<string, { qx: Hex; qy: Hex }>();
   waitingPeriod = 0;
+  /** Accounts the owner has paused (lower case). */
+  pausedAccounts = new Set<string>();
+  paused(account: Address) {
+    return Promise.resolve(this.pausedAccounts.has(account.toLowerCase()));
+  }
   /** An error name every dry run of an account call returns (e.g. InsufficientBalance). */
   accountRefusal: string | undefined;
   ownerKeyValid = true;
@@ -107,6 +112,8 @@ export function demoDeps(store: Store) {
           const key = tx.to.toLowerCase();
           chain.nonces.set(key, (chain.nonces.get(key) ?? 0n) + 1n);
           const call = decodeFunctionData({ abi: countersignAccountAbi, data: tx.data });
+          if (call.functionName === 'pause') chain.pausedAccounts.add(key);
+          if (call.functionName === 'unpause') chain.pausedAccounts.delete(key);
           if (call.functionName === 'setSupplier') {
             const [id, payTo, active] = call.args as unknown as [Hex, Address, boolean];
             chain.suppliers.set(`${key}:${id.toLowerCase()}`, { payTo, active, activeAfter: 0 });
