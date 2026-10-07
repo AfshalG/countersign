@@ -29,4 +29,4 @@ export {
   type Refusal,
 } from './payment-state.js';
 export { USDC_DECIMALS, formatUsdc, usdc } from './amounts.js';
-export { invoiceHash, normalizeInvoiceNumber, supplierId } from './invoice.js';
+export { invoiceHash, normalizeInvoiceNumber, supplierId, supplierSlug } from './invoice.js';

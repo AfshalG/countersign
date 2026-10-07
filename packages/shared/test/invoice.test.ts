@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import vectors from './fixtures/invoice-ids.json' with { type: 'json' };
-import { invoiceHash, normalizeInvoiceNumber, supplierId } from '../src/invoice.js';
+import { invoiceHash, normalizeInvoiceNumber, supplierId, supplierSlug } from '../src/invoice.js';
 
 describe('invoice identity', () => {
   it('names a supplier by the keccak256 of its slug', () => {
@@ -22,5 +22,26 @@ describe('invoice identity', () => {
   it('refuses an empty or overlong invoice number', () => {
     expect(() => normalizeInvoiceNumber('   ')).toThrow(/empty/);
     expect(() => normalizeInvoiceNumber('X'.repeat(129))).toThrow(/128/);
+  });
+});
+
+describe('supplierSlug (a proposal names its supplier; the account knows it by slug)', () => {
+  it('gives the slug Slice 5 used for the demo supplier', () => {
+    expect(supplierSlug('Kalibre Studio')).toBe('kalibre-studio');
+    expect(supplierId(supplierSlug('Kalibre Studio'))).toBe(supplierId('kalibre-studio'));
+  });
+
+  it('ignores case, spacing and punctuation, so one supplier never becomes two', () => {
+    for (const name of [
+      '  KALIBRE  studio ',
+      'Kalibre-Studio',
+      'Kalibre Studio.',
+      'ｋａｌｉｂｒｅ studio',
+    ])
+      expect(supplierSlug(name)).toBe('kalibre-studio');
+  });
+
+  it('refuses a name with nothing to identify it', () => {
+    expect(() => supplierSlug(' -- ')).toThrow(/name/);
   });
 });
