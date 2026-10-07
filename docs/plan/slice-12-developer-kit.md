@@ -2,7 +2,7 @@
 
 ## Status
 
-**DECIDED (7 Oct 2026); building next (D33 build order: 6 → 12 → 19).** Technical decisions made by Claude (Afshal, 7 Oct: decide technical choices). Owners: Roshan (MCP server), Afshal (gateway); built by Claude.
+**DONE (7 Oct 2026).** Every manual step passed on Monad testnet; the SDK is released (`sdk-v0.1.1`), the MCP server is on Vercel, the gateway's reference is live. Technical decisions made by Claude (Afshal, 7 Oct: decide technical choices). Owners: Roshan (MCP server), Afshal (gateway); built by Claude.
 
 ## Goal
 
@@ -141,13 +141,28 @@ docs/developers/quickstart.md
 3. Claude Code with the hosted MCP server: `list_open_orders`; `check_invoice` (nothing paid); `pay_invoice` for a clean invoice (settled, with the transaction); `pay_invoice` with a look-alike address (held, both addresses, the link opens the status page); the same invoice again (the same result, no new transaction); `pay_invoices` for a run of 3; `payment_status`.
 4. `propose_order` returns a link and nothing changes on chain.
 
-## Results (filled in after the build)
+## Results (7 Oct 2026, Monad testnet)
 
 | Measure | Value |
 |---|---|
-| SDK quickstart: install to settled | |
-| Claude Code: tools called, outcomes | |
-| Payments and MON spent | |
+| SDK quickstart: install to settled | `npm i <release URL>` in an empty folder: 3 s. `examples/pay-an-invoice` against the hosted gateway: one 0.001 USDC invoice settled in 1.9 s (tx `0x0dc68405…54e7`); the status page shows it paid |
+| Claude Code through the hosted MCP server | Headless, 8 turns, 56 s, $0.26: listed both orders and chose the one with the most left; paid a clean invoice; held a look-alike with both addresses and the owner's link, and did not retry around it; recognised the resent invoice; paid a run of 3; read the run's status. After the duplicate fix (below): 6 turns, 29 s, $0.19, and it reported exactly one payment |
+| `propose_order` / `proposeOrder` | A pending proposal with its approval link; the same quote again is the same proposal; nothing on chain changed |
+| Order index | Account registered from block 68,894,518; both testnet orders found from their chain events within a minute (137k blocks in 100-block windows); what is left read live (3,000 and 13,600 base units) |
+| Web API reference | `/openapi.json` (OpenAPI 3.1, 13 paths, validated in tests) and `/docs` on the hosted gateway |
+| Payments and gas | 6 payments, 0.006 USDC (one order 3,000 → 2,000 base units, the other 13,600 → 8,600); the relayers hold about 0.10 MON (about 3 more payments) |
+| Tests | 259 TypeScript tests (SDK unit, the SDK end to end against the gateway, the MCP server through a real MCP client, gateway routes, indexer, OpenAPI) |
+
+### Findings, carried forward
+
+1. **A resent invoice read like a new payment (fixed in `782e03e`).** The tool answered "Paid 0.001 USDC …" for the earlier request, and Claude Code's summary counted five payments where the vault paid four (13,600 to 9,600 base units). `pay()` now returns `duplicate`, and the tool says first that nothing new was paid. → Slice 14 (chat messages), Slice 20 (the benchmark counts payments from the chain, never from the agent's words).
+2. **Turbopack cannot map the workspace packages' `.js` specifiers to their `.ts` sources.** The MCP server builds with webpack (`next build --webpack`, `resolve.extensionAlias`). → Slices 9, 11 and 7 (every Next.js app that imports the SDK or `packages/shared`).
+3. **Vercel's CLI uploads local files.** An allow-list `.vercelignore` at the repo root (package files, packages, services, spikes; never `.env`), checked against the deployment's own file list. → every Vercel app.
+4. **`railway up .` fails ("prefix not found"); `railway up` without the path works.** → Slice 21's deploy notes.
+5. **GitHub refused every push for about 20 minutes with a 500** (even an empty commit) while its status page said operational; work continued in local commits and pushed once it recovered.
+6. **The feed must stop at once on abort.** Some runtimes do not tie the abort to the response body; the SDK now cancels the reader. → Slice 16 (the run board's feed).
+7. **One wording for every reason** (`REASON_TEXT` in `packages/shared`), used by the status page, the SDK and the tools. → Slices 11 and 14.
+8. **More MON is needed** before Slice 16 and the demo (the relayers hold about 0.10).
 
 ## Commit
 
@@ -155,7 +170,7 @@ Gated commits, merged into `development` after CI passes.
 
 ## Next
 
-Slice 19: ERC-8004 agent identity (D33 build order), then Slice 7.
+Slice 19: ERC-8004 agent identity (D33 build order), then Slice 7. Before the demo: another Metropolis team integrates (the quickstart and the release are ready).
 
 ## Decisions (made 7 Oct)
 

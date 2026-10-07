@@ -482,7 +482,7 @@ THE HOLD:
   Slice 11:  Approver app: proposals, holds, feed, the diff           TODO
 
 AGENT DOOR:
-  Slice 12:  Developer kit: TypeScript SDK, MCP server and web API    PLANNED
+  Slice 12:  Developer kit: TypeScript SDK, MCP server and web API    DONE (SDK RELEASED, MCP LIVE)
              (six tools incl. batch runs), quickstart docs (D33)
   Slice 13:  Sign-in from the agent app with one link                 TODO
   Slice 14:  Proposals and holds in the chat (every agent that        TODO
