@@ -43,7 +43,7 @@ countersign/
 └── docs/plan/           Architecture and slice files
 ```
 
-## Stack (MANDATORY: no changes without Afshal's yes)
+## Stack (record every change here with its reason; product scope and spending stay Afshal's call)
 
 | Area | Choice |
 |---|---|
@@ -52,14 +52,15 @@ countersign/
 | Contracts | Solidity with Foundry; OpenZeppelin Contracts 5.x (`WebAuthn`, `P256`, `EIP712`, `Clones`) |
 | Chain client | viem |
 | Services | Hono on Node |
-| Agent door | Official MCP TypeScript SDK |
+| Agent door | MCP SDK v2 (`@modelcontextprotocol/server`) through Vercel's `mcp-handler`; serves the 2026-07-28 protocol and 2025-era clients |
+| Model calls and test agent | Vercel AI SDK (`ai`, `@ai-sdk/mcp`, `@openrouter/ai-sdk-provider`) |
 | Apps | Next.js; the approver app installs as a PWA |
 | Data | Postgres with Drizzle |
 | Validation | zod at every boundary |
 | Guard model | Jev through OpenRouter, pinned `typesafe/jev-1.13`, via `@typesafe-ai/sdk`. Fallback: Claude Sonnet behind the same interface |
 | Attestation | Primus zkTLS |
 | Tests | `forge test` (with fuzzing), Vitest, Playwright |
-| Hosting | Vercel (apps), Railway (services, Postgres) |
+| Hosting | Vercel (apps, MCP server); Railway (gateway, checker and Postgres: always-running processes) |
 
 Pinned in Slice 0 (6 Oct 2026, checked with Context7 and npm): Node 24 LTS, pnpm 12.9.1, TypeScript 6.0.3 (not 7: typescript-eslint supports `<6.1`), Vitest 5.0.3, ESLint 10.12.0 with typescript-eslint 8.71.1, Prettier 3.9.9, zod 4.6.5, Foundry 1.8.5, solc 0.8.37 (`via_ir` on), OpenZeppelin 5.7.0 and forge-std 1.17.0 through Soldeer.
 

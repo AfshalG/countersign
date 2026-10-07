@@ -2,7 +2,7 @@
 
 ## Status
 
-**DRAFT, for Afshal's review (7 Oct 2026).** Owner: Roshan (MCP server, D6); Claude builds while he is busy.
+**DECIDED (7 Oct 2026); ready to build.** Technical decisions made by Claude (Afshal, 7 Oct: decide technical choices); Muse's directory and the accounts are Afshal's. Owner: Roshan (MCP server, D6); Claude builds while he is busy.
 
 ## Goal
 
@@ -18,7 +18,7 @@ Prove that **one** Countersign MCP server, on public HTTPS, can be added to each
 
 - Slices 0 to 2 done. ✅
 - **Accounts:** Grok (grok.com; the plan for custom connectors is unclear: xAI says all users, others say paid), Claude (Pro or above for Claude Code; claude.ai allows one custom connector on Free), Codex (Plus or above, or an API key), ChatGPT developer mode (Business, Enterprise or Edu for full use; Pro may be read-only), Muse (free, US). Afshal's accounts, or a teammate's; each result notes the plan used.
-- **Railway** for hosting (the always-on server pause-and-ask needs): a $5 trial or the $5 Hobby plan.
+- **Vercel** for hosting: the CLI is already logged in to Afshal's account (`afshalgs-projects`).
 - An OpenRouter API key in `.env` (`OPENROUTER_API_KEY`, already listed for the checker), and an xAI API key if the Grok API path is tested (`XAI_API_KEY`).
 
 ## Cross-checked (7 Oct 2026)
@@ -30,7 +30,8 @@ Prove that **one** Countersign MCP server, on public HTTPS, can be added to each
 | Server shape (v2) | `McpServer` + `registerTool(name, {title, description, inputSchema, annotations}, handler)`; `createMcpHandler` is stateless; a sessionful `NodeStreamableHTTPServerTransport({ sessionIdGenerator })` serves 2025-era clients, routed with `isLegacyRequest` | v2 docs, `examples/legacy-routing` |
 | Elicitation | Form: `ctx.mcpReq.elicitInput({mode:'form', …})`; URL: `{mode:'url', url, elicitationId}`. Reaches 2025-era clients **only over a sessionful connection**, not stateless HTTP | v2 elicitation and migration docs |
 | Auth (v2) | `requireBearerAuth({ verifier, … })` (the verifier must throw `OAuthError(InvalidToken)`, anything else is a 500); `mcpAuthMetadataRouter` for protected-resource metadata; a full authorization server only in `server-legacy`, otherwise external | v2 authorization docs |
-| Hosting | Vercel `mcp-handler` v2 is stateless (no pause-and-ask for 2025 clients); 300 s on Hobby. Railway runs persistent containers; HTTP streams up to 15 min with heartbeats, closed after 5 min idle | vercel.com/docs/mcp, docs.railway.com |
+| Hosting | Vercel `mcp-handler` 2.2.0 (peer `@modelcontextprotocol/server` ^2, Next.js 13+) is stateless: it serves 2026-07-28 natively and 2025-era clients statelessly, so 2025-era pause-and-ask is lost; 300 s per call on Hobby; `withMcpAuth` for OAuth later. Railway runs persistent containers; HTTP streams up to 15 min with heartbeats | vercel.com/docs/mcp, npm, docs.railway.com |
+| Vercel AI SDK | `ai` 7.0.129; `@ai-sdk/mcp` 2.0.68: `createMCPClient({ transport: { type: 'http', url, headers, authProvider } })`, `client.tools()` gives AI SDK tools, `onElicitationRequest` handles pause-and-ask; `@openrouter/ai-sdk-provider` 3.1.0 plugs OpenRouter models into `generateText` | Context7 `/websites/ai-sdk_dev`, `/openrouterteam/ai-sdk-provider`, npm |
 | Grok (grok.com) | grok.com/connectors → New Connector → Custom → URL → sign in. OAuth via CIMD (`grok.com/oauth/mcp-client.json`); must be public (no localhost or private IPs). Plan: unclear. Elicitation: not documented | docs.x.ai/grok/connectors |
 | Grok (API, CLI) | xAI Responses API: `{"type":"mcp","server_url",…}` in `tools`, Streamable HTTP or SSE, `authorization` header. Grok CLI: `grok mcp add --transport http <name> <url> --header …` | docs.x.ai/developers/tools/remote-mcp, docs.x.ai/build/features/mcp-servers |
 | Grok Bot | A separate xAI product (cloud computer); connectors from its Marketplace; custom MCP only via third-party reports | docs.x.ai/grok-bot |
@@ -48,7 +49,7 @@ Prove that **one** Countersign MCP server, on public HTTPS, can be added to each
 | Slice | What it changes here |
 |---|---|
 | 0 | Node 24, pnpm 12, TypeScript 6.0.3; settings through the fail-closed loader (`OPENROUTER_API_KEY` and any server token); one CI job per spike; gated commits |
-| 1 | A Vercel function served the phone test page over HTTPS. **Not reused here:** Vercel's MCP handler is stateless, so pause-and-ask could not reach Claude Code or Codex; the server runs on Railway. The approval link it returns points at the Slice 1 style page on HTTPS. Link files (`.vercel/`, Railway's) are never committed |
+| 1 | A Vercel project served the phone test page over HTTPS with secrets as encrypted settings; the same account and pattern host this server. Link files (`.vercel/`) are never committed; after the 6 Oct revert a lost link created a stray project, so `vercel link --project <name>` is run explicitly before every deploy |
 | 2 | Scripts and long-running clients exit explicitly with a time limit (Primus's SDK hung without it; MCP clients can too) |
 | Architecture | The six MCP tools (Slice 12) and their idempotency; "In the agent chat" pause-and-ask with a link to the approval page; D19 (ways in), D30 (one connector, many agents), D31 (WhatsApp is a separate channel, not tested here); D27 (the model can only hold) does not apply to the agent itself, which is untrusted |
 
@@ -60,7 +61,7 @@ Prove that **one** Countersign MCP server, on public HTTPS, can be added to each
 
 The real six tools come in Slice 12.
 
-**2. One server, both protocol versions.** MCP SDK v2 on Railway. New-protocol clients (Claude Code negotiates 2026-07-28) are served directly; 2025-era clients (most others) go through a sessionful Streamable HTTP transport, routed by `isLegacyRequest`, so pause-and-ask can reach them. Public HTTPS on Railway's domain. *Alternative:* Vercel, rejected because its MCP handler is stateless.
+**2. One server, both protocol versions, on Vercel.** `mcp-handler` (built on MCP SDK v2) as a Next.js route. New-protocol clients (Claude Code negotiates 2026-07-28) get pause-and-ask through the new multi-round-trip input, which needs no held connection. 2025-era clients are served statelessly, so Codex loses pause-and-ask; acceptable, because consent never depends on it (point 4). *Alternative:* a sessionful server on Railway, rejected: its only gain is pause-and-ask in Codex, against a second platform, no `withMcpAuth`, and none of Vercel's integrations. Railway stays for the always-running gateway (Slice 6).
 
 **3. Sign-in for the spike.** Two doors on the same tools:
 - **No sign-in** for the web apps (grok.com, claude.ai, ChatGPT): the test tools return demo answers only, touch no money and hold no data, so an open door is acceptable for a spike, with a request-rate limit.
@@ -68,11 +69,11 @@ The real six tools come in Slice 12.
 
 Real sign-in (OAuth with CIMD, falling back to DCR, which every OAuth client here accepts) is Slice 13; the v2 SDK needs an external authorization server or `server-legacy`'s, decided there.
 
-**4. Consent never depends on pause-and-ask.** Only Claude Code and Codex support elicitation today. So every held result carries the approval link in its text, and (from Slice 14) goes to WhatsApp; where elicitation works, the agent also pauses and asks "Approve or refuse?" with the same link. Tools never wait on a person: Codex cuts tools off at 60 s and claude.ai at 240 s. The agent checks back with a status tool.
+**4. Consent never depends on pause-and-ask.** Only Claude Code and Codex support elicitation today, and on Vercel only Claude Code (new protocol) gets it. So every held result carries the approval link in its text, and (from Slice 14) goes to WhatsApp; where pause-and-ask works, the agent also asks "Approve or refuse?" with the same link. Tools never wait on a person: Codex cuts tools off at 60 s and claude.ai at 240 s. The agent checks back with a status tool.
 
 **4b. Tool hints.** `check_payment` is marked `readOnlyHint` (runs without a confirmation prompt in claude.ai and ChatGPT). Future pay tools will be `destructiveHint`, and in Claude Code `requiresUserInteraction`, so the agent app itself also asks.
 
-**5. The OpenRouter test agent.** OpenRouter is not an MCP client, so a small script bridges: it connects to the server with the official MCP client SDK, lists the tools, turns each into an OpenRouter tool definition (sent on every request), runs each model on the same task ("pay these three invoices"; one has a changed address), executes the model's tool calls through MCP, and records what each model called and told the user. Hand-rolled rather than `@openrouter/mcp`, so the bridge is ours to test and reuse. Models, one per family, exact slugs read from OpenRouter's live model list at build time: OpenAI GPT, Anthropic Claude, xAI Grok, Google Gemini, Meta Llama, Qwen. Reused by the benchmark (Slice 20).
+**5. The OpenRouter test agent, on the Vercel AI SDK.** OpenRouter is not an MCP client, so the AI SDK bridges: `createMCPClient` connects to our server and `client.tools()` turns its tools into AI SDK tools; `generateText` runs each model through the OpenRouter provider on the same task ("pay these three invoices"; one has a changed address), with a step limit; the run records which tools each model called and what it told the user. *Alternatives:* a hand-rolled bridge (more code of ours to maintain) or `@openrouter/mcp` (smaller ecosystem); the AI SDK is the most used and also serves the checker's Claude fallback later. Models, one per family, exact slugs read from OpenRouter's live list at build time: OpenAI GPT, Anthropic Claude, xAI Grok, Google Gemini, Meta Llama, Qwen. Reused by the benchmark (Slice 20).
 
 **6. Muse.** Two paths. In chat: ask Muse to build a custom connector for our server (its docs cover APIs and CLIs, not MCP URLs, so this tests whether it manages anyway). The reviewed directory (muse.ai/platform) takes MCP servers but needs business verification, a questionnaire and QA, with a waitlist: a decision for Afshal, not a dependency.
 
@@ -87,11 +88,11 @@ Real sign-in (OAuth with CIMD, falling back to DCR, which every OAuth client her
 ```
 spikes/04-connectors/
 ├── README.md                 per-agent results table, how to connect each one
-├── server/                   the test MCP server (streamable HTTP), deployed on public HTTPS
-│   ├── tools.ts (+ test)     check_payment, connection_info
-│   ├── auth.ts (+ test)      bearer token for the token door; rate limit for the open door
-│   └── server.ts             MCP SDK v2, both protocol versions, on Railway
-├── agent/openrouter.ts       the OpenRouter test agent (MCP client to OpenRouter tool calls)
+├── server/                   Next.js app on Vercel
+│   ├── app/api/mcp/route.ts  mcp-handler (MCP SDK v2): both protocol versions, two doors
+│   ├── lib/tools.ts (+ test) check_payment, connection_info
+│   └── lib/auth.ts (+ test)  bearer token for the token door; rate limit for the open door
+├── agent/openrouter.ts       the test agent: AI SDK createMCPClient + generateText per model
 └── agent/report.ts (+ test)  turns its runs into a per-model table
 ```
 
@@ -102,7 +103,7 @@ spikes/04-connectors/
 2. Inputs that are not a valid supplier, amount or address are refused with a clear error, never a guess.
 3. Auth: on the token door, a missing or wrong token is refused with a 401 and an MCP auth challenge (the verifier throws `OAuthError(InvalidToken)`, never a 500); on the open door, a burst over the rate limit is refused with 429.
 4. Protocol: a 2026-07-28 request and a 2025-era request both list and call the tools.
-5. The OpenRouter bridge: an MCP tool's schema becomes a valid OpenRouter tool definition, and a tool call comes back as an MCP call with the same arguments.
+5. The test agent's wiring: against an in-process test server, `createMCPClient` lists both tools and a scripted model's tool call reaches `check_payment` with the same arguments.
 6. The report: per-model results computed correctly from sample runs.
 
 ## Git workflow
@@ -144,17 +145,17 @@ The commits above, merged into `development` with `--no-ff` once CI passes.
 
 Slice 5: the account and order vaults, using what Spikes 1 to 3 measured.
 
-## Decisions for Afshal in this slice
+## Decisions (made 7 Oct)
 
-| # | Decision | Recommendation |
+| # | Decision | Decided |
 |---|---|---|
-| S4-1 | Hosting | Railway (always-on, so pause-and-ask works); not Vercel |
-| S4-2 | SDK | MCP SDK v2, serving both the new and the 2025 protocol |
+| S4-1 | Hosting | **Vercel** (`mcp-handler`): stateless is enough because consent uses the link; only Codex loses pause-and-ask. Railway only for the gateway |
+| S4-2 | SDK | MCP SDK v2 through `mcp-handler`, serving both protocol versions; the **Vercel AI SDK** for the test agent |
 | S4-3 | Sign-in for the spike | No sign-in for the web apps (demo tools only), a bearer token for the command-line tools; OAuth in Slice 13 |
 | S4-4 | Consent | Always the approval link (and WhatsApp from Slice 14); pause-and-ask only as a bonus where supported |
 | S4-5 | OpenRouter models | One per family: GPT, Claude, Grok, Gemini, Llama, Qwen |
-| S4-6 | Muse's directory | Optional: apply only if you want Muse listed (business verification, waitlist) |
-| S4-7 | Whose accounts | Yours, unless a teammate already pays for one; each result records the plan used |
+| S4-6 | Muse's directory | **Afshal's call** (it needs business verification under his name): not applied for now; the spike uses Muse's in-chat connector |
+| S4-7 | Whose accounts | **Afshal's** (or a teammate's); each result records the plan used |
 
 ---
 
