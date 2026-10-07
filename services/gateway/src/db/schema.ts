@@ -155,7 +155,25 @@ export const proposals = pgTable('proposals', {
   decidedAt: at('decided_at'),
 });
 
+/**
+ * Judge mode (Slice 9 part 4): an account created for a new passkey. `plan` fixes the three setup
+ * actions its passkey signs (src/demo/plan.ts), so the challenges shown are the ones checked.
+ */
+export const DEMO_STATUSES = ['creating', 'awaiting_passkey', 'setting_up', 'ready'] as const;
+export type DemoStatus = (typeof DEMO_STATUSES)[number];
+
+export const demoAccounts = pgTable('demo_accounts', {
+  account: text('account').primaryKey(),
+  qx: text('qx').notNull(),
+  qy: text('qy').notNull(),
+  plan: jsonb('plan').notNull(),
+  status: text('status').$type<DemoStatus>().notNull(),
+  createdAt: at('created_at').notNull().defaultNow(),
+  readyAt: at('ready_at'),
+});
+
 export type PaymentRequestRow = typeof paymentRequests.$inferSelect;
 export type AccountRow = typeof accounts.$inferSelect;
 export type OrderRow = typeof orders.$inferSelect;
 export type ProposalRow = typeof proposals.$inferSelect;
+export type DemoAccountRow = typeof demoAccounts.$inferSelect;

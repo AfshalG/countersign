@@ -48,8 +48,36 @@ export class FinalityTracker {
   private lastProcessed: number | undefined;
   private queue: Promise<void> = Promise.resolve();
   private poller: ReturnType<typeof setInterval> | undefined;
+  /** Transactions that are not payments (judge-mode setup), by lower-case hash. */
+  private readonly waiters = new Map<
+    string,
+    (result: { status: 'success' | 'reverted'; blockNumber: number }) => void
+  >();
 
   constructor(private readonly deps: FinalityDeps) {}
+
+  /**
+   * Resolves when the transaction is in a finalized block, and clears it from its relayer's lane,
+   * as settling does for payments. On timeout it rejects but the transaction is not forgotten: its
+   * lane keeps re-sending it, and a later call can wait again.
+   */
+  waitFinal(
+    hash: Hex,
+    timeoutMs: number,
+  ): Promise<{ status: 'success' | 'reverted'; blockNumber: number }> {
+    const key = hash.toLowerCase();
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.waiters.delete(key);
+        reject(new Error(`transaction ${hash} not final after ${String(timeoutMs)} ms`));
+      }, timeoutMs);
+      this.waiters.set(key, (result) => {
+        clearTimeout(timer);
+        this.waiters.delete(key);
+        resolve(result);
+      });
+    });
+  }
 
   async onHead(head: Head): Promise<void> {
     this.stages.observe(head.number, head.blockId, head.commitState, head.at);
@@ -118,6 +146,12 @@ export class FinalityTracker {
     if (receipts.length === 0) return;
 
     const byHash = new Map(receipts.map((r) => [r.transactionHash.toLowerCase(), r]));
+    for (const [key, done] of [...this.waiters]) {
+      const receipt = byHash.get(key);
+      if (!receipt) continue;
+      this.deps.pool.included(receipt.transactionHash);
+      done({ status: receipt.status, blockNumber });
+    }
     const ours = await this.deps.store.settlingByTx([...byHash.keys()]);
     const stages = this.stages.stagesOf(blockNumber);
     const time = (ms: number | undefined) => (ms === undefined ? undefined : new Date(ms));
