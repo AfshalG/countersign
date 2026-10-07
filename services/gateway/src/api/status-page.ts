@@ -103,7 +103,7 @@ export function paymentPage(
       : '',
     agent
       ? row(
-          'Paid by agent',
+          r.status === 'settled' ? 'Paid by agent' : 'Sent by agent',
           agent.agentId === null
             ? `<code>${escape(agent.address)}</code>`
             : `#${escape(agent.agentId)} in Monad's ERC-8004 Identity Registry (its wallet <code>${escape(agent.address)}</code> signed this payment)`,
