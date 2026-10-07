@@ -2,7 +2,7 @@
 
 ## Status
 
-**BUILDING (7 Oct 2026).** Part 1 (the approvals API: a held payment paid once or refused with the owner's passkey) is being built first, because Sophie's approver app (Slice 11) needs it (D35). Technical decisions made by Claude (Afshal, 7 Oct: decide technical choices). Owners: Afshal (gateway, contracts), Sophie (the screens, Slice 11).
+**DONE (7 Oct 2026).** All four parts built and run on Monad testnet: pay once or refuse a hold; approve or refuse a proposed supplier and order; pause and unpause; an account for a new passkey (judge mode) with demo invoices. Technical decisions made by Claude (Afshal, 7 Oct: decide technical choices). Owners: Afshal (gateway, contracts), Sophie (the screens, Slice 11).
 
 ## Goal
 
@@ -36,7 +36,7 @@ Everything the owner does, done with the passkey on their phone and enforced by 
 
 **Part 2: approving a proposal on chain (BUILT and run on testnet 7 Oct).** The view of a pending proposal offers `approve` (two signatures: `setSupplier`, then `approveOrder`, at consecutive nonces) and `refuse`. The gateway sends both transactions through the relayers, waits for Finalized, and marks the proposal approved. The account must hold the order's USDC.
 
-**Part 3: pause and unpause** from the app, the stop button (D23).
+**Part 3: pause and unpause** from the app, the stop button (D23). Built 7 Oct: `GET`/`POST /v1/owner/{account}` (no token, any origin), the one action that changes the state with a ten-minute deadline sent back with the assertion; checked, dry-run, sent crash-safe, final before answering.
 
 **Part 4: an account for a new passkey (judge mode, D35), BUILT and run on testnet 7 Oct.** Corrected 7 Oct: the gateway cannot open the demo order itself; only the account's passkey can (money rule 8), so the new passkey signs three setup actions. This part comes before 2 and 3 because it lets Sophie's phone (and a judge's) run the whole flow with their own Face ID.
 1. `POST /v1/demo/accounts` with the new passkey's public key (as `navigator.credentials.create` gives it, or `{ x, y }`): the gateway checks it is a valid P256 key, creates the account through a relayer (`createAccount`, waiting period 0, stated on screen), sends it 0.01 test USDC from the funding wallet, registers it for indexing, and returns three setup actions with their challenges: `setPolicy` (nonce 0: the hosted demo agent's key, the gateway's checker key, caps 0.005 and 0.002 USDC, 30 days), `setSupplier` (nonce 1: Kalibre Studio at its Primus-proven address), `approveOrder` (nonce 2: 0.005 USDC, 30 days).
@@ -117,6 +117,18 @@ Provisioned: a separate funding wallet (`0x99c1…16Bb`, 0.5 MON and 2 USDC, abo
 
 Design notes: the supplier's on-chain id comes from its name's slug (`supplierSlug`, so "Kalibre Studio" is Slice 5's `kalibre-studio` and a proposal never makes one supplier into two); the order's hash is the quote the agent read; a changed address is shown as a difference and approving it changes the address for every order (and the waiting period applies); only refuse is offered when the account cannot fund the order.
 
+## Results, part 3 (7 Oct 2026, Monad testnet)
+
+`pnpm --filter @countersign/gateway pause-smoke` against the hosted gateway (`623f679`), a fresh judge account (`0xAF0A374a3F7527b2438Efc412ccfd32DC67ea1e6`):
+
+| Step | Result |
+|---|---|
+| Pause with the passkey | paused in 1.3 s |
+| A clean invoice while paused | held: "The owner has paused the account." (the vault refuses with `AccountPaused`) |
+| Unpause with the passkey | running again in 1.2 s |
+| The held invoice, paid once with the passkey | settled 1.4 s later (tx `0xff6aae043aedaed2caaddc4f50a9ee445610945a969596e0e0b0c15e2aca3600`) |
+| Tests | 344 |
+
 ### Findings, carried forward
 
 1. **Railway did not deploy on push (fixed 7 Oct).** The Railway GitHub app was installed on another GitHub organisation but not on Afshal's personal account, so Railway could build the public repo when asked but could not list its branches or receive pushes. Afshal installed it for `countersign` only; the production environment is now connected to `development` (auto deploy on push) with **Wait for CI** on, so a merge deploys only after GitHub Actions pass. Switching production to `main` later is one setting. Verified: merge `9556a23` deployed itself after CI and was live about 105 s later. → Slice 21's deploy notes.
@@ -128,5 +140,5 @@ Design notes: the supplier's on-chain id comes from its name's slug (`supplierSl
 
 ## Next
 
-Slice 11 (Sophie): the approver app on these routes, briefed in `apps/approver/FEATURES.md`. Next here: Part 3 (pause and unpause, the stop button).
+Slice 11 (Sophie): the approver app on these routes, briefed in `apps/approver/FEATURES.md`. Slice 9 is done. Next: Slice 19 (ERC-8004 agent identity and the A2A door).
 
