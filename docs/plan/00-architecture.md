@@ -85,7 +85,7 @@ Three things, more so at scale. Each is built for and each gets a published numb
 
 | Need | How Countersign meets it | The number we publish |
 |---|---|---|
-| **Speed** | A matching invoice pays without waiting for a person. The check answers within about 1.5 seconds; the payment is final on Monad about 0.6 seconds later. A run of 200 invoices settles in parallel, because each order is its own vault | Time to final for one payment and for a run of 200 (Slices 3 and 16) |
+| **Speed** | A matching invoice pays without waiting for a person. The check answers within about 1.5 seconds; the payment is final on Monad about 0.6 seconds later. Measured in Spike 3: 200 payments settled in 5.4 s through 8 sending wallets, 0.95 s each from send to final; sending through the public endpoints is most of that | Time to final for one payment and for a run of 200 (Slices 3 and 16) |
 | **No mistakes** | Addresses and amounts are compared by code, not judged by a model. The contract refuses any address not on file. Duplicates are caught. Any doubt is a hold, never a silent payment. Every decision is recorded on chain | Share of doctored invoices caught, and share of clean invoices wrongly held (Slice 20) |
 | **Ease of use** | Setup happens in the chat: the agent proposes, the person signs with Face ID. No seed phrase, no gas token. People are asked only when something differs | Taps per supplier, per order and per matched payment. The last one is zero |
 
@@ -157,14 +157,14 @@ Point 3 is the answer to "agents are everywhere". The demo shows one familiar ag
 | Monad property | What it gives the product | Where it shows in the demo |
 |---|---|---|
 | 600 ms finality | A supplier is paid, for good, while still on the call | Supplier portal flips to "paid" under a second after release |
-| Optimistic parallel execution, 10,000 TPS | Each approved order is its own vault, so payments against different orders touch different data and run side by side | A run of 200 invoices against 200 orders: the clean ones final together, the doctored ones held |
+| Optimistic parallel execution, 10,000 TPS | Each approved order is its own vault, so payments against different orders touch different data, as Monad advises. Spike 3 found one shared account just as fast at 200 payments (Monad absorbs the conflicts), so vaults are kept for isolation, not speed (S3-7) | A run of 200 invoices against 200 orders: the clean ones final together, the doctored ones held |
 | P256 precompile at `0x0100` | Approvers sign with Face ID. No seed phrase, no wallet app | Every approval, and every supplier or order the agent proposes |
 | Low fees | Every decision, including refusals, can be written on chain | The audit record: who decided, on what evidence |
 | Contracts are exempt from the 10 MON reserve | Users never hold MON or think about gas | The relayer pays; the company account holds only USDC |
 
 **Designing for parallel execution.** Monad runs a block's transactions in parallel and re-runs any that touched the same data. The guidance in our Monad notes is to keep each user's state separate and not have every payment write to one shared counter; emit events instead (`04-monad-technical-notes.md` (research workspace)). So:
 
-- **Each approved order is its own vault,** holding the money set aside for it. A payment touches only its vault, the supplier's balance and its own events. If every payment came out of one account, every payment would touch that account's USDC balance and Monad would re-run them one after another.
+- **Each approved order is its own vault,** holding the money set aside for it. A payment touches only its vault, the supplier's balance and its own events. If every payment came out of one account, every payment would touch that account's USDC balance. **Measured (Spike 3, 7 Oct):** at 200 payments that costs no time (finality 592 ms against 576 ms), so the reason for vaults is isolation: one order's money and limits are out of reach of another order's payments, a bug or a misused signature reaches one vault, and a vault payment uses about 4% less gas.
 - **No shared counters.** The account-wide daily limit is dropped; spending is bounded by what is already set aside in open orders. Duplicate invoices across orders are caught by the checker off chain, and each vault refuses an invoice it has already paid.
 - **A pool of relayer wallets,** because one wallet's transactions queue behind each other by nonce.
 - **What still conflicts:** two payments to the same supplier in the same block both change that supplier's USDC balance, so one is re-run. Reading the policy does not conflict unless it changes in the same block.
@@ -181,7 +181,7 @@ A company's inbox gets dozens of invoices at once, several agents may work on it
 | **2. The checker** | About 1.5 s per check, mostly the model; 200 in a row would take minutes | Checks run in parallel under a cap sized to the model provider's rate limit. Code-only checks (supplier, address, amount, duplicate) run first; obvious mismatches are held without waiting for the model (D16) |
 | **3. Several agents at once** | Two agents, or a retry, submit the same invoice | Same order and invoice give the same request id and the same result; each vault refuses an invoice it already paid. Tested with agents firing at once (Spike 3, Slice 16) |
 | **4. Sending to Monad** | One wallet's transactions queue by nonce (a stuck one holds up the rest); the public testnet RPC allows 50 requests a second (25 for estimates and calls); each wallet's in-flight gas is capped at min(10 MON, its balance) | A pool of sending wallets; gas limits hard-coded per operation; each wallet keeps to one endpoint and sends its nonces in order, and wallets are spread across endpoints (Spike 3: out-of-order nonces were lost, not held). Relayers are topped up in one Multicall3 transaction (reserve balance). Measured: 200 payments in 5.4 s through 8 wallets, sending being most of it. D17's private endpoint is reconsidered in Slice 3: free private tiers are slower than the public one |
-| **5. Monad itself** | A transaction whose reads were changed by an earlier one in the block is re-executed before it commits (at most once more, usually cheaply). It costs time, not gas | One vault per order (D13) keeps payments on separate balances. Two payments to the same supplier in one block still conflict. Spike 3 measures how much this matters; Monad itself calls parallel execution an implementation detail |
+| **5. Monad itself** | A transaction whose reads were changed by an earlier one in the block is re-executed before it commits (at most once more, usually cheaply). It costs time, not gas | One vault per order (D13) keeps payments on separate balances. Two payments to the same supplier in one block still conflict. **Spike 3 measured it:** at 200 payments (about 20 a block), one shared account finalized as fast as 200 vaults, so conflicts cost no visible time at this scale; Monad itself calls parallel execution an implementation detail. Vaults stay for isolation (S3-7) |
 | **6. The person** | 15 held payments means 15 prompts, and people stop reading | Batch review: holds grouped by reason, "refuse all duplicates" in one step. One screen-lock signature over a reviewed list is a stretch, because it changes what the contract checks (D18) |
 | **7. Seeing it** | Hundreds of payments a minute and no way to follow them | The payment run board (D20) |
 
@@ -343,7 +343,7 @@ Agent and checker keys together can pay a supplier on file, at its address on fi
 - **A public chain shows payees and amounts.** Order and invoice contents stay off chain; only their hashes are written.
 - **A compromised supplier website defeats the attestation.** It is one signal on the approval sheet, not a guarantee.
 - **The supplier has to accept USDC.** Otherwise the check is advice only, as for bank and card payments.
-- **Money set aside is locked to its order** until the order is closed or expires. That is the price of parallel payments and of a hard ceiling on what an agent can spend.
+- **Money set aside is locked to its order** until the order is closed or expires. That is the price of keeping each order's money separate and of a hard ceiling on what an agent can spend.
 
 ### Where your data goes (D24)
 
@@ -606,7 +606,7 @@ None of these has had an explicit yes, except that Afshal has said parallel exec
 | D10 | Invoice format | Web page and plain text first. PDF once a text extractor has been checked in Slice 10 |
 | D11 | Demo agent | Superseded by D30 (7 Oct): the demo runs in every agent that connects in Spike 4 (Grok, Claude Code, Codex, Muse), with Claude as the floor. (Was: Grok if Spike 4 works, Claude otherwise) |
 | D12 | Model and first users | B2B, sold self-serve. Small teams that use an agent and pay overseas contractors and suppliers. Finance teams are where it goes next |
-| D13 | Parallel payments | One vault per approved order; the account-wide daily limit is dropped. Afshal: "parallel execution is needed" |
+| D13 | Parallel payments | One vault per approved order; the account-wide daily limit is dropped. Afshal: "parallel execution is needed". **Spike 3 (7 Oct):** vaults were not faster than one account at 200 payments; kept for isolation and slightly lower gas (S3-7). Speed comes from Monad's 0.6 s finality and a pool of sending wallets |
 
 ### Added in v3 (6 Oct). Afshal: "up to u" on keeping stablecoins central; the rest follows his points on volume, agents and phones
 
