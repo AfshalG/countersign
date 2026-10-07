@@ -96,6 +96,44 @@ contract PaymentsTest is Test {
         vault.pay("invoice-1", 1_000, sig);
     }
 
+    function test_VaultRefusesASignatureForAnotherInvoice() public {
+        OrderVault vault = openVault(5_000, "order-1");
+        bytes memory sigForInvoice1 = sign(vault.paymentDigest("invoice-1", 1_000));
+        vm.expectRevert(OrderVault.NotTheChecker.selector);
+        vault.pay("invoice-2", 1_000, sigForInvoice1);
+    }
+
+    function test_VaultRefusesASignatureForAnotherChain() public {
+        OrderVault vault = openVault(5_000, "order-1");
+        bytes memory sig = sign(vault.paymentDigest("invoice-1", 1_000));
+        vm.chainId(143); // the same vault address on mainnet must not accept a testnet signature
+        vm.expectRevert(OrderVault.NotTheChecker.selector);
+        vault.pay("invoice-1", 1_000, sig);
+    }
+
+    function test_ImplementationItselfCannotPay() public {
+        OrderVault implementation = OrderVault(factory.implementation());
+        vm.expectRevert();
+        implementation.pay("invoice-1", 1_000, sign(bytes32(uint256(1))));
+    }
+
+    /// Whatever amount the checker signs, a vault never pays more than it was funded with,
+    /// and the supplier receives exactly what was signed or nothing.
+    function testFuzz_VaultNeverMovesMoreThanTheOrderHolds(uint96 funded, uint96 amount) public {
+        funded = uint96(bound(funded, 0, 1_000_000));
+        OrderVault vault = openVault(funded, "order-1");
+        bytes memory sig = sign(vault.paymentDigest("invoice-1", amount));
+        if (amount > funded) {
+            vm.expectRevert(OrderVault.InsufficientFunds.selector);
+            vault.pay("invoice-1", amount, sig);
+            assertEq(usdc.balanceOf(supplier), 0);
+        } else {
+            vault.pay("invoice-1", amount, sig);
+            assertEq(usdc.balanceOf(supplier), amount);
+            assertEq(usdc.balanceOf(address(vault)), funded - amount);
+        }
+    }
+
     function testFuzz_VaultNeverPaysWithoutTheChecker(uint256 key, bytes32 invoice, uint96 amount) public {
         key = bound(key, 1, type(uint128).max);
         vm.assume(vm.addr(key) != checker);
@@ -161,6 +199,46 @@ contract PaymentsTest is Test {
         bytes memory sig = sign(account.paymentDigest(9, "invoice-1", 1_000));
         vm.expectRevert(SharedAccount.UnknownOrder.selector);
         account.pay(9, "invoice-1", 1_000, sig);
+    }
+
+    function test_AccountRefusesAnotherSigner() public {
+        fundAccount(1, 5_000);
+        (, uint256 otherKey) = makeAddrAndKey("not the checker");
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(otherKey, account.paymentDigest(1, "invoice-1", 1_000));
+        vm.expectRevert(SharedAccount.NotTheChecker.selector);
+        account.pay(1, "invoice-1", 1_000, abi.encodePacked(r, s, v));
+    }
+
+    function test_AccountRefusesASignatureForAnotherChain() public {
+        fundAccount(1, 5_000);
+        bytes memory sig = sign(account.paymentDigest(1, "invoice-1", 1_000));
+        vm.chainId(143);
+        vm.expectRevert(SharedAccount.NotTheChecker.selector);
+        account.pay(1, "invoice-1", 1_000, sig);
+    }
+
+    function test_OnlyTheOwnerSetsOrders() public {
+        vm.prank(makeAddr("stranger"));
+        vm.expectRevert(SharedAccount.NotOwner.selector);
+        account.setOrder(1, supplier, 5_000);
+    }
+
+    /// One order can never spend another order's money, even though it all sits in one account.
+    function testFuzz_AccountNeverMovesMoreThanTheOrdersBudget(uint96 budget, uint96 amount) public {
+        budget = uint96(bound(budget, 0, 100_000));
+        fundAccount(1, budget);
+        fundAccount(2, 500_000); // another order's money in the same account
+        bytes memory sig = sign(account.paymentDigest(1, "invoice-1", amount));
+        if (amount > budget) {
+            vm.expectRevert(SharedAccount.InsufficientFunds.selector);
+            account.pay(1, "invoice-1", amount, sig);
+            assertEq(usdc.balanceOf(supplier), 0);
+        } else {
+            account.pay(1, "invoice-1", amount, sig);
+            assertEq(usdc.balanceOf(supplier), amount);
+            assertEq(account.budget(1), budget - amount);
+            assertEq(account.budget(2), 500_000);
+        }
     }
 
     // --- Gas, for the hard-coded limits ---
