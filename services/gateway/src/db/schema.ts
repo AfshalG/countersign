@@ -236,3 +236,66 @@ export const ownerSignatures = pgTable(
 export type OwnerSignatureRow = typeof ownerSignatures.$inferSelect;
 export type RelayerTxRow = typeof relayerTxs.$inferSelect;
 export type AgentRow = typeof agents.$inferSelect;
+
+/**
+ * WhatsApp (Slice 14, D31): a person who connected a WhatsApp number to an account. An owner signs
+ * a one-off challenge with their passkey for a code (`whatsapp_links`), and sends the code to
+ * Countersign's number from WhatsApp: that message is their consent, and it opens WhatsApp's
+ * 24-hour window for free-form messages (`lastInboundAt`). STOP removes them.
+ */
+export const whatsappContacts = pgTable(
+  'whatsapp_contacts',
+  {
+    account: text('account').notNull(),
+    waId: text('wa_id').notNull(),
+    connectedAt: at('connected_at').notNull().defaultNow(),
+    lastInboundAt: at('last_inbound_at').notNull().defaultNow(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.account, t.waId] }),
+    index('whatsapp_contacts_wa_idx').on(t.waId),
+  ],
+);
+
+/** A connect code: issued for an account, usable once an owner has signed for it, then once. */
+export const whatsappLinks = pgTable(
+  'whatsapp_links',
+  {
+    code: text('code').primaryKey(),
+    account: text('account').notNull(),
+    expiresAt: at('expires_at').notNull(),
+    signedAt: at('signed_at'),
+    usedAt: at('used_at'),
+    createdAt: at('created_at').notNull().defaultNow(),
+  },
+  (t) => [index('whatsapp_links_account_idx').on(t.account, t.createdAt)],
+);
+
+/**
+ * One message per decision and person: `subject` is the held payment's or the proposal's id, so
+ * the same hold never messages a person twice. `status` follows WhatsApp's webhooks (sent,
+ * delivered, read, failed); `skipped` records a message not sent, and why.
+ */
+export const whatsappMessages = pgTable(
+  'whatsapp_messages',
+  {
+    subject: text('subject').notNull(),
+    waId: text('wa_id').notNull(),
+    account: text('account').notNull(),
+    kind: text('kind').$type<'held' | 'proposal'>().notNull(),
+    via: text('via').$type<'link' | 'template'>(),
+    messageId: text('message_id'),
+    status: text('status').notNull(),
+    error: text('error'),
+    createdAt: at('created_at').notNull().defaultNow(),
+    updatedAt: at('updated_at').notNull().defaultNow(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.subject, t.waId] }),
+    index('whatsapp_messages_id_idx').on(t.messageId),
+    index('whatsapp_messages_recent_idx').on(t.waId, t.createdAt),
+  ],
+);
+
+export type WhatsappContactRow = typeof whatsappContacts.$inferSelect;
+export type WhatsappMessageRow = typeof whatsappMessages.$inferSelect;

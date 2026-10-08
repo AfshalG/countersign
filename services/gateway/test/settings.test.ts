@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { generatePrivateKey, privateKeyToAddress } from 'viem/accounts';
-import { checkerMode, judgeMode, loadSettings } from '../src/settings.js';
+import { checkerMode, judgeMode, loadSettings, whatsappMode } from '../src/settings.js';
 
 const base = {
   DATABASE_URL: 'postgres://localhost:5432/gateway',
@@ -74,5 +74,43 @@ describe('checker settings (Slice 10)', () => {
     const withoutKey: Partial<typeof base> = { ...base };
     delete withoutKey.TEST_CHECKER_PRIVATE_KEY;
     expect(() => checkerMode(loadSettings(withoutKey))).toThrow(/checker/);
+  });
+});
+
+describe('WhatsApp settings (Slice 14)', () => {
+  const whatsapp = {
+    WHATSAPP_PHONE_NUMBER_ID: '106540352242922',
+    WHATSAPP_ACCESS_TOKEN: 'EAAJB-test-access-token-0123',
+    WHATSAPP_APP_SECRET: 'meta-app-secret-0123456789',
+    WHATSAPP_VERIFY_TOKEN: 'verify-token-0123456789',
+    WHATSAPP_NUMBER: '15550783881',
+  };
+
+  it('is off when none is set, and nothing is sent', () => {
+    expect(whatsappMode(loadSettings(base))).toBeUndefined();
+  });
+
+  it('is on with the five, the template only when named (English unless set)', () => {
+    expect(whatsappMode(loadSettings({ ...base, ...whatsapp }))).toEqual({
+      phoneNumberId: whatsapp.WHATSAPP_PHONE_NUMBER_ID,
+      accessToken: whatsapp.WHATSAPP_ACCESS_TOKEN,
+      appSecret: whatsapp.WHATSAPP_APP_SECRET,
+      verifyToken: whatsapp.WHATSAPP_VERIFY_TOKEN,
+      number: whatsapp.WHATSAPP_NUMBER,
+    });
+    expect(
+      whatsappMode(
+        loadSettings({ ...base, ...whatsapp, WHATSAPP_TEMPLATE: 'countersign_decision' }),
+      )?.template,
+    ).toEqual({ name: 'countersign_decision', language: 'en' });
+  });
+
+  it('refuses to start half-configured, or with a number written with a plus or spaces', () => {
+    const missing: Partial<typeof whatsapp> = { ...whatsapp };
+    delete missing.WHATSAPP_APP_SECRET;
+    expect(() => whatsappMode(loadSettings({ ...base, ...missing }))).toThrow(/together, or none/);
+    expect(() =>
+      loadSettings({ ...base, ...whatsapp, WHATSAPP_NUMBER: '+1 555 078 3881' }),
+    ).toThrow();
   });
 });

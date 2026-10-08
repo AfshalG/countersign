@@ -14,7 +14,10 @@ import { Store } from './db/store.js';
 import { RelayerPool } from './relay/pool.js';
 import { WalletFunder } from './demo/funder.js';
 import { AgentDirectory } from './agents/identity.js';
-import { checkerMode, judgeMode, loadSettings } from './settings.js';
+import { checkerMode, judgeMode, loadSettings, whatsappMode } from './settings.js';
+import { supplierNameOf } from './suppliers.js';
+import { WhatsAppApi } from './notify/whatsapp-api.js';
+import { WhatsAppNotifier } from './notify/whatsapp.js';
 import { Workers } from './workers.js';
 
 const settings = loadSettings();
@@ -138,11 +141,44 @@ console.log(
   }`,
 );
 
+// WhatsApp (Slice 14, D31): held payments and proposals reach the people connected to the account,
+// with the approval link. Sending never holds up a payment: it runs after the change is stored.
+const wa = whatsappMode(settings);
+const whatsapp = wa
+  ? new WhatsAppNotifier({
+      store,
+      api: new WhatsAppApi({ phoneNumberId: wa.phoneNumberId, accessToken: wa.accessToken }),
+      chain: monad,
+      chainId,
+      publicUrl: settings.PUBLIC_URL.replace(/\/$/, ''),
+      number: wa.number,
+      ...(wa.template ? { template: wa.template } : {}),
+      supplierName: (account, vault) => supplierNameOf(store, account, vault),
+    })
+  : undefined;
+if (whatsapp) {
+  const failed = (what: string) => (e: unknown) => {
+    console.error(`whatsapp ${what}: ${e instanceof Error ? e.message : String(e)}`);
+  };
+  store.onChange((change) => {
+    if (change.to === 'held') void whatsapp.held(change.requestId).catch(failed('held'));
+  });
+  store.onProposal((proposal) => {
+    void whatsapp.proposed(proposal).catch(failed('proposal'));
+  });
+}
+console.log(
+  `whatsapp ${wa ? `on (${wa.template ? `template ${wa.template.name}` : 'no template: only within 24 hours'})` : 'off'}`,
+);
+
 const app = createApp({
   agents,
   ...(demo ? { demo } : {}),
   proposals: owner,
   pause: owner,
+  ...(whatsapp && wa
+    ? { whatsapp: { notifier: whatsapp, verifyToken: wa.verifyToken, appSecret: wa.appSecret } }
+    : {}),
   store,
   chain: monad,
   checker,
@@ -165,6 +201,8 @@ const app = createApp({
     starved: pool.starved(),
     // Which checker decides: the service (Slice 10) or the stand-in.
     checker: { kind: checking.kind, signer: checking.address },
+    // WhatsApp (Slice 14): on or off, and the template used outside the 24-hour window.
+    whatsapp: wa ? { template: wa.template?.name ?? null } : null,
   }),
 });
 const server = serve({ fetch: app.fetch, port: settings.PORT }, (info) => {
