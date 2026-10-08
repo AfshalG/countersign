@@ -41,7 +41,7 @@ export function render(d: DemoDocument): string {
   const rows = d.lines
     .map(
       (l) =>
-        `<tr><td>${escape(l.description)}</td><td class="n">${String(l.quantity)}</td><td class="n">${amount(l.totalUsdc)}</td></tr>`,
+        `<tr><td>${escape(l.description)}</td><td class="n">${String(l.quantity)}</td><td class="n">${amount(l.unitUsdc)}</td><td class="n">${amount(l.totalUsdc)}</td></tr>`,
     )
     .join('');
   const pay = d.bank
@@ -56,8 +56,8 @@ export function render(d: DemoDocument): string {
     `<p class="muted small">${escape(d.from.name)} · ${escape(d.from.tagline)}</p>
      <h1>${escape(d.title)}</h1>
      <p class="small">Issued ${escape(d.issued)}${d.due ? ` · Due ${escape(d.due)}` : ''}${d.reference ? `<br>Reference: ${escape(d.reference)}` : ''}</p>
-     <table><thead><tr><th>Item</th><th class="n">Qty</th><th class="n">Amount</th></tr></thead><tbody>${rows}</tbody>
-     <tfoot><tr><th>Total</th><th></th><th class="n">${amount(d.totalUsdc)}</th></tr></tfoot></table>
+     <table><thead><tr><th>Item</th><th class="n">Qty</th><th class="n">Unit price</th><th class="n">Amount</th></tr></thead><tbody>${rows}</tbody>
+     <tfoot><tr><th>Total</th><th></th><th></th><th class="n">${amount(d.totalUsdc)}</th></tr></tfoot></table>
      ${d.notes.map((n) => `<p class="note">${escape(n)}</p>`).join('')}
      ${pay}${hidden}
      <p class="small muted">Questions: ${escape(d.from.email)} · Testnet amounts.</p>
@@ -72,7 +72,10 @@ export function asText(d: DemoDocument): string {
     d.title,
     `Issued ${d.issued}${d.due ? `, due ${d.due}` : ''}`,
     d.reference ? `Reference: ${d.reference}` : '',
-    ...d.lines.map((l) => `${l.description} x${String(l.quantity)}: ${amount(l.totalUsdc)}`),
+    ...d.lines.map(
+      (l) =>
+        `${l.description} x${String(l.quantity)} at ${amount(l.unitUsdc)}: ${amount(l.totalUsdc)}`,
+    ),
     `Total: ${amount(d.totalUsdc)}`,
     ...d.notes,
     d.bank ? `Bank transfer: ${d.bank.name}, IBAN ${d.bank.iban}, BIC ${d.bank.bic}` : '',
