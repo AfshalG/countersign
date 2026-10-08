@@ -76,7 +76,7 @@ const checker: Checker =
     ? new RemoteChecker({
         url: checking.url,
         token: checking.token,
-        facts: (row) => orderFacts({ store, chain: monad }, row),
+        facts: (row) => orderFacts({ store }, row),
       })
     : new TestChecker(checking.key, chainId, (input) => testHold(input.request.document));
 // Suppliers' websites (Slice 15): what a site lists, proven by Primus and recorded on Monad, shown

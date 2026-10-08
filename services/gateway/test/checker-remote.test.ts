@@ -15,7 +15,6 @@ const VAULT: Address = '0x6c033066C05Eb524119c8C830F937C4bbd17E426';
 const KALIBRE: Address = '0x90f9931B748B26763161a8191C178Fe425C25fEc';
 const KALIBRE_ID = supplierId(supplierSlug('Kalibre Studio'));
 const QUOTE = 'Kalibre Studio — Product photography\nQuote Q-1\nTotal: 0.005 USDC';
-const chain = { addressOnFile: () => Promise.resolve(KALIBRE) };
 
 const row = (document: unknown): PaymentRequestRow =>
   ({
@@ -75,7 +74,7 @@ describe('what the gateway tells the checker about the order (Slice 10)', () => 
       document: QUOTE,
     });
     await store.decideProposal(proposal.id, 'approved');
-    expect(await orderFacts({ store, chain }, row(null))).toEqual({
+    expect(await orderFacts({ store }, row(null))).toEqual({
       supplierId: KALIBRE_ID,
       supplierName: 'Kalibre Studio',
       addressOnFile: KALIBRE,
@@ -85,14 +84,14 @@ describe('what the gateway tells the checker about the order (Slice 10)', () => 
 
   it('gives a judge’s demo order its quote, and no quote for an order opened without one', async () => {
     await order(keccak256(stringToHex(DEMO_QUOTE)));
-    expect((await orderFacts({ store, chain }, row(null)))?.quote).toEqual({ text: DEMO_QUOTE });
+    expect((await orderFacts({ store }, row(null)))?.quote).toEqual({ text: DEMO_QUOTE });
     await truncate(database);
     await order(keccak256(stringToHex('demo order')));
-    expect((await orderFacts({ store, chain }, row(null)))?.quote).toBeNull();
+    expect((await orderFacts({ store }, row(null)))?.quote).toBeNull();
   });
 
   it('knows nothing of an order not yet indexed', async () => {
-    expect(await orderFacts({ store, chain }, row(null))).toBeNull();
+    expect(await orderFacts({ store }, row(null))).toBeNull();
   });
 });
 
