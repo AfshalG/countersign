@@ -17,10 +17,21 @@ export type OrderFacts = {
   supplierId: Hex;
   supplierName: string | null;
   addressOnFile: Address;
-  quote: { text: string } | null;
+  /** The quote as the agent read it: a web page as HTML, anything else as text. */
+  quote: { html: string } | { text: string } | null;
 };
 
 const DEMO_QUOTE_HASH = keccak256(stringToHex(DEMO_QUOTE));
+
+/**
+ * A quote stored as a web page is read as one (Slice 16): an agent proposes from the quote's page,
+ * and read as plain text its lines and prices would be lost, so nothing would be compared.
+ */
+function quoteOf(document: string): { html: string } | { text: string } {
+  return /^\s*<(!doctype|html|body|table|div|main)\b/i.test(document)
+    ? { html: document }
+    : { text: document };
+}
 
 /**
  * The order a payment is against, as the checker needs it. The quote is the document the owner
@@ -40,13 +51,15 @@ export async function orderFacts(
   const approved = await deps.store.approvedQuote(row.account, order.orderHash);
   const quote =
     typeof approved?.document === 'string'
-      ? { text: approved.document }
+      ? quoteOf(approved.document)
       : order.orderHash.toLowerCase() === DEMO_QUOTE_HASH
         ? { text: DEMO_QUOTE }
         : null;
   return {
     supplierId: order.supplierId as Hex,
-    supplierName: approved?.supplierName ?? (quote?.text === DEMO_QUOTE ? 'Kalibre Studio' : null),
+    supplierName:
+      approved?.supplierName ??
+      (quote && 'text' in quote && quote.text === DEMO_QUOTE ? 'Kalibre Studio' : null),
     addressOnFile,
     quote,
   };

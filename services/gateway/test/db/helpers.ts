@@ -16,6 +16,6 @@ export async function freshDatabase(): Promise<Database> {
 
 export async function truncate(database: Database): Promise<void> {
   await database.db.execute(
-    sql`truncate payment_events, payment_requests, runs, relayer_nonces, accounts, orders, proposals, demo_accounts, relayer_txs, agents, owner_signatures, whatsapp_contacts, whatsapp_links, whatsapp_messages, api_tokens, website_proofs, supplier_websites restart identity cascade`,
+    sql`truncate payment_events, payment_requests, runs, relayer_nonces, accounts, orders, proposals, demo_accounts, relayer_txs, agents, owner_signatures, whatsapp_contacts, whatsapp_links, whatsapp_messages, api_tokens, website_proofs, supplier_websites, run_requests restart identity cascade`,
   );
 }

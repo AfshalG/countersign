@@ -32,6 +32,7 @@ import {
   relayerTxs,
   paymentRequests,
   proposals,
+  runRequests,
   runs,
   supplierWebsites,
   websiteProofs,
@@ -359,12 +360,24 @@ export class Store {
       );
   }
 
+  /** Every request a run sent, including ones another run sent first (Slice 16). */
   async listRun(runId: string): Promise<PaymentRequestRow[]> {
-    return this.db
-      .select()
-      .from(paymentRequests)
-      .where(eq(paymentRequests.runId, runId))
+    const rows = await this.db
+      .select({ request: paymentRequests })
+      .from(runRequests)
+      .innerJoin(paymentRequests, eq(paymentRequests.id, runRequests.requestId))
+      .where(eq(runRequests.runId, runId))
       .orderBy(asc(paymentRequests.requestedAt));
+    return rows.map((r) => r.request);
+  }
+
+  /** Records the requests a run sent (the same request can be in several runs). */
+  async addToRun(runId: string, requestIds: string[]): Promise<void> {
+    if (requestIds.length === 0) return;
+    await this.db
+      .insert(runRequests)
+      .values(requestIds.map((requestId) => ({ runId, requestId })))
+      .onConflictDoNothing();
   }
 
   async getRun(id: string): Promise<RunRow | undefined> {

@@ -163,6 +163,48 @@ describe('runs over the API', () => {
   });
 });
 
+describe('two agents sending the same invoices at once (Slice 16)', () => {
+  it('each run lists every invoice it sent, though one request pays each invoice once', async () => {
+    const payments = Array.from({ length: 4 }, (_, i) => ({
+      vault: VAULT,
+      payment: {
+        amount: '1000',
+        invoiceHash: keccak256(toHex(`shared ${String(i)} ${String(Math.random())}`)),
+        payTo: SUPPLIER,
+        deadline: 1_791_400_000,
+      },
+      agentSig: AGENT_SIG,
+    }));
+    const send = (list: typeof payments) =>
+      app.request('/v1/runs', {
+        method: 'POST',
+        headers: { authorization: `Bearer ${TOKEN}`, 'content-type': 'application/json' },
+        body: JSON.stringify({ account: ACCOUNT, payments: list }),
+      });
+    // The second agent's two arrive first; the first agent's run of four overlaps them.
+    const b = (await (await send(payments.slice(0, 2))).json()) as { runId: string };
+    const a = (await (await send(payments)).json()) as {
+      runId: string;
+      requests: { id: string }[];
+    };
+    const view = async (id: string) =>
+      (await (
+        await app.request(`/v1/runs/${id}`, { headers: { authorization: `Bearer ${TOKEN}` } })
+      ).json()) as { size: number; requests: { id: string }[]; summary: { size: number } };
+    expect((await view(a.runId)).requests).toHaveLength(4);
+    expect((await view(b.runId)).requests).toHaveLength(2);
+    expect((await view(a.runId)).summary.size).toBe(4);
+    // Still one request per invoice.
+    const shared = (await view(b.runId)).requests.map((r) => r.id).sort();
+    expect(
+      a.requests
+        .map((r) => r.id)
+        .slice(0, 2)
+        .sort(),
+    ).toEqual(shared);
+  });
+});
+
 describe('the run page (public, read-only, until the approver app’s board)', () => {
   it('shows the counts and the holds by reason, each linked to its approval page', async () => {
     const { runId, requests } = (await (await submitRun(TOKEN, ACCOUNT, 3)).json()) as {
