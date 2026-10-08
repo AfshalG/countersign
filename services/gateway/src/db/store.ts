@@ -1,4 +1,18 @@
-import { and, asc, count, eq, gt, gte, inArray, isNotNull, isNull, lt, sql } from 'drizzle-orm';
+import {
+  and,
+  asc,
+  count,
+  desc,
+  eq,
+  gt,
+  gte,
+  inArray,
+  isNotNull,
+  isNull,
+  lt,
+  or,
+  sql,
+} from 'drizzle-orm';
 import type { Address, Hex } from 'viem';
 import {
   canTransition,
@@ -19,6 +33,8 @@ import {
   paymentRequests,
   proposals,
   runs,
+  supplierWebsites,
+  websiteProofs,
   whatsappContacts,
   whatsappLinks,
   whatsappMessages,
@@ -30,7 +46,9 @@ import {
   type OwnerSignatureRow,
   type RelayerTxRow,
   type PaymentRequestRow,
+  type ProofError,
   type ProposalRow,
+  type WebsiteProofRow,
   type WhatsappContactRow,
   type WhatsappMessageRow,
 } from './schema.js';
@@ -613,7 +631,17 @@ export class Store {
 
   /** The same (account, document) is one proposal: the second call returns the first. */
   async createProposal(
-    p: Omit<ProposalRow, 'status' | 'createdAt' | 'decidedAt'>,
+    p: Omit<
+      ProposalRow,
+      | 'status'
+      | 'createdAt'
+      | 'decidedAt'
+      | 'proofStatus'
+      | 'proofUrl'
+      | 'proofSource'
+      | 'proofId'
+      | 'proofError'
+    >,
   ): Promise<{ proposal: ProposalRow; created: boolean }> {
     const inserted = await this.db
       .insert(proposals)
@@ -941,5 +969,104 @@ export class Store {
       .from(apiTokens)
       .where(and(eq(apiTokens.tokenHash, tokenHash), isNull(apiTokens.revokedAt)));
     return row?.account ?? null;
+  }
+
+  // ---------- website proofs (Slice 15) ----------
+
+  async addWebsiteProof(row: {
+    url: string;
+    listed?: string | null;
+    signedAt?: Date | null;
+    proofHash?: string | null;
+    txHash?: string | null;
+    error?: ProofError | null;
+    createdAt: Date;
+  }): Promise<WebsiteProofRow> {
+    const [added] = await this.db.insert(websiteProofs).values(row).returning();
+    if (!added) throw new Error('website proof not stored');
+    return added;
+  }
+
+  /** The newest check of a file URL. */
+  async latestWebsiteProof(url: string): Promise<WebsiteProofRow | undefined> {
+    const [row] = await this.db
+      .select()
+      .from(websiteProofs)
+      .where(eq(websiteProofs.url, url))
+      .orderBy(desc(websiteProofs.createdAt), desc(websiteProofs.id))
+      .limit(1);
+    return row;
+  }
+
+  async websiteProof(id: number): Promise<WebsiteProofRow | undefined> {
+    const [row] = await this.db.select().from(websiteProofs).where(eq(websiteProofs.id, id));
+    return row;
+  }
+
+  /** A proposal's website check has started, on this file. */
+  async startProposalCheck(
+    id: string,
+    check: { url: string; source: 'on_file' | 'proposal' },
+  ): Promise<void> {
+    await this.db
+      .update(proposals)
+      .set({ proofStatus: 'checking', proofUrl: check.url, proofSource: check.source })
+      .where(eq(proposals.id, id));
+  }
+
+  /**
+   * A proposal's website check has ended: its proof, or why there is none. Only the first ending
+   * counts (a late result after a timeout changes nothing), so the challenge stays fixed.
+   */
+  async finishProposalCheck(
+    id: string,
+    result: {
+      proofId?: number;
+      error?: ProofError;
+      url?: string | null;
+      source?: 'on_file' | 'proposal' | null;
+    },
+  ): Promise<boolean> {
+    const updated = await this.db
+      .update(proposals)
+      .set({
+        proofStatus: 'done',
+        proofId: result.proofId ?? null,
+        proofError: result.error ?? null,
+        ...(result.url !== undefined ? { proofUrl: result.url } : {}),
+        ...(result.source !== undefined ? { proofSource: result.source } : {}),
+      })
+      .where(
+        and(
+          eq(proposals.id, id),
+          or(isNull(proposals.proofStatus), eq(proposals.proofStatus, 'checking')),
+        ),
+      )
+      .returning({ id: proposals.id });
+    return updated.length > 0;
+  }
+
+  /** The website a supplier was approved with on this account (S15-4). */
+  async supplierWebsite(account: Address, supplierId: Hex): Promise<string | undefined> {
+    const [row] = await this.db
+      .select({ url: supplierWebsites.url })
+      .from(supplierWebsites)
+      .where(
+        and(
+          eq(supplierWebsites.account, account.toLowerCase()),
+          eq(supplierWebsites.supplierId, supplierId.toLowerCase()),
+        ),
+      );
+    return row?.url;
+  }
+
+  async setSupplierWebsite(account: Address, supplierId: Hex, url: string): Promise<void> {
+    await this.db
+      .insert(supplierWebsites)
+      .values({ account: account.toLowerCase(), supplierId: supplierId.toLowerCase(), url })
+      .onConflictDoUpdate({
+        target: [supplierWebsites.account, supplierWebsites.supplierId],
+        set: { url, updatedAt: new Date() },
+      });
   }
 }

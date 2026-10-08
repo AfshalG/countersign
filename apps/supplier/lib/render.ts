@@ -60,7 +60,7 @@ export function render(d: DemoDocument): string {
      <tfoot><tr><th>Total</th><th></th><th></th><th class="n">${amount(d.totalUsdc)}</th></tr></tfoot></table>
      ${d.notes.map((n) => `<p class="note">${escape(n)}</p>`).join('')}
      ${pay}${hidden}
-     <p class="small muted">Questions: ${escape(d.from.email)} · Testnet amounts.</p>`,
+     <p class="small muted">${d.from.website ? `Website: <a href="${escape(d.from.website)}">${escape(d.from.website)}</a> · ` : ''}Questions: ${escape(d.from.email)} · Testnet amounts.</p>`,
   );
 }
 
@@ -80,6 +80,7 @@ export function asText(d: DemoDocument): string {
     d.bank ? `Bank transfer: ${d.bank.name}, IBAN ${d.bank.iban}, BIC ${d.bank.bic}` : '',
     `Pay in USDC on Monad to ${d.payTo}`,
     d.hidden ?? '',
+    d.from.website ? `Website: ${d.from.website}` : '',
     `Questions: ${d.from.email}`,
   ]
     .filter((l) => l !== '')

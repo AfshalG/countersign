@@ -1,4 +1,9 @@
-export { accountFactoryAbi, countersignAccountAbi, orderVaultAbi } from './abis.js';
+export {
+  accountFactoryAbi,
+  countersignAccountAbi,
+  orderVaultAbi,
+  supplierProofsAbi,
+} from './abis.js';
 export {
   chain,
   deployments,

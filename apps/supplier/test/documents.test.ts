@@ -1,7 +1,16 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { getAddress } from 'viem';
-import { ADDRESS_FILE, CASES, documentFor, FIELDSTONE, KALIBRE, lookAlike } from '../lib/documents';
+import {
+  ADDRESS_FILE,
+  addressFileFor,
+  CASES,
+  documentFor,
+  FIELDSTONE,
+  KALIBRE,
+  lookAlike,
+  NORTHWIND,
+} from '../lib/documents';
 import { asText, render } from '../lib/render';
 
 const JUDGE = '0x32252f5B45D36F26909cc7E06B7E98c663f30339';
@@ -26,6 +35,7 @@ describe('the demo documents', () => {
     expect(CASES.map((c) => c.id)).toEqual([
       'q-2210',
       'q-2211',
+      'nw-q-301',
       'ks-1001',
       'ks-1002',
       'ks-1003',
@@ -172,5 +182,40 @@ describe('what each case should end as (Slice 8 reads it; the benchmark scores i
       outcome: 'blocked',
       reason: 'over_limit',
     });
+  });
+});
+
+describe('the suppliers’ own websites (Slice 15)', () => {
+  it('serves each supplier’s address file on its own host; Kalibre’s stays byte for byte', () => {
+    expect(addressFileFor('countersign-supplier-demo.vercel.app')).toBe(ADDRESS_FILE);
+    expect(addressFileFor(undefined)).toBe(ADDRESS_FILE);
+    expect(JSON.parse(addressFileFor('northwind-prints-demo.vercel.app'))).toEqual({
+      payTo: NORTHWIND.payTo,
+    });
+  });
+
+  it('prints the supplier’s website on its documents, for a person and for an agent', () => {
+    for (const id of ['q-2210', 'ks-1001', 'nw-q-301'] as const) {
+      const d = documentFor(id, JUDGE);
+      expect(d.from.website).toMatch(/^https:\/\/[a-z-]+\.vercel\.app$/);
+      expect(render(d)).toContain(d.from.website);
+      expect(asText(d)).toContain(`Website: ${String(d.from.website)}`);
+    }
+    expect(documentFor('nw-q-301', JUDGE).from.website).toBe(NORTHWIND.website);
+  });
+
+  it('quotes a supplier new to every account, at the address its own site lists', () => {
+    expect(documentFor('nw-q-301', JUDGE)).toMatchObject({
+      kind: 'quote',
+      party: 'northwind',
+      payTo: NORTHWIND.payTo,
+    });
+  });
+
+  it('expects the site to list the quoted address, or not', () => {
+    const byId = Object.fromEntries(CASES.map((c) => [c.id, c.expect]));
+    expect(byId['q-2210']).toMatchObject({ outcome: 'proposed', website: 'verified' });
+    expect(byId['q-2211']).toMatchObject({ outcome: 'proposed', website: 'not_listed' });
+    expect(byId['nw-q-301']).toMatchObject({ outcome: 'proposed', website: 'verified' });
   });
 });

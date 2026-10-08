@@ -366,6 +366,9 @@ importers:
       '@hono/zod-validator':
         specifier: 0.9.1
         version: 0.9.1(hono@4.13.13)(zod@4.6.5)
+      '@primuslabs/zktls-core-sdk':
+        specifier: 0.3.7
+        version: 0.3.7
       '@scalar/hono-api-reference':
         specifier: 0.12.10
         version: 0.12.10(hono@4.13.13)

@@ -15,6 +15,8 @@ export const deployments = {
   accountFactory: '0x7b21a2FF0C13f2d1c8D985232663BA6B08082464',
   accountTemplate: '0x5E1812BD0573d7f79909e519dF71b070CBc75907',
   vaultTemplate: '0x95Fff6CBcd4bD637e0DCfbB7b5cf510f109703b0',
+  /** Slice 15: what suppliers' websites list, proven by Primus (trusts Spike 2's verifier proxy). */
+  supplierProofs: '0xA91FBA7133F24aadf77c28769C706f71E281aE57',
 } as const satisfies Record<string, Address>;
 
 /**
@@ -61,6 +63,10 @@ export const GAS_LIMITS = {
   createAccount: 251_000n, // no passkey data: the D36 broadcast's limit, which landed
   setPolicy: 198_000n, // 169,255
   setSupplier: 126_000n, // 107,733
+  // Slice 15: SupplierProofs.record of a live Primus proof (1,668 bytes of calldata for the demo
+  // supplier's file): Monad's eth_estimateGas 222,035 (proof-smoke, 8 Oct), x 1.08 = 239,797,
+  // rounded up with room for a longer site name.
+  recordSupplierProof: 250_000n,
   approveOrder: 332_000n, // 284,406
   // The stop button (Slice 9 part 3).
   pause: 107_000n, // 91,265
