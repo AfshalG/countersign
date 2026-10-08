@@ -488,8 +488,8 @@ AGENT DOOR:
   Slice 13:  Sign-in from the agent app with one link                 DONE (CLAUDE.AI SIGNED IN)
              (OAuth for grok.com, ChatGPT/dots, claude.ai: WorkOS AuthKit,
              chosen by Afshal 7 Oct)
-  Slice 14:  Proposals and holds in the chat (every agent that        TODO
-             connected in Spike 4) and on WhatsApp
+  Slice 14:  Proposals and holds in the chat (every agent that        IN PROGRESS (QUESTION LIVE,
+             connected in Spike 4) and on WhatsApp                    WHATSAPP BUILT, FIRST REAL AGENT)
 
 DEPTH AND PROOF:
   Slice 15:  Supplier address attestation wired in, or the fallback   TODO
