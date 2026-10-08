@@ -160,6 +160,21 @@ describe('the MCP server', () => {
     expect(r.structuredContent).toMatchObject({ verdict: 'would_settle' });
   });
 
+  it('says a check is not a request: the owner sees nothing unless the invoice is paid', async () => {
+    // dots-3 (Slice 14) checked six invoices, paid the one that would settle, and told the person
+    // the other five were held for the owner. None was: a check stores nothing.
+    const r = await call('check_invoice', {
+      orderId: ORDER_ID,
+      invoiceNumber: 'INV-0051',
+      amount: '1',
+      payTo: LOOK_ALIKE,
+    });
+    expect(textOf(r)).toMatch(/^Not held yet: /);
+    expect(textOf(r)).toContain('Nothing was paid and the owner has not been told');
+    expect(textOf(r)).toContain('pay_invoice');
+    expect(r.structuredContent).toMatchObject({ verdict: 'held', reason: 'address_mismatch' });
+  });
+
   it('looks up a payment, then a run, then a proposal, by id', async () => {
     expect(textOf(await call('payment_status', { id: '0xrun' }))).toContain(
       'Run of 2: 1 settled, 1 held.',
