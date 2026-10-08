@@ -45,8 +45,10 @@ export class FakeChain implements Chain {
 
   /** One owner unless set (D36): a single owner's signature is owner 0's without an off-chain check. */
   ownerKeys: OwnerKey[] = [{ qx: `0x${'11'.repeat(32)}`, qy: `0x${'22'.repeat(32)}` }];
-  owners(): Promise<OwnerKey[]> {
-    return Promise.resolve(this.ownerKeys);
+  manage = 1;
+  release = 1;
+  ownership() {
+    return Promise.resolve({ owners: this.ownerKeys, manage: this.manage, release: this.release });
   }
 
   finalizedReceipt(): Promise<null> {

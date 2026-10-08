@@ -40,8 +40,8 @@ export interface Chain {
   addressOnFile(account: Address, vault: Address): Promise<Address>;
   /** Whether the owner's passkey signed this decision for this vault (an eth_call of recordDecisionByOwner). */
   verifyOwnerDecision(vault: Address, decision: Decision, sigs: OwnerSig[]): Promise<boolean>;
-  /** The account's owners' passkeys, in the order signatures name them (D36). */
-  owners(account: Address): Promise<OwnerKey[]>;
+  /** The account's owners' passkeys, in the order signatures name them, and its thresholds (D36). */
+  ownership(account: Address): Promise<{ owners: OwnerKey[]; manage: number; release: number }>;
   /** A transaction's receipt once it is in a finalized block; null if it is not (yet). */
   finalizedReceipt(
     hash: Hex,

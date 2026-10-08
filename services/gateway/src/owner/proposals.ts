@@ -7,7 +7,7 @@ import {
   type Address,
   type Hex,
 } from 'viem';
-import { countersignAccountAbi, GAS_LIMITS } from '@countersign/chain';
+import { countersignAccountAbi, ownerGas } from '@countersign/chain';
 import {
   accountDomain,
   formatUsdc,
@@ -20,6 +20,7 @@ import type { Store } from '../db/store.js';
 import { AssertionError, fromBrowser, type BrowserAssertion } from '../api/webauthn.js';
 import type { OwnerSig, WebAuthnAuth } from '../chain/types.js';
 import { ownerSigOf } from './signers.js';
+import { collect, progress, type Collected } from './collect.js';
 import { OwnerActionError, sendAndWait, type OwnerSendDeps } from './send.js';
 
 /**
@@ -39,7 +40,9 @@ export interface ProposalChain {
   ): Promise<{ payTo: Address; active: boolean; activeAfter: number } | null>;
   usdcBalance(address: Address): Promise<bigint>;
   effectiveWaitingPeriod(account: Address): Promise<number>;
-  owners(account: Address): Promise<{ qx: Hex; qy: Hex }[]>;
+  ownership(
+    account: Address,
+  ): Promise<{ owners: { qx: Hex; qy: Hex }[]; manage: number; release: number }>;
   dryRun(to: Address, data: Hex): Promise<string | undefined>;
   finalizedReceipt(
     hash: Hex,
@@ -47,7 +50,10 @@ export interface ProposalChain {
 }
 
 export type ProposalDeps = OwnerSendDeps & {
-  store: Pick<Store, 'getProposal' | 'decideProposal' | 'pendingRelayerTx'>;
+  store: Pick<
+    Store,
+    'getProposal' | 'decideProposal' | 'pendingRelayerTx' | 'addOwnerSignature' | 'ownerSignatures'
+  >;
   chain: ProposalChain;
   chainId: number;
   publicUrl?: string;
@@ -73,7 +79,7 @@ type Step = {
   challenge: Hex;
   typedData: unknown;
   call: (sigs: OwnerSig[]) => Hex;
-  gas: bigint;
+  gas: 'setSupplier' | 'approveOrder';
 };
 
 const strings = (o: Record<string, unknown>) =>
@@ -134,7 +140,7 @@ async function planOf(deps: ProposalDeps, p: ProposalRow) {
           functionName: 'setSupplier',
           args: [id, payTo, true, zeroHash, nonce, deadline, sigs],
         }),
-      gas: GAS_LIMITS.setSupplier,
+      gas: 'setSupplier',
     });
   }
   const orderNonce = needsSupplier ? nonce + 1n : nonce;
@@ -170,7 +176,7 @@ async function planOf(deps: ProposalDeps, p: ProposalRow) {
           sigs,
         ],
       }),
-    gas: GAS_LIMITS.approveOrder,
+    gas: 'approveOrder',
   });
   return {
     account,
@@ -187,8 +193,16 @@ async function planOf(deps: ProposalDeps, p: ProposalRow) {
   };
 }
 
-/** One thing the owner can sign: its challenge, the typed data behind it, and what it does. */
-export type ProposalAction = { challenge: Hex; typedData: unknown; summary: string };
+/**
+ * One thing the owner can sign: its challenge, the typed data behind it, what it does, and (D36)
+ * how many owners it needs and which have signed.
+ */
+export type ProposalAction = {
+  challenge: Hex;
+  typedData: unknown;
+  summary: string;
+  signatures?: { need: number; signed: number[] };
+};
 
 /** What the owner's phone shows and signs for a proposal (GET /v1/approvals/{id}). */
 export async function proposalApprovalView(deps: ProposalDeps, p: ProposalRow) {
@@ -216,6 +230,14 @@ export async function proposalApprovalView(deps: ProposalDeps, p: ProposalRow) {
       },
     };
   };
+  const actions = actionsOf();
+  for (const [key, action] of Object.entries(actions))
+    action.signatures = await progress(
+      deps,
+      plan.account,
+      action.challenge,
+      key === 'refuse' ? 'one' : 'manage',
+    );
   return {
     id: p.id,
     kind: 'proposal' as const,
@@ -241,7 +263,7 @@ export async function proposalApprovalView(deps: ProposalDeps, p: ProposalRow) {
     differences: plan.changesAddress
       ? [{ field: 'payTo', onFile: plan.onFile?.payTo ?? '', onInvoice: p.payTo }]
       : [],
-    actions: actionsOf(),
+    actions,
     statusUrl: `${deps.publicUrl ?? ''}/p/${p.id}`,
   };
 }
@@ -292,10 +314,24 @@ export async function approveProposal(
     step: s,
     auth: checked(assertions[s.key], s.challenge, s.key),
   }));
-  for (const { step, auth } of signed) {
-    const sig = await ownerSigOf(deps.chain, plan.account, auth);
-    if (!sig) throw new OwnerActionError(422, 'invalid_passkey', 'not this account’s passkey');
-    const data = step.call([sig]);
+  // D36: each step waits until the manage threshold of owners has signed it; nothing is sent
+  // until every step has enough, so a supplier is never added without its order.
+  const gathered: { step: Step; got: Collected }[] = [];
+  for (const { step, auth } of signed)
+    gathered.push({
+      step,
+      got: await collect(deps, {
+        account: plan.account,
+        digest: step.challenge,
+        auth,
+        threshold: 'manage',
+        purpose: `proposal:${id}:${step.key}`,
+      }),
+    });
+  if (gathered.some((g) => !g.got.ready)) return proposalApprovalView(deps, p);
+  for (const { step, got } of gathered) {
+    const sigs = got.ready ? got.sigs : [];
+    const data = step.call(sigs);
     const refusal = await deps.chain.dryRun(plan.account, data);
     if (refusal === 'InvalidOwnerSignature')
       throw new OwnerActionError(422, 'invalid_passkey', 'not this account’s passkey');
@@ -309,7 +345,13 @@ export async function approveProposal(
       throw new OwnerActionError(409, 'contract_refuses', `${step.key} refused: ${refusal}`, {
         contract: refusal,
       });
-    await sendAndWait(deps, plan.account, data, step.gas, `proposal ${id} ${step.key}`);
+    await sendAndWait(
+      deps,
+      plan.account,
+      data,
+      ownerGas(step.gas, sigs.length),
+      `proposal ${id} ${step.key}`,
+    );
   }
   const decided = await deps.store.decideProposal(id, 'approved');
   return proposalApprovalView(deps, decided ?? p);

@@ -36,6 +36,13 @@
       "when": 1791414337300,
       "tag": "0004_agents",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1791419617799,
+      "tag": "0005_owner_signatures",
+      "breakpoints": true
     }
   ]
 }

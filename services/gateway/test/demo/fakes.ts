@@ -59,13 +59,17 @@ export class FakeDemoChain implements DemoChain {
       this.suppliers.get(`${account.toLowerCase()}:${supplierId.toLowerCase()}`) ?? null,
     );
   }
-  /** Every account here has one owner (D36's thresholds of one); `extraOwners` adds more. */
+  /** Every account here has one owner and thresholds of one unless set (D36). */
   extraOwners = new Map<string, { qx: Hex; qy: Hex }[]>();
-  owners(account: Address) {
-    const key = this.ownerKeys.get(account.toLowerCase());
-    return key
-      ? Promise.resolve([key, ...(this.extraOwners.get(account.toLowerCase()) ?? [])])
-      : Promise.reject(new Error('no such account'));
+  thresholds = new Map<string, { manage: number; release: number }>();
+  ownership(account: Address) {
+    const a = account.toLowerCase();
+    const key = this.ownerKeys.get(a);
+    if (!key) return Promise.reject(new Error('no such account'));
+    return Promise.resolve({
+      owners: [key, ...(this.extraOwners.get(a) ?? [])],
+      ...(this.thresholds.get(a) ?? { manage: 1, release: 1 }),
+    });
   }
   effectiveWaitingPeriod() {
     return Promise.resolve(this.waitingPeriod);
@@ -118,6 +122,20 @@ export function demoDeps(store: Store) {
           const call = decodeFunctionData({ abi: countersignAccountAbi, data: tx.data });
           if (call.functionName === 'pause') chain.pausedAccounts.add(key);
           if (call.functionName === 'unpause') chain.pausedAccounts.delete(key);
+          if (call.functionName === 'setOwners') {
+            const [keys, manage, release] = call.args as unknown as [
+              { qx: Hex; qy: Hex }[],
+              number,
+              number,
+            ];
+            const [first, ...rest] = keys;
+            if (first) chain.ownerKeys.set(key, { qx: first.qx, qy: first.qy });
+            chain.extraOwners.set(
+              key,
+              rest.map((k) => ({ qx: k.qx, qy: k.qy })),
+            );
+            chain.thresholds.set(key, { manage, release });
+          }
           if (call.functionName === 'setSupplier') {
             const [id, payTo, active] = call.args as unknown as [Hex, Address, boolean];
             chain.suppliers.set(`${key}:${id.toLowerCase()}`, { payTo, active, activeAfter: 0 });

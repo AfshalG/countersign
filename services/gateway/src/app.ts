@@ -43,7 +43,7 @@ export type AppDeps = {
   store: Store;
   chain: Pick<
     Chain,
-    'simulate' | 'verifyOwnerDecision' | 'addressOnFile' | 'orderState' | 'owners'
+    'simulate' | 'verifyOwnerDecision' | 'addressOnFile' | 'orderState' | 'ownership'
   >;
   /** The order index (Slice 12); without it, registering an account answers 503. */
   indexing?: Indexing;
@@ -227,6 +227,12 @@ const approve = createRoute({
   },
   responses: {
     200: json(paymentView, 'Released; it settles like any other payment'),
+    202: json(
+      paymentView.extend({
+        signatures: z.object({ need: z.number().int(), signed: z.array(z.number().int()) }),
+      }),
+      'Counted: still held, waiting for more owners’ passkeys (D36)',
+    ),
     404: json(apiError, 'unknown_request'),
     409: json(apiError, 'not_held, or contract_refuses with the contract’s reason'),
     422: json(apiError, 'invalid_passkey'),
@@ -468,10 +474,12 @@ export function createApp(deps: AppDeps) {
 
   app.openapi(approve, async (c) => {
     const result = await payOnce(
-      { store, chain },
+      { store, chain, chainId: deps.chainId },
       c.req.valid('param').id,
       toAuth(c.req.valid('json').ownerAuth),
     );
+    if (result.ok && result.waiting)
+      return c.json({ ...view(result.row), signatures: result.waiting }, 202);
     if (result.ok) return c.json(view(result.row), 200);
     switch (result.status) {
       case 404:
@@ -487,7 +495,7 @@ export function createApp(deps: AppDeps) {
   app.openapi(refuse, async (c) => {
     const body = c.req.valid('json');
     const result = await refuseHeld(
-      { store, chain },
+      { store, chain, chainId: deps.chainId },
       c.req.valid('param').id,
       toAuth(body.ownerAuth),
       {

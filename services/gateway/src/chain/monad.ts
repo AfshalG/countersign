@@ -214,16 +214,33 @@ export class MonadClient
     );
   }
 
-  async owners(account: Address): Promise<OwnerKey[]> {
-    const out = await this.call(
-      account,
-      encodeFunctionData({ abi: countersignAccountAbi, functionName: 'owners' }),
-    );
-    return decodeFunctionResult({
-      abi: countersignAccountAbi,
-      functionName: 'owners',
-      data: out,
-    }).map((k) => ({ qx: k.qx, qy: k.qy }));
+  async ownership(
+    account: Address,
+  ): Promise<{ owners: OwnerKey[]; manage: number; release: number }> {
+    const read = (functionName: 'owners' | 'manageThreshold' | 'releaseThreshold') =>
+      this.call(account, encodeFunctionData({ abi: countersignAccountAbi, functionName }));
+    const [owners, manage, release] = await Promise.all([
+      read('owners'),
+      read('manageThreshold'),
+      read('releaseThreshold'),
+    ]);
+    return {
+      owners: decodeFunctionResult({
+        abi: countersignAccountAbi,
+        functionName: 'owners',
+        data: owners,
+      }).map((k) => ({ qx: k.qx, qy: k.qy })),
+      manage: decodeFunctionResult({
+        abi: countersignAccountAbi,
+        functionName: 'manageThreshold',
+        data: manage,
+      }),
+      release: decodeFunctionResult({
+        abi: countersignAccountAbi,
+        functionName: 'releaseThreshold',
+        data: release,
+      }),
+    };
   }
 
   async usdcBalance(address: Address): Promise<bigint> {

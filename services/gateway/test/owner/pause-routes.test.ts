@@ -87,3 +87,45 @@ describe('the stop button over HTTP (no token: the passkey decides)', () => {
     expect(await again.json()).toMatchObject({ error: 'already_paused' });
   });
 });
+
+describe('changing the owners over HTTP (D36)', () => {
+  const second = SoftPasskey.fromScalar(`0x${'88'.repeat(32)}`);
+  const post = (a: ReturnType<typeof app>, path: string, body: unknown) =>
+    a.request(path, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', origin: 'https://approver.example' },
+      body: JSON.stringify(body),
+    });
+
+  it('previews adding a second owner, signs it, and shows the new owners', async () => {
+    const a = app();
+    const change = {
+      owners: [
+        { x: owner.qx, y: owner.qy },
+        { x: second.qx, y: second.qy },
+      ],
+      manage: 2,
+      release: 1,
+    };
+    const pv = await post(a, `/v1/owner/${ACCOUNT}/owners/preview`, change);
+    expect(pv.status).toBe(200);
+    const { challenge, deadline } = (await pv.json()) as { challenge: Hex; deadline: number };
+    const done = await post(a, `/v1/owner/${ACCOUNT}/owners`, {
+      ...change,
+      deadline,
+      assertion: browser(challenge),
+    });
+    expect(done.status).toBe(200);
+    expect(await done.json()).toMatchObject({ manage: 2, release: 1, ownerChanges: [] });
+  });
+
+  it('refuses a set that could never work, before anything is signed', async () => {
+    const res = await post(app(), `/v1/owner/${ACCOUNT}/owners/preview`, {
+      owners: [{ x: owner.qx, y: owner.qy }],
+      manage: 2,
+      release: 1,
+    });
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({ error: 'bad_owners' });
+  });
+});

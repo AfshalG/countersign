@@ -8,7 +8,7 @@ import {
   type Address,
   type Hex,
 } from 'viem';
-import { countersignAccountAbi } from '@countersign/chain';
+import { countersignAccountAbi, ownerGas } from '@countersign/chain';
 import { accountDomain, ownerActionTypes, supplierId } from '@countersign/shared';
 import { Store } from '../../src/db/store.js';
 import type { Database } from '../../src/db/client.js';
@@ -274,6 +274,69 @@ describe('refusing a proposal with the owner’s passkey', () => {
     expect(await refusal(approveProposal(deps, p.id, signApproval(view)))).toMatchObject({
       status: 409,
       code: 'not_pending',
+    });
+  });
+});
+
+describe('several approvers (D36): approving a proposal needs the manage threshold', () => {
+  const second = SoftPasskey.fromScalar(`0x${'88'.repeat(32)}`);
+  const signersOf = (data: Hex) => {
+    const { args } = decodeFunctionData({ abi: countersignAccountAbi, data });
+    return (args.at(-1) as readonly { owner: number }[]).map((s) => s.owner);
+  };
+
+  beforeEach(() => {
+    chain.extraOwners.set(ACCOUNT.toLowerCase(), [{ qx: second.qx, qy: second.qy }]);
+    chain.thresholds.set(ACCOUNT.toLowerCase(), { manage: 2, release: 1 });
+  });
+
+  it('sends nothing until a second owner signs, then each step with both signatures', async () => {
+    const p = await proposed();
+    const view = await proposalApprovalView(deps, p);
+    expect(view.actions.set_supplier?.signatures).toEqual({ need: 2, signed: [] });
+    expect(view.actions.refuse?.signatures).toEqual({ need: 1, signed: [] });
+
+    const first = await approveProposal(deps, p.id, signApproval(view, second));
+    expect(sent).toHaveLength(0);
+    expect(first.status).toBe('pending');
+    expect(first.actions.set_supplier?.signatures).toEqual({ need: 2, signed: [1] });
+    expect(first.actions.approve_order?.signatures).toEqual({ need: 2, signed: [1] });
+
+    const done = await approveProposal(deps, p.id, signApproval(view, owner));
+    expect(done.status).toBe('approved');
+    expect(functionsSent()).toEqual(['setSupplier', 'approveOrder']);
+    expect(sent.map((t) => signersOf(t.data))).toEqual([
+      [0, 1],
+      [0, 1],
+    ]);
+    expect(sent.map((t) => t.gas)).toEqual([
+      ownerGas('setSupplier', 2),
+      ownerGas('approveOrder', 2),
+    ]);
+  });
+
+  it('lets any one owner refuse it', async () => {
+    const p = await proposed();
+    const view = await proposalApprovalView(deps, p);
+    const refused = await refuseProposal(
+      deps,
+      p.id,
+      browser(second, view.actions.refuse?.challenge ?? '0x'),
+    );
+    expect(refused.status).toBe('refused');
+    expect(sent).toHaveLength(0);
+  });
+
+  it('refuses a stranger’s passkey before anything is stored', async () => {
+    const p = await proposed();
+    const view = await proposalApprovalView(deps, p);
+    expect(await refusal(approveProposal(deps, p.id, signApproval(view, stranger)))).toEqual({
+      status: 422,
+      code: 'invalid_passkey',
+    });
+    expect((await proposalApprovalView(deps, p)).actions.set_supplier?.signatures).toEqual({
+      need: 2,
+      signed: [],
     });
   });
 });

@@ -19,12 +19,12 @@ export function ownerIndexOf(
 }
 
 export async function ownerSigOf(
-  chain: { owners(account: Address): Promise<OwnerKey[]> },
+  chain: { ownership(account: Address): Promise<{ owners: OwnerKey[] }> },
   account: Address,
   auth: WebAuthnAuth,
   alwaysCheck = false,
 ): Promise<OwnerSig | null> {
-  const owner = ownerIndexOf(await chain.owners(account), auth, alwaysCheck);
+  const owner = ownerIndexOf((await chain.ownership(account)).owners, auth, alwaysCheck);
   return owner === null ? null : { owner, auth };
 }
 
