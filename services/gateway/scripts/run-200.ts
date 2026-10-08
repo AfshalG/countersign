@@ -107,13 +107,14 @@ for (let i = 0; i < ORDERS; i++) {
     if (view.actions.approve_order) break;
     await new Promise((r) => setTimeout(r, 1_000));
   }
+  const approveOrder = view.actions.approve_order;
   const res = await fetch(`${gateway}/v1/approvals/${p.id}`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({
       action: 'approve',
       assertions: {
-        approve_order: owner.sign((view.actions.approve_order as { challenge: Hex }).challenge),
+        approve_order: owner.sign(approveOrder.challenge),
       },
     }),
   });
