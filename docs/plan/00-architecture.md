@@ -492,7 +492,7 @@ AGENT DOOR:
              connected in Spike 4) and on WhatsApp                    WHATSAPP BUILT, FIRST REAL AGENT)
 
 DEPTH AND PROOF:
-  Slice 15:  Supplier address attestation wired in, or the fallback   TODO
+  Slice 15:  Supplier address attestation wired in, or the fallback   DONE (WEBSITE PROOFS LIVE)
   Slice 16:  Payment run: 200 invoices in parallel, run board         TODO
   Slice 17:  Advice-only check for bank-transfer invoices             TODO
   Slice 18:  Audit record export                                      TODO
