@@ -173,7 +173,10 @@ const invoiceRoute = createRoute({
       'Paid, or held for the owner',
     ),
     404: json(demoError, 'unknown_account'),
-    409: json(demoError, 'not_ready (set the account up first) or order_used_up'),
+    409: json(
+      demoError,
+      'not_ready (set the account up first), order_not_indexed (just set up: try again in a few seconds) or order_used_up',
+    ),
   },
 });
 
@@ -230,7 +233,20 @@ export function registerDemoRoutes(
       );
     const kind = c.req.valid('json').kind;
     const plan = demoPlan.fromJson(row.plan as Parameters<typeof demoPlan.fromJson>[0]);
-    const paid = await agent.pay(account, demoInvoice(kind, plan.supplier.payTo));
+    const paid = await agent.pay(
+      account,
+      demoInvoice(kind, plan.supplier.payTo),
+      plan.order.orderId,
+    );
+    if (paid === 'not_indexed')
+      return c.json(
+        {
+          error: 'order_not_indexed',
+          message:
+            'the demo order is still being indexed (it follows finalized blocks); try again in a few seconds',
+        },
+        409,
+      );
     if (paid === 'no_open_order')
       return c.json(
         { error: 'order_used_up', message: 'this account’s demo order has nothing left to pay' },
