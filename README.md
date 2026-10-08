@@ -11,6 +11,7 @@ Built for Monad Metropolis 2026, Track 04 (Trust, Identity & AI Infrastructure).
 - **Several approvers** (dual control): up to five owners per account, each with their own passkey. Adding a supplier, opening an order or paying a held payment once can need two of them, and any one can always pause or refuse.
 - **The gateway** (`services/gateway`, hosted on Railway): takes payment requests, checks them, sends them through a pool of relayer wallets and marks them settled only at Monad's Finalized stage. Killed mid-run and restarted on testnet: 8 payments, 8 transactions, nothing paid twice.
 - **A supplier's own website proving its payment address** (Primus zkTLS), checked on Monad.
+- **Demo documents and an agent that pays them** (`apps/supplier`, `apps/scripted-agent`): a supplier's and a shop's [site](https://countersign-supplier-demo.vercel.app/demo) with quotes, invoices and checkouts, clean and doctored (a look-alike address, padding, hidden instructions, the wrong supplier, too much). An agent with no model read and paid all 14 cases live on testnet, and each ended as its document says (`services/gateway/results/2026-10-08-scripted-agent.json`).
 - **The developer kit** (below): an SDK, an MCP server and a web API.
 
 ## Security model
