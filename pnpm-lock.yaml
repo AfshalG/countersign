@@ -196,6 +196,31 @@ importers:
         specifier: 5.0.3
         version: 5.0.3(@types/node@24.19.1)(@vitest/coverage-v8@5.0.3)(vite@8.3.2(@types/node@24.19.1)(esbuild@0.28.2)(tsx@4.23.15)(yaml@2.9.1))
 
+  apps/agent-runner:
+    dependencies:
+      '@ai-sdk/mcp':
+        specifier: 2.0.67
+        version: 2.0.67(zod@4.6.5)
+      '@countersign/scripted-agent':
+        specifier: workspace:*
+        version: link:../scripted-agent
+      '@openrouter/ai-sdk-provider':
+        specifier: 3.1.0
+        version: 3.1.0(ai@7.0.128(zod@4.6.5))(zod@4.6.5)
+      ai:
+        specifier: 7.0.128
+        version: 7.0.128(zod@4.6.5)
+      zod:
+        specifier: 4.6.5
+        version: 4.6.5
+    devDependencies:
+      '@types/node':
+        specifier: 24.19.1
+        version: 24.19.1
+      tsx:
+        specifier: 4.23.15
+        version: 4.23.15
+
   apps/approver:
     dependencies:
       '@countersign/sdk':
