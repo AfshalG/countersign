@@ -23,24 +23,28 @@ export const deployments = {
  * The public testnet endpoints and the share of each one's limit used for sends and for reads (Spike 3:
  * Monad 50/s with eth_call capped at 15/s, Ankr 300 per 10 s, monadinfra 20/s).
  * `poolStatus`: whether txpool_statusByHash works there (Ankr refuses it).
+ *
+ * Slice 16 moved budget from sends to reads: a run of 200 sends about 20 transactions a second,
+ * but checks are read-bound (each payment is simulated before the checker and before sending), so
+ * reads go from 21 to 35 a second; sends keep 55, every endpoint still under its limit.
  */
 export const ENDPOINTS = [
   {
     url: 'https://testnet-rpc.monad.xyz',
     sendsPerSecond: 30,
-    readsPerSecond: 10,
+    readsPerSecond: 15,
     poolStatus: true,
   },
   {
     url: 'https://rpc.ankr.com/monad_testnet',
-    sendsPerSecond: 25,
-    readsPerSecond: 5,
+    sendsPerSecond: 15,
+    readsPerSecond: 12,
     poolStatus: false,
   },
   {
     url: 'https://rpc-testnet.monadinfra.com',
-    sendsPerSecond: 12,
-    readsPerSecond: 6,
+    sendsPerSecond: 10,
+    readsPerSecond: 8,
     poolStatus: true,
   },
 ] as const;

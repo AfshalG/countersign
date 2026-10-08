@@ -56,7 +56,9 @@ export async function sendOne(deps: SendDeps, row: PaymentRequestRow): Promise<v
     throw new SimulationUnavailable(e); // stays released; its lease expires and it is tried again
   }
   if (refusal !== undefined) {
-    await store.transition(row.id, 'released', 'failed', {
+    // A refusal the contract treats as a hold (a signature it no longer accepts, a pause) goes back
+    // to the owner; anything else fails, unsent.
+    await store.transition(row.id, 'released', refusal.status === 'held' ? 'held' : 'failed', {
       reason: refusal.reason,
       decidedBy: 'rule',
       detail: { contract: refusal.error },
