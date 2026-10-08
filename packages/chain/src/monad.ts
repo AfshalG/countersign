@@ -6,11 +6,15 @@ export const chain = monadTestnet;
 
 export const USDC: Address = '0x534b2f3A21130d7a60830c2Df862319e593943A3';
 
-/** Slice 5 deployment on testnet (contracts/deployments/10143.json). */
+/**
+ * The D36 deployment on testnet, several approvers (contracts/deployments/10143.json, 7 Oct).
+ * Slice 5's factory (0x094250cCC1dDBd8530e4FC9A1C900db3D0D9EB5f, deployments/10143-slice5.json)
+ * and the accounts made on it stay on chain as history; this gateway no longer acts on them.
+ */
 export const deployments = {
-  accountFactory: '0x094250cCC1dDBd8530e4FC9A1C900db3D0D9EB5f',
-  accountTemplate: '0x282cf7AD04f666C1b704B91f1911C8A21c705f02',
-  vaultTemplate: '0x9950941673E7479c5b20c8603cC24981c386A59D',
+  accountFactory: '0x7b21a2FF0C13f2d1c8D985232663BA6B08082464',
+  accountTemplate: '0x5E1812BD0573d7f79909e519dF71b070CBc75907',
+  vaultTemplate: '0x95Fff6CBcd4bD637e0DCfbB7b5cf510f109703b0',
 } as const satisfies Record<string, Address>;
 
 /**
@@ -47,32 +51,33 @@ export const WS_URL = 'wss://testnet-rpc.monad.xyz';
  */
 export const GAS_LIMITS = {
   pay: 266_000n,
-  // D36 (several owners): each limit below is for one owner's signature and was scaled from the
-  // Slice 5 broadcast by the Foundry gas test's change (the owners array, thresholds and
-  // OwnerSig[] encoding). The D36 testnet deployment re-measures them with eth_estimateGas.
+  // Owner actions with one owner's signature: the limits Monad charged in the D36 testnet run
+  // (7 Oct; the node's estimate plus 8%), rounded up. Each extra signature adds
+  // GAS_PER_EXTRA_SIGNER.
+  // payWithOwner with two signatures cost 286,392 on testnet; one is about 233,000-240,000 (the
+  // second signature adds about 53,000 there), checked with eth_estimateGas in the live smoke.
   payWithOwner: 249_000n,
   recordDecision: 94_000n,
-  // Judge mode's account setup (Slice 9 part 4), from Slice 5's testnet broadcast (197,928,
-  // 153,729, 104,685 and 296,429 gas used), scaled for D36.
-  createAccount: 270_000n,
-  setPolicy: 173_000n,
-  setSupplier: 122_000n,
-  approveOrder: 331_000n,
-  // The stop button (Slice 9 part 3): 88,185 and 71,664 gas in Slice 5's broadcast, plus D36's
-  // encoding (about 6,000 on every owner action).
-  pause: 103_000n,
-  unpause: 87_000n,
-  // D36: replacing the owners, for up to two keys; more keys add GAS_PER_OWNER_KEY each.
-  setOwners: 230_000n,
+  // Judge mode's account setup (Slice 9 part 4): 250,965, 164,302, 116,351 and 307,145.
+  createAccount: 251_000n,
+  setPolicy: 165_000n,
+  setSupplier: 117_000n,
+  approveOrder: 308_000n,
+  // The stop button (Slice 9 part 3): pause 98,579; unpause with two signatures 104,401, so
+  // about 82,500 with one.
+  pause: 99_000n,
+  unpause: 84_000n,
+  // Owners (D36): one owner adding a second, 132,325; more keys add GAS_PER_OWNER_KEY each.
+  setOwners: 133_000n,
 } as const;
 
 /**
- * What each signature beyond the first adds (D36): one more P-256 check and its calldata (about
- * 25,000 gas in Foundry on an account action; 60,000 on payWithOwner, whose vault passes the
- * signatures on to the account).
+ * What each signature beyond the first adds (D36): one more P-256 check and its calldata. On
+ * testnet, 21,798 (setSupplier) and 21,981 (approveOrder); payWithOwner passes the signatures on
+ * from the vault to the account (60,292 in Foundry, about 53,000 on testnet).
  */
-export const GAS_PER_EXTRA_SIGNER = { account: 33_000n, payWithOwner: 66_000n } as const;
-/** Each owner key beyond two in setOwners: two new storage slots on Monad. */
+export const GAS_PER_EXTRA_SIGNER = { account: 24_000n, payWithOwner: 60_000n } as const;
+/** Each owner key beyond two in setOwners: two new storage slots, priced high on Monad. */
 export const GAS_PER_OWNER_KEY = 50_000n;
 
 /** The limit for an owner action carrying `signers` signatures. */

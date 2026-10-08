@@ -72,7 +72,7 @@ One payment as evidence: what was asked, what was checked, who decided, and the 
 
 Each supplier's address on file and its open orders, with how much is left.
 
-- `GET /v1/accounts/{account}/orders` (_token_): supplier, address on file, amount left, expiry. Demo account: `0xE890B35be32F04032B502Dc4Dc2db8062aD6d603`.
+- `GET /v1/accounts/{account}/orders` (_token_): supplier, address on file, amount left, expiry. Demo account: `0xC127e7Dbc29d0d38Be3b2e557ce7d796bd2403A9`.
 
 ### 5. Live updates and the payment run
 

@@ -16,7 +16,7 @@ const accountParam = z.object({
     .regex(/^0x[0-9a-fA-F]{40}$/)
     .openapi({
       param: { name: 'account', in: 'path' },
-      example: '0xE890B35be32F04032B502Dc4Dc2db8062aD6d603',
+      example: '0xC127e7Dbc29d0d38Be3b2e557ce7d796bd2403A9',
     }),
 });
 const signatures = z
