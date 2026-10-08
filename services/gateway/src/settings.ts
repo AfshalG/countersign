@@ -48,6 +48,29 @@ export function loadSettings(source?: Record<string, string | undefined>) {
       // named in their policies.
       DEMO_FUNDER_PRIVATE_KEY: privateKey.optional(),
       DEMO_AGENT_PRIVATE_KEY: privateKey.optional(),
+      // WhatsApp (Slice 14, D31), the first five together or none: the Cloud API phone number's id
+      // and its access token, the Meta app's secret (signs webhooks), the webhook's verify token,
+      // and the number people message, digits with the country code. The template is for
+      // messages outside WhatsApp's 24-hour window; without it those are skipped.
+      WHATSAPP_PHONE_NUMBER_ID: z
+        .string()
+        .regex(/^\d{5,20}$/)
+        .optional(),
+      WHATSAPP_ACCESS_TOKEN: z.string().min(20).optional(),
+      WHATSAPP_APP_SECRET: z.string().min(16).optional(),
+      WHATSAPP_VERIFY_TOKEN: z.string().min(16).optional(),
+      WHATSAPP_NUMBER: z
+        .string()
+        .regex(/^\d{7,15}$/)
+        .optional(),
+      WHATSAPP_TEMPLATE: z
+        .string()
+        .regex(/^[a-z0-9_]{1,512}$/)
+        .optional(),
+      WHATSAPP_TEMPLATE_LANGUAGE: z
+        .string()
+        .regex(/^[a-z]{2}(_[A-Z]{2})?$/)
+        .optional(),
       // New demo accounts per UTC day; each costs about 0.09 MON to set up.
       DEMO_ACCOUNTS_PER_DAY: z
         .string()
@@ -90,4 +113,43 @@ export function checkerMode(settings: ReturnType<typeof loadSettings>) {
       'No checker: set the checker service (CHECKER_URL, …) or TEST_CHECKER_PRIVATE_KEY',
     );
   return { kind: 'stand-in' as const, key, address: privateKeyToAddress(key) };
+}
+
+/** WhatsApp's settings when it is on (Slice 14); a half-configured WhatsApp is a mistake. */
+export function whatsappMode(settings: ReturnType<typeof loadSettings>) {
+  const required = {
+    phoneNumberId: settings.WHATSAPP_PHONE_NUMBER_ID,
+    accessToken: settings.WHATSAPP_ACCESS_TOKEN,
+    appSecret: settings.WHATSAPP_APP_SECRET,
+    verifyToken: settings.WHATSAPP_VERIFY_TOKEN,
+    number: settings.WHATSAPP_NUMBER,
+  };
+  const set = Object.values(required).filter((v) => v !== undefined).length;
+  if (set === 0) return undefined;
+  const { phoneNumberId, accessToken, appSecret, verifyToken, number } = required;
+  if (
+    phoneNumberId === undefined ||
+    accessToken === undefined ||
+    appSecret === undefined ||
+    verifyToken === undefined ||
+    number === undefined
+  )
+    throw new Error(
+      'Set WHATSAPP_PHONE_NUMBER_ID, WHATSAPP_ACCESS_TOKEN, WHATSAPP_APP_SECRET, WHATSAPP_VERIFY_TOKEN and WHATSAPP_NUMBER together, or none',
+    );
+  return {
+    phoneNumberId,
+    accessToken,
+    appSecret,
+    verifyToken,
+    number,
+    ...(settings.WHATSAPP_TEMPLATE === undefined
+      ? {}
+      : {
+          template: {
+            name: settings.WHATSAPP_TEMPLATE,
+            language: settings.WHATSAPP_TEMPLATE_LANGUAGE ?? 'en',
+          },
+        }),
+  };
 }

@@ -443,6 +443,9 @@ importers:
       '@ai-sdk/mcp':
         specifier: 2.0.67
         version: 2.0.67(zod@4.6.5)
+      '@countersign/scripted-agent':
+        specifier: workspace:*
+        version: link:../../apps/scripted-agent
       '@hono/node-server':
         specifier: 2.1.3
         version: 2.1.3(hono@4.13.13)

@@ -43,6 +43,13 @@
       "when": 1791419617799,
       "tag": "0005_owner_signatures",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1791443750212,
+      "tag": "0006_whatsapp",
+      "breakpoints": true
     }
   ]
 }

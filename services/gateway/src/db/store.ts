@@ -1,4 +1,4 @@
-import { and, asc, eq, gt, inArray, isNull, lt, sql } from 'drizzle-orm';
+import { and, asc, count, eq, gt, gte, inArray, isNotNull, isNull, lt, sql } from 'drizzle-orm';
 import type { Address, Hex } from 'viem';
 import {
   canTransition,
@@ -18,6 +18,9 @@ import {
   paymentRequests,
   proposals,
   runs,
+  whatsappContacts,
+  whatsappLinks,
+  whatsappMessages,
   type AccountRow,
   type AgentRow,
   type DemoAccountRow,
@@ -27,6 +30,8 @@ import {
   type RelayerTxRow,
   type PaymentRequestRow,
   type ProposalRow,
+  type WhatsappContactRow,
+  type WhatsappMessageRow,
 } from './schema.js';
 
 export type NewRequest = {
@@ -83,6 +88,7 @@ export type StatusChange = {
 
 export class Store {
   private readonly listeners = new Set<(change: StatusChange) => void>();
+  private readonly proposalListeners = new Set<(proposal: ProposalRow) => void>();
 
   constructor(private readonly db: Db) {}
 
@@ -91,6 +97,14 @@ export class Store {
     this.listeners.add(listener);
     return () => {
       this.listeners.delete(listener);
+    };
+  }
+
+  /** Calls `listener` after each new proposal is stored (Slice 14's WhatsApp). Returns an unsubscribe function. */
+  onProposal(listener: (proposal: ProposalRow) => void): () => void {
+    this.proposalListeners.add(listener);
+    return () => {
+      this.proposalListeners.delete(listener);
     };
   }
 
@@ -592,7 +606,16 @@ export class Store {
       .onConflictDoNothing()
       .returning();
     const first = inserted[0];
-    if (first) return { proposal: first, created: true };
+    if (first) {
+      for (const listener of this.proposalListeners) {
+        try {
+          listener(first);
+        } catch (e) {
+          console.error(`proposal listener: ${e instanceof Error ? e.message : String(e)}`);
+        }
+      }
+      return { proposal: first, created: true };
+    }
     const existing = await this.getProposal(p.id);
     if (!existing) throw new Error(`proposal ${p.id} vanished`);
     return { proposal: existing, created: false };
@@ -663,5 +686,198 @@ export class Store {
         ),
       )
       .orderBy(asc(ownerSignatures.createdAt));
+  }
+
+  // ---------- WhatsApp (Slice 14) ----------
+
+  /** A new connect code for an account, not usable until an owner signs for it. */
+  async createWhatsappLink(
+    code: string,
+    account: Address,
+    expiresAt: Date,
+    now: Date,
+  ): Promise<void> {
+    // Times come from the caller's clock, the one its hourly cap compares with.
+    await this.db
+      .insert(whatsappLinks)
+      .values({ code, account: account.toLowerCase(), expiresAt, createdAt: now });
+  }
+
+  /** Codes issued for an account since `since` (a cap on how many anyone can ask for). */
+  async whatsappLinksSince(account: Address, since: Date): Promise<number> {
+    const [row] = await this.db
+      .select({ n: count() })
+      .from(whatsappLinks)
+      .where(
+        and(eq(whatsappLinks.account, account.toLowerCase()), gte(whatsappLinks.createdAt, since)),
+      );
+    return row?.n ?? 0;
+  }
+
+  async whatsappLink(code: string) {
+    const [row] = await this.db.select().from(whatsappLinks).where(eq(whatsappLinks.code, code));
+    return row;
+  }
+
+  /** An owner signed for the code; false if it is unknown, expired or already signed. */
+  async signWhatsappLink(code: string, now: Date): Promise<boolean> {
+    const rows = await this.db
+      .update(whatsappLinks)
+      .set({ signedAt: now })
+      .where(
+        and(
+          eq(whatsappLinks.code, code),
+          isNull(whatsappLinks.signedAt),
+          gt(whatsappLinks.expiresAt, now),
+        ),
+      )
+      .returning({ code: whatsappLinks.code });
+    return rows.length === 1;
+  }
+
+  /**
+   * Uses a signed, unexpired code once, connecting the number that sent it to the code's account.
+   * The account, or undefined if the code is not usable.
+   */
+  async redeemWhatsappLink(code: string, waId: string, now: Date): Promise<string | undefined> {
+    return this.db.transaction(async (tx) => {
+      const [link] = await tx
+        .update(whatsappLinks)
+        .set({ usedAt: now })
+        .where(
+          and(
+            eq(whatsappLinks.code, code),
+            isNotNull(whatsappLinks.signedAt),
+            isNull(whatsappLinks.usedAt),
+            gt(whatsappLinks.expiresAt, now),
+          ),
+        )
+        .returning({ account: whatsappLinks.account });
+      if (!link) return undefined;
+      await tx
+        .insert(whatsappContacts)
+        .values({ account: link.account, waId, connectedAt: now, lastInboundAt: now })
+        .onConflictDoUpdate({
+          target: [whatsappContacts.account, whatsappContacts.waId],
+          set: { lastInboundAt: now },
+        });
+      return link.account;
+    });
+  }
+
+  /** The person wrote to Countersign: WhatsApp's 24-hour window for free-form messages opens again. */
+  async touchWhatsapp(waId: string, now: Date): Promise<number> {
+    const rows = await this.db
+      .update(whatsappContacts)
+      .set({ lastInboundAt: now })
+      .where(eq(whatsappContacts.waId, waId))
+      .returning({ account: whatsappContacts.account });
+    return rows.length;
+  }
+
+  /** STOP: the number is disconnected from every account. How many it was connected to. */
+  async removeWhatsapp(waId: string): Promise<number> {
+    const rows = await this.db
+      .delete(whatsappContacts)
+      .where(eq(whatsappContacts.waId, waId))
+      .returning({ account: whatsappContacts.account });
+    return rows.length;
+  }
+
+  async whatsappContacts(account: string): Promise<WhatsappContactRow[]> {
+    return this.db
+      .select()
+      .from(whatsappContacts)
+      .where(eq(whatsappContacts.account, account.toLowerCase()))
+      .orderBy(asc(whatsappContacts.connectedAt));
+  }
+
+  /** Messages to a number since `since`, sent or not (the hourly cap). */
+  async whatsappMessagesSince(waId: string, since: Date): Promise<number> {
+    const [row] = await this.db
+      .select({ n: count() })
+      .from(whatsappMessages)
+      .where(
+        and(
+          eq(whatsappMessages.waId, waId),
+          gte(whatsappMessages.createdAt, since),
+          inArray(whatsappMessages.status, ['sending', 'sent', 'delivered', 'read']),
+        ),
+      );
+    return row?.n ?? 0;
+  }
+
+  /**
+   * Claims the one message about `subject` for this person, before it is sent: false if it was
+   * claimed already (the same hold twice, or a second gateway process).
+   */
+  async claimWhatsappMessage(m: {
+    subject: string;
+    waId: string;
+    account: string;
+    kind: 'held' | 'proposal';
+    now: Date;
+  }): Promise<boolean> {
+    const { now, ...rest } = m;
+    const rows = await this.db
+      .insert(whatsappMessages)
+      .values({
+        ...rest,
+        account: m.account.toLowerCase(),
+        status: 'sending',
+        createdAt: now,
+        updatedAt: now,
+      })
+      .onConflictDoNothing()
+      .returning({ subject: whatsappMessages.subject });
+    return rows.length === 1;
+  }
+
+  /** What became of a claimed message: sent (with WhatsApp's id), failed or skipped, and why. */
+  async finishWhatsappMessage(
+    subject: string,
+    waId: string,
+    result: {
+      status: 'sent' | 'failed' | 'skipped';
+      via?: 'link' | 'template';
+      messageId?: string;
+      error?: string;
+    },
+  ): Promise<void> {
+    await this.db
+      .update(whatsappMessages)
+      .set({
+        status: result.status,
+        via: result.via ?? null,
+        messageId: result.messageId ?? null,
+        error: result.error ?? null,
+        updatedAt: new Date(),
+      })
+      .where(and(eq(whatsappMessages.subject, subject), eq(whatsappMessages.waId, waId)));
+  }
+
+  /**
+   * A delivery status from WhatsApp's webhook. Statuses can arrive out of order, so a message only
+   * moves forward (sent, delivered, read); failed always applies.
+   */
+  async whatsappDelivery(messageId: string, status: string, error?: string): Promise<void> {
+    const order = ['sending', 'sent', 'delivered', 'read'];
+    const rank = order.indexOf(status);
+    if (status !== 'failed' && rank === -1) return;
+    const earlier = status === 'failed' ? order : order.slice(0, rank);
+    await this.db
+      .update(whatsappMessages)
+      .set({ status, error: error ?? null, updatedAt: new Date() })
+      .where(
+        and(eq(whatsappMessages.messageId, messageId), inArray(whatsappMessages.status, earlier)),
+      );
+  }
+
+  async whatsappMessages(subject: string): Promise<WhatsappMessageRow[]> {
+    return this.db
+      .select()
+      .from(whatsappMessages)
+      .where(eq(whatsappMessages.subject, subject))
+      .orderBy(asc(whatsappMessages.createdAt));
   }
 }

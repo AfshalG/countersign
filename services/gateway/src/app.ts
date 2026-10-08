@@ -20,6 +20,7 @@ import type { DemoDeps } from './demo/accounts.js';
 import type { ProposalDeps } from './owner/proposals.js';
 import type { PauseDeps } from './owner/pause.js';
 import { registerOwnerRoutes } from './api/owner.js';
+import { registerWhatsAppRoutes, type WhatsAppRouteDeps } from './api/whatsapp.js';
 import { recoverAgent, type AgentDirectory } from './agents/identity.js';
 import { supplierNameOf } from './suppliers.js';
 import { registerAgentRoutes } from './api/agents.js';
@@ -66,6 +67,8 @@ export type AppDeps = {
   pause?: PauseDeps;
   /** ERC-8004 agents named on payments (Slice 19); without it, agents show by address only. */
   agents?: AgentDirectory;
+  /** WhatsApp (Slice 14); without it its routes do not exist and nothing is sent. */
+  whatsapp?: WhatsAppRouteDeps;
 };
 
 // ---------- views ----------
@@ -355,13 +358,17 @@ export function createApp(deps: AppDeps) {
   app.use('/v1/approvals/*', browserCors);
   if (deps.demo) app.use('/v1/demo/*', browserCors);
   if (deps.pause) app.use('/v1/owner/*', browserCors);
+  if (deps.whatsapp) app.use('/v1/whatsapp/*', browserCors);
   const requireToken = bearerAuth({
     token: deps.token,
     noAuthenticationHeader: { message: { error: 'unauthorized' } },
     invalidAuthenticationHeader: { message: { error: 'unauthorized' } },
     invalidToken: { message: { error: 'unauthorized' } },
   });
-  app.use('/v1/*', except(['/v1/approvals/*', '/v1/demo/*', '/v1/owner/*'], requireToken));
+  app.use(
+    '/v1/*',
+    except(['/v1/approvals/*', '/v1/demo/*', '/v1/owner/*', '/v1/whatsapp/*'], requireToken),
+  );
 
   app.openapi(submitPayment, async (c) => {
     const body = c.req.valid('json');
@@ -590,6 +597,7 @@ export function createApp(deps: AppDeps) {
   if (deps.demo) registerDemoRoutes(app, deps.demo, { token: deps.token, publicUrl });
   if (deps.pause) registerOwnerRoutes(app, deps.pause);
   if (deps.agents) registerAgentRoutes(app, { store, agents: deps.agents });
+  if (deps.whatsapp) registerWhatsAppRoutes(app, deps.whatsapp);
 
   // A page a person can open from an agent's message; public, like the link in the message.
   app.get('/p/:id', async (c) => {
