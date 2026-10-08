@@ -18,7 +18,8 @@
     "pause-smoke": "tsx scripts/pause-smoke.ts",
     "owners-smoke": "tsx scripts/owners-smoke.ts",
     "gas-calibrate": "tsx scripts/gas-calibrate.ts",
-    "register-agent": "tsx scripts/register-agent.ts"
+    "register-agent": "tsx scripts/register-agent.ts",
+    "agent-run": "tsx scripts/agent-run.ts"
   },
   "dependencies": {
     "@countersign/chain": "workspace:*",
@@ -34,6 +35,7 @@
     "zod": "4.6.5"
   },
   "devDependencies": {
+    "@countersign/scripted-agent": "workspace:*",
     "@countersign/sdk": "workspace:*",
     "@scalar/openapi-parser": "0.29.11",
     "@types/pg": "8.23.1",
