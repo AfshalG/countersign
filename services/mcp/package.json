@@ -9,7 +9,8 @@
     "start": "next start",
     "typecheck": "tsc --noEmit",
     "smoke": "tsx scripts/smoke.ts",
-    "a2a-smoke": "tsx scripts/a2a-smoke.ts"
+    "a2a-smoke": "tsx scripts/a2a-smoke.ts",
+    "question-smoke": "tsx scripts/question-smoke.ts"
   },
   "dependencies": {
     "@a2a-js/sdk": "1.3.0",
@@ -26,6 +27,7 @@
   },
   "devDependencies": {
     "@ai-sdk/mcp": "2.0.67",
+    "@countersign/scripted-agent": "workspace:*",
     "@hono/node-server": "2.1.3",
     "@modelcontextprotocol/client": "2.3.1",
     "@types/node": "24.19.1",
