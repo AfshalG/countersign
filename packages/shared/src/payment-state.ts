@@ -96,8 +96,9 @@ const TRANSITIONS: Record<PaymentStatus, readonly PaymentStatus[]> = {
   // A hard limit can also surface while checking (the contract's own simulation).
   checking: ['held', 'released', 'blocked'],
   held: ['released', 'refused', 'expired'],
-  // A released payment the chain will no longer accept (order closed meanwhile) fails.
-  released: ['settling', 'failed'],
+  // A released payment the chain will no longer accept fails (order closed meanwhile), or goes
+  // back to the owner when the contract's refusal is a hold (Slice 16: checked just before sending).
+  released: ['settling', 'failed', 'held'],
   settling: ['settled', 'failed'],
   settled: [],
   blocked: [],

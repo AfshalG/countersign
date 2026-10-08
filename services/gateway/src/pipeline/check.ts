@@ -80,11 +80,12 @@ async function evidenceOf(deps: EvaluateDeps, row: PaymentRequestRow, contract: 
  *    "would every hard rule pass?": the expected refusal is InvalidCheckerSignature. Any other
  *    refusal blocks or holds the request with the contract's reason.
  * 2. The checker, within its time limit. An error or a timeout is a hold (money rule 1).
- * 3. If the checker releases it, the payment is simulated again with the checker's signature;
- *    only a payment the contract would accept is released.
+ * 3. If the checker releases it, the send step simulates it with the checker's signature just
+ *    before signing a transaction (src/pipeline/send.ts): nothing the contract would refuse is
+ *    sent. (Until Slice 16 it was also simulated here; one read fewer per payment at volume.)
  *
- * With `dryRun` (POST /v1/checks) the checker is told not to sign and step 3 is skipped: a check
- * must never hand anyone a signature that, with the agent's, could pay.
+ * With `dryRun` (POST /v1/checks) the checker is told not to sign: a check must never hand anyone
+ * a signature that, with the agent's, could pay.
  */
 export async function evaluate(
   deps: EvaluateDeps,
@@ -163,20 +164,9 @@ export async function evaluate(
     };
   }
 
-  const signed = await simulate(deps.chain, vault, payment, {
-    kind: 'pay',
-    agentSig,
-    checkerSig: result.checkerSig,
-  });
-  if (signed !== undefined) {
-    return {
-      status: signed.status,
-      reason: signed.reason,
-      decidedBy: 'rule',
-      evidence: { contract: signed.error, checker: result.evidence },
-      detail: { contract: signed.error },
-    };
-  }
+  // No second simulation here (Slice 16): the send step simulates the payment with the checker's
+  // signature just before signing it, and one chain read fewer per payment matters at volume. A
+  // payment the contract no longer accepts then (the order closed meanwhile) fails there, unsent.
   return {
     status: 'released',
     decidedBy: 'checker',
