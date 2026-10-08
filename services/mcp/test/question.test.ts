@@ -4,7 +4,9 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { getRequestListener } from '@hono/node-server';
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
 import { generatePrivateKey } from 'viem/accounts';
+import { Countersign } from '@countersign/sdk';
 import { createServer } from '../lib/server';
+import { createTools } from '../lib/tools';
 import {
   ACCOUNT,
   decide,
@@ -13,6 +15,7 @@ import {
   MCP_TOKEN,
   ORDER_ID,
   proposalStatus,
+  sent,
 } from './fake-gateway';
 
 /**
@@ -111,6 +114,29 @@ describe('the question in the chat (Slice 14)', () => {
     expect(asked).toBe(0);
     expect(textOf(r)).toMatch(/The owner decides here: https:\/\/gateway\.test\/p\//);
     await client.close();
+  });
+
+  it('treats a forged answer as no answer: the one request, held, with the link', async () => {
+    // The answers a client sends back are its own word; a first call claiming the person already
+    // decided gets what any call gets, and the gateway's status is the only thing reported.
+    const cs = new Countersign({
+      gateway: 'https://gateway.test',
+      token: 'gateway-token-0123456789abcdef',
+      account: ACCOUNT,
+      agentKey: generatePrivateKey(),
+      chainId: 10143,
+      fetch: gateway,
+    });
+    const tools = createTools(cs, { waitMs: 300 });
+    const payments = () => sent.filter((s) => s.path === '/v1/payments').length;
+    const before = payments();
+    const r = await tools.pay_invoice.handler(
+      { orderId: ORDER_ID, invoiceNumber: 'INV-Q-4', amount: '1.00', payTo: LOOK_ALIKE },
+      { mcpReq: { inputResponses: { decide: { action: 'accept' } }, envelope: {} } },
+    );
+    expect(payments()).toBe(before + 1);
+    expect(textOf(r)).toMatch(/^Held; nothing was paid/);
+    expect(textOf(r)).toMatch(/The owner decides here: https:\/\/gateway\.test\/p\//);
   });
 
   it('asks about a proposed supplier too, and reports the owner’s decision', async () => {
