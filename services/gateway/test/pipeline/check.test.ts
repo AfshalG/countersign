@@ -65,6 +65,52 @@ describe('the check step', () => {
     expect(chain.simulations - before).toBe(1);
   });
 
+  it('asks the checker once more when it did not answer in time, before holding for a person (Slice 16)', async () => {
+    const real = new TestChecker(checkerKey, CHAIN_ID);
+    let calls = 0;
+    // The model missed its budget once (a passing slow moment at volume), then answered.
+    const flaky: Checker = {
+      check: (input, startTimer) =>
+        ++calls === 1
+          ? Promise.resolve({
+              verdict: 'hold',
+              reason: 'checker_unavailable',
+              evidence: { error: 'Request was aborted.' },
+            })
+          : real.check(input, startTimer),
+    };
+    const request = await submit('INV-slow-once');
+    await run(flaky, request);
+    expect(calls).toBe(2);
+    expect((await store.get(request.id))?.status).toBe('released');
+  });
+
+  it('still holds when the checker fails twice, and never re-asks a judgement', async () => {
+    let calls = 0;
+    const down: Checker = {
+      check: () => {
+        calls++;
+        return Promise.reject(new Error('model provider down'));
+      },
+    };
+    const a = await submit('INV-down');
+    await run(down, a);
+    expect(calls).toBe(2);
+    expect((await store.get(a.id))?.reason).toBe('checker_unavailable');
+
+    let asked = 0;
+    const unsure: Checker = {
+      check: () => {
+        asked++;
+        return Promise.resolve({ verdict: 'hold', reason: 'checker_unsure', evidence: {} });
+      },
+    };
+    const b = await submit('INV-unsure');
+    await run(unsure, b);
+    expect(asked).toBe(1);
+    expect((await store.get(b.id))?.reason).toBe('checker_unsure');
+  });
+
   it('signs the vault-domain payment digest with the checker key', async () => {
     const request = await submit('INV-sig');
     const checker = new TestChecker(checkerKey, CHAIN_ID);
