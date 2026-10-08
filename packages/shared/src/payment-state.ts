@@ -134,6 +134,11 @@ export const CONTRACT_REFUSALS: Record<string, Refusal> = {
   PolicyExpired: { status: 'held', reason: 'policy_inactive' },
   InvalidCheckerSignature: { status: 'held', reason: 'checker_unavailable' },
   InvalidOwnerSignature: { status: 'held', reason: 'checker_unavailable' },
+  // Several approvers (D36): payWithOwner asks the account to count the owners. The gateway
+  // gathers signatures until there are enough, so these mean the owners changed meanwhile.
+  NotEnoughSigners: { status: 'held', reason: 'checker_unavailable' },
+  OwnersOutOfOrder: { status: 'held', reason: 'checker_unavailable' },
+  UnknownOwner: { status: 'held', reason: 'checker_unavailable' },
 };
 
 /** Fail closed: an error we do not recognise is a hold, never a pass. */

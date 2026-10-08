@@ -62,6 +62,10 @@ describe('contract refusals', () => {
       'InvalidAgentSignature',
       'InvalidCheckerSignature',
       'InvalidOwnerSignature',
+      // D36: a pay-once's owners are checked by the account, so its errors reach the vault too.
+      'NotEnoughSigners',
+      'OwnersOutOfOrder',
+      'UnknownOwner',
     ];
     for (const e of errors) {
       const r = refusalFor(e);
