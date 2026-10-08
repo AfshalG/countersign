@@ -1,5 +1,5 @@
 import { encodeFunctionData, type Address, type Hex } from 'viem';
-import { GAS_LIMITS, orderVaultAbi } from '@countersign/chain';
+import { GAS_LIMITS, orderVaultAbi, ownerGas } from '@countersign/chain';
 import type { Chain, PaymentCall } from '../chain/types.js';
 import { sigsOf } from '../owner/signers.js';
 import type { PaymentRequestRow } from '../db/schema.js';
@@ -76,7 +76,10 @@ export async function sendOne(deps: SendDeps, row: PaymentRequestRow): Promise<v
           functionName: 'payWithOwner',
           args: [payment, call.ownerSigs],
         });
-  const gas = call.kind === 'pay' ? GAS_LIMITS.pay : GAS_LIMITS.payWithOwner;
+  // Monad charges the whole limit, so it is fixed, and a pay-once carries one P-256 check per
+  // owner who signed it (D36).
+  const gas =
+    call.kind === 'pay' ? GAS_LIMITS.pay : ownerGas('payWithOwner', call.ownerSigs.length);
   const signed = await pool.sign({ to: vault, data, gas }, row.id);
   await store.transition(row.id, 'released', 'settling', { sentAt: new Date() });
   pool.enqueue(signed);

@@ -1,7 +1,7 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { decodeFunctionData, keccak256, parseTransaction, toHex, type Hex } from 'viem';
 import { generatePrivateKey } from 'viem/accounts';
-import { orderVaultAbi, GAS_LIMITS } from '@countersign/chain';
+import { orderVaultAbi, GAS_LIMITS, ownerGas } from '@countersign/chain';
 import { Store } from '../../src/db/store.js';
 import type { Database } from '../../src/db/client.js';
 import { requestId } from '../../src/ids.js';
@@ -43,6 +43,16 @@ beforeEach(async () => {
 afterEach(() => {
   pool.stop();
 });
+
+/** One stored owner assertion (JSON: bigints as strings). */
+const stored = {
+  r: `0x${'11'.repeat(32)}`,
+  s: `0x${'22'.repeat(32)}`,
+  challengeIndex: '23',
+  typeIndex: '1',
+  authenticatorData: `0x${'33'.repeat(37)}`,
+  clientDataJSON: '{"type":"webauthn.get"}',
+};
 
 async function released(invoice: string, how: 'checker' | 'owner' = 'checker') {
   const invoiceHash = keccak256(toHex(invoice));
@@ -114,6 +124,23 @@ describe('the send step', () => {
     });
     expect(call.functionName).toBe('payWithOwner');
     expect(parseTransaction(after?.rawTx as Hex).gas).toBe(GAS_LIMITS.payWithOwner);
+  });
+
+  it('gives a pay-once the gas for every owner who signed it (D36)', async () => {
+    const row = await released('INV-two-owners', 'owner');
+    await store.update(row.id, 'released', {
+      ownerAuth: [
+        { owner: 0, auth: stored },
+        { owner: 1, auth: stored },
+      ],
+    });
+    const two = await store.get(row.id);
+    if (!two) throw new Error('missing');
+    await sendOne(deps(), two);
+    const tx = parseTransaction((await store.get(row.id))?.rawTx as Hex);
+    const call = decodeFunctionData({ abi: orderVaultAbi, data: tx.data as Hex });
+    expect((call.args[1] as readonly { owner: number }[]).map((x) => x.owner)).toEqual([0, 1]);
+    expect(tx.gas).toBe(ownerGas('payWithOwner', 2));
   });
 
   it('fails a payment the chain would now refuse, without using a nonce', async () => {

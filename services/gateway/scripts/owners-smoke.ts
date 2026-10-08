@@ -1,9 +1,9 @@
 /**
  * Several approvers on a live gateway (D36), as two people do it: a fresh judge account with one
  * passkey; a second person's passkey added with manage 2 and release 2; an agent proposes a
- * supplier, and approving it waits (202) until the second owner signs; either owner pauses alone;
- * unpausing waits for both. No service token on any owner call. Spends about 0.2 MON and 0.005
- * USDC.
+ * supplier, and approving it waits (202) until the second owner signs; a held payment is paid
+ * once only when both have signed; either owner pauses alone; unpausing waits for both. No
+ * service token on any owner call. Spends about 0.25 MON and 0.006 USDC.
  *
  *   pnpm --filter @countersign/gateway owners-smoke [gateway URL]
  */
@@ -98,6 +98,34 @@ console.log(
   `Bob added in ${String(Date.now() - t)} ms: ${String(added.owners.length)} owners, manage ${String(added.manage)}, release ${String(added.release)}`,
 );
 
+// 2b. A held payment now needs both to pay it once: Alice (202), then Bob (200, settles).
+const invoice = await call<{ requestId: string; status: string }>(
+  'POST',
+  `/v1/demo/accounts/${account}/invoices`,
+  { kind: 'amount_mismatch' },
+);
+const held = await call<Approval>('GET', `/v1/approvals/${invoice.requestId}`);
+const payOnce = held.actions.pay_once as Action;
+console.log(`held invoice: pay_once ${progress(payOnce.signatures)}`);
+const payBy = (p: SoftPasskey) =>
+  call<Approval>('POST', `/v1/approvals/${invoice.requestId}`, {
+    action: 'pay_once',
+    assertion: by(p, payOnce.challenge),
+  });
+const half = await payBy(alice);
+expectStatus('Alice pays once alone', half.httpStatus, 202);
+console.log(`Alice: 202, ${half.status}, ${progress(half.actions.pay_once?.signatures)}`);
+t = Date.now();
+const both = await payBy(bob);
+expectStatus('Bob pays once too', both.httpStatus, 200);
+let settled = both.status;
+while (settled !== 'settled') {
+  if (Date.now() - t > 30_000) throw new Error(`the pay-once did not settle: ${settled}`);
+  await new Promise((r) => setTimeout(r, 500));
+  settled = (await call<Approval>('GET', `/v1/approvals/${invoice.requestId}`)).status;
+}
+console.log(`Bob: paid once by both, settled in ${String(Date.now() - t)} ms`);
+
 // 3. The agent proposes a supplier; Alice approves (202, waiting), then Bob (200, approved).
 const agent = new Countersign({
   gateway,
@@ -144,12 +172,12 @@ const paused = await call<Owner>('POST', `/v1/owner/${account}`, {
 expectStatus('Bob pauses alone', paused.httpStatus, 200);
 console.log(`paused by Bob alone: ${String(paused.paused)}`);
 const unpause = (await owner()).actions.unpause as Action;
-const half = await call<Owner>('POST', `/v1/owner/${account}`, {
+const halfUnpause = await call<Owner>('POST', `/v1/owner/${account}`, {
   action: 'unpause',
   deadline: unpause.deadline,
   assertion: by(alice, unpause.challenge),
 });
-expectStatus('Alice unpauses alone', half.httpStatus, 202);
+expectStatus('Alice unpauses alone', halfUnpause.httpStatus, 202);
 const again = (await owner()).actions.unpause as Action;
 if (again.challenge !== unpause.challenge) throw new Error('the unpause challenge changed');
 console.log(`Alice unpaused: 202, still paused, ${progress(again.signatures)}; same challenge`);
