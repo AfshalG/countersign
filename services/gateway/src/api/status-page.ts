@@ -1,6 +1,7 @@
 import { chain as monad } from '@countersign/chain';
 import { formatUsdc, REASON_TEXT } from '@countersign/shared';
 import type { PaymentRequestRow, ProposalRow } from '../db/schema.js';
+import type { RunSummary } from '../runs.js';
 
 /**
  * A plain, read-only page a person can open from an agent's message (Slice 12, S12-7): what
@@ -212,5 +213,47 @@ export function proposalPage(p: ProposalRow): string {
   return page(
     headline,
     `<p class="muted">Countersign · Monad testnet</p><h1>${escape(headline)}</h1><dl>${rows}</dl><p class="note">Nothing changes until the owner signs with their passkey. A new payment address also waits out the account's waiting period before it can be paid.</p>`,
+  );
+}
+
+/**
+ * A run's page (Slice 16): how far the run is, how long it has taken, and the holds grouped by
+ * reason (D18), each linked to its approval page. It reloads itself until every payment is decided.
+ */
+export function runPage(s: RunSummary, publicUrl: string): string {
+  const seconds = (ms: number | null) => (ms === null ? '–' : `${(ms / 1000).toFixed(1)} s`);
+  const groups = (title: string, list: RunSummary['held']) =>
+    list.length === 0
+      ? ''
+      : `<h2>${escape(title)}</h2>${list
+          .map(
+            (g) =>
+              `<details><summary><strong>${String(g.count)}</strong> · ${escape(g.text)}</summary><ul>${g.ids
+                .map(
+                  (id) =>
+                    `<li><a href="${escape(`${publicUrl}/p/${id}`)}"><code>${escape(id.slice(0, 18))}…</code></a></li>`,
+                )
+                .join('')}</ul></details>`,
+          )
+          .join('')}`;
+  const heldCount = s.held.reduce((n, g) => n + g.count, 0);
+  const blockedCount = s.blocked.reduce((n, g) => n + g.count, 0);
+  return page(
+    `Run of ${String(s.size)}`,
+    `<p class="muted">A payment run</p>
+     <h1>${String(s.size)} invoices</h1>
+     <p class="lead">${s.done ? `All decided in ${seconds(s.elapsedMs)}` : `${String(s.decided)} of ${String(s.size)} decided, ${seconds(s.elapsedMs)} so far`}</p>
+     <dl>${grouped(
+       row(
+         'Paid and final',
+         `${String(s.settled.count)} · each in ${seconds(s.settled.p50Ms)} (median), ${seconds(s.settled.p95Ms)} (95th percentile)`,
+       ) +
+         row('Held for the owner', String(heldCount)) +
+         row('Stopped', String(blockedCount)) +
+         row('Submitted', escape(s.submittedAt)),
+     )}</dl>
+     ${groups('Held, by reason', s.held)}
+     ${groups('Stopped, by reason', s.blocked)}
+     ${s.done ? '' : '<script>setTimeout(() => location.reload(), 2000)</script>'}`,
   );
 }

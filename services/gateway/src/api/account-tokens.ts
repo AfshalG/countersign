@@ -51,6 +51,7 @@ const ACCOUNT_ROUTES: readonly { method: string; path: RegExp }[] = [
   { method: 'GET', path: /^\/v1\/feed$/ },
   { method: 'POST', path: /^\/v1\/accounts$/ },
   { method: 'GET', path: /^\/v1\/accounts\/[^/]+\/orders$/ },
+  { method: 'GET', path: /^\/v1\/accounts\/[^/]+\/runs$/ },
   { method: 'POST', path: /^\/v1\/proposals$/ },
   { method: 'GET', path: /^\/v1\/proposals\/[^/]+$/ },
 ];

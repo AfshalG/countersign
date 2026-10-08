@@ -108,6 +108,8 @@ export const runs = pgTable('runs', {
   createdAt: at('created_at').notNull().defaultNow(),
 });
 
+export type RunRow = typeof runs.$inferSelect;
+
 /** The next nonce each relayer will use, so a restart resumes where it stopped. */
 export const relayerNonces = pgTable('relayer_nonces', {
   address: text('address').primaryKey(),

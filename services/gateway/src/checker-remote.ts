@@ -1,6 +1,5 @@
-import { keccak256, stringToHex, type Address, type Hex } from 'viem';
+import { getAddress, keccak256, stringToHex, type Address, type Hex } from 'viem';
 import { REASONS, type Reason } from '@countersign/shared';
-import type { Chain } from './chain/types.js';
 import type { CheckInput, CheckResult, Checker } from './checker.js';
 import type { PaymentRequestRow } from './db/schema.js';
 import type { Store } from './db/store.js';
@@ -29,18 +28,16 @@ const DEMO_QUOTE_HASH = keccak256(stringToHex(DEMO_QUOTE));
  * quote. An order opened without one (a label for a hash) has no quote, and the checker says so.
  */
 export async function orderFacts(
-  deps: {
-    store: Pick<Store, 'orderByVault' | 'approvedQuote'>;
-    chain: Pick<Chain, 'addressOnFile'>;
-  },
+  deps: { store: Pick<Store, 'orderByVault' | 'approvedQuote'> },
   row: PaymentRequestRow,
 ): Promise<OrderFacts | null> {
   const order = await deps.store.orderByVault(row.vault);
   if (!order) return null;
-  const [addressOnFile, approved] = await Promise.all([
-    deps.chain.addressOnFile(row.account as Address, row.vault as Address),
-    deps.store.approvedQuote(row.account, order.orderHash),
-  ]);
+  // The checker is asked only after the contract's own rules passed by simulation, which proved
+  // the payment's address is the one on file (else PayToNotOnFile): no chain read needed for it
+  // (Slice 16: one paced read fewer per payment at volume).
+  const addressOnFile = getAddress(row.payTo);
+  const approved = await deps.store.approvedQuote(row.account, order.orderHash);
   const quote =
     typeof approved?.document === 'string'
       ? { text: approved.document }

@@ -24,7 +24,8 @@
     "whatsapp-connect": "tsx scripts/whatsapp-connect.ts",
     "whatsapp-template": "tsx scripts/whatsapp-template.ts",
     "proof-smoke": "tsx scripts/proof-smoke.ts",
-    "website-smoke": "tsx scripts/website-smoke.ts"
+    "website-smoke": "tsx scripts/website-smoke.ts",
+    "run-200": "tsx scripts/run-200.ts"
   },
   "dependencies": {
     "@countersign/chain": "workspace:*",

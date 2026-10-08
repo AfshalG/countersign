@@ -141,11 +141,41 @@ export const runCreated = z
   })
   .openapi('RunSubmitted');
 
+const reasonGroup = z.object({
+  reason: z.enum(REASONS),
+  text: z.string(),
+  count: z.number(),
+  ids: z.array(z.string()),
+});
+
+export const runSummaryView = z
+  .object({
+    runId: z.string(),
+    account: z.string(),
+    size: z.number(),
+    submittedAt: z.string(),
+    decided: z.number().openapi({ description: 'Paid and final, held, or stopped' }),
+    done: z.boolean(),
+    elapsedMs: z.number().openapi({
+      description: 'From intake to the last decision (to now, while the run is going)',
+    }),
+    settled: z.object({
+      count: z.number(),
+      p50Ms: z.number().nullable(),
+      p95Ms: z.number().nullable(),
+      maxMs: z.number().nullable(),
+    }),
+    held: z.array(reasonGroup).openapi({ description: 'Holds grouped by reason (D18)' }),
+    blocked: z.array(reasonGroup),
+  })
+  .openapi('RunSummary');
+
 export const runView = z
   .object({
     runId: z.string(),
     size: z.number(),
     byStatus: z.record(z.string(), z.number()),
+    summary: runSummaryView,
     requests: z.array(paymentView),
   })
   .openapi('Run');

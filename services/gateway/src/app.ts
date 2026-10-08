@@ -12,7 +12,8 @@ import type { Chain, WebAuthnAuth } from './chain/types.js';
 import type { Checker } from './checker.js';
 import { evaluate, SimulationUnavailable } from './pipeline/check.js';
 import { registerOrderRoutes, type Indexing } from './api/orders.js';
-import { paymentPage, proposalPage } from './api/status-page.js';
+import { paymentPage, proposalPage, runPage } from './api/status-page.js';
+import { runSummary } from './runs.js';
 import { llmsFullTxt, llmsTxt } from './api/llms.js';
 import { payOnce, refuseHeld, registerApprovalRoutes } from './api/approvals.js';
 import { registerDemoRoutes } from './api/demo.js';
@@ -30,6 +31,7 @@ import type { WebsiteProofs } from './proofs/website.js';
 import type { StatusChange, Store } from './db/store.js';
 import { requestId, runId } from './ids.js';
 import {
+  accountParam,
   address,
   apiError,
   bytes32,
@@ -223,6 +225,32 @@ const getRun = createRoute({
   security: secured,
   request: { params: requestIdParam },
   responses: { 200: json(runView, 'The run'), 404: json(apiError, 'unknown_run'), ...errors },
+});
+
+const listRuns = createRoute({
+  method: 'get',
+  path: '/v1/accounts/{account}/runs',
+  tags: ['Payments'],
+  summary: 'An account’s runs, newest first, each with its run board',
+  security: secured,
+  request: { params: accountParam },
+  responses: {
+    200: json(
+      z.object({
+        account: z.string(),
+        runs: z.array(
+          z.object({
+            runId: z.string(),
+            size: z.number(),
+            submittedAt: z.string(),
+            board: z.string().openapi({ description: 'The read-only run page' }),
+          }),
+        ),
+      }),
+      'The runs',
+    ),
+    ...errors,
+  },
 });
 
 const approve = createRoute({
@@ -505,7 +533,40 @@ export function createApp(deps: AppDeps) {
     const byStatus = Object.fromEntries(
       PAYMENT_STATUSES.map((s) => [s, rows.filter((r) => r.status === s).length]),
     );
-    return c.json({ runId: id, size: rows.length, byStatus, requests: rows.map(view) }, 200);
+    const run = (await store.getRun(id)) ?? {
+      id,
+      account: rows[0]?.account ?? '',
+      size: rows.length,
+      createdAt: rows[0]?.requestedAt ?? new Date(),
+    };
+    return c.json(
+      {
+        runId: id,
+        size: rows.length,
+        byStatus,
+        summary: runSummary(run, rows, new Date()),
+        requests: rows.map(view),
+      },
+      200,
+    );
+  });
+
+  app.openapi(listRuns, async (c) => {
+    const { account } = c.req.valid('param');
+    if (!mayUse(c, account)) return c.json(wrongAccount, 403);
+    const runs = await store.runsOf(account);
+    return c.json(
+      {
+        account,
+        runs: runs.map((r) => ({
+          runId: r.id,
+          size: r.size,
+          submittedAt: r.createdAt.toISOString(),
+          board: `${publicUrl}/r/${r.id}`,
+        })),
+      },
+      200,
+    );
   });
 
   app.openapi(approve, async (c) => {
@@ -623,6 +684,19 @@ export function createApp(deps: AppDeps) {
   if (deps.pause) registerOwnerRoutes(app, deps.pause);
   if (deps.agents) registerAgentRoutes(app, { store, agents: deps.agents });
   if (deps.whatsapp) registerWhatsAppRoutes(app, deps.whatsapp);
+
+  // A run's page (Slice 16): public like the status pages (the run id is an unguessable hash),
+  // read-only, refreshing itself; Sophie's run board replaces it. `?format=json` for the board.
+  app.get('/r/:id', async (c) => {
+    const id = c.req.param('id');
+    const rows = await store.listRun(id);
+    const run = await store.getRun(id);
+    if (!run || rows.length === 0)
+      return c.html('<!doctype html><title>Not found</title><p>No run with that id.</p>', 404);
+    const summary = runSummary(run, rows, new Date());
+    if (c.req.query('format') === 'json') return c.json(summary, 200);
+    return c.html(runPage(summary, publicUrl));
+  });
 
   // A page a person can open from an agent's message; public, like the link in the message.
   app.get('/p/:id', async (c) => {
