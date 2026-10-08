@@ -34,6 +34,7 @@ The real things an agent reads and pays, on their own sites, as a second party w
 |---|---|---|---|---|
 | Quote | `/quotes/q-2210` | Nothing | The agent proposes Kalibre and an order; approved with Face ID (Slice 9) | Slice 15: "listed on the supplier's website" |
 | Poisoned quote | `/quotes/q-2211` | An address the website's file does not list | Proposed; the owner sees the address (a new address waits out the waiting period) | Slice 15: "not listed on the supplier's website" |
+| New supplier quote (added in Slice 15) | `/quotes/nw-q-301` on `northwind-prints-demo.vercel.app` | Nothing | Proposed; Northwind's own site lists the address, proven on Monad; approving names the proof in the supplier record | |
 | Clean invoice | `/invoices/ks-1001` | Nothing | Settled, no prompt | |
 | Changed address | `/invoices/ks-1002` | "New payment details", a look-alike address | Held: `address_mismatch` (the contract) | |
 | Padded line | `/invoices/ks-1003` | An extra line not on the order | Settled (the stand-in checker cannot read it) | Slice 10: held, `items_mismatch` |

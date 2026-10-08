@@ -2,7 +2,7 @@
 
 ## Status
 
-**PLANNED (8 Oct 2026); building now.** Technical decisions made by Claude (Afshal, 7 Oct: decide technical choices); D10 (Primus in the core) and S2-1 to S2-5 stand. Owner: Afshal (contracts, gateway); built by Claude.
+**DONE (8 Oct 2026).** Every part built test-first and checked live on Monad testnet (below). Technical decisions made by Claude (Afshal, 7 Oct: decide technical choices); D10 (Primus in the core) and S2-1 to S2-5 stand. Owner: Afshal (contracts, gateway); built by Claude.
 
 ## Goal
 
@@ -60,6 +60,37 @@ Foundry: the registry accepts Spike 2's recorded proof and stores what it lists;
 ## Manual testing (Monad testnet, a few proofs)
 
 Deploy the registry; set the Primus keys on Railway's gateway. Propose Q-2210 (Kalibre, listed) and Q-2211 (poisoned, not listed) for the main account; propose Northwind's quote and approve it with the passkey: `SupplierSet` names a proof hash the registry recorded. A changed-address invoice: the page says the site lists the address on file. Change a test file to another address: the next payment is held `website_changed`.
+
+## Built (8 Oct)
+
+- **`SupplierProofs`** (`contracts/src/SupplierProofs.sol`), deployed on testnet at `0xA91FBA7133F24aadf77c28769C706f71E281aE57`, trusting Spike 2's Primus verifier proxy. 18 Foundry tests against Spike 2's two real proofs (the file listing Kalibre's address, and the same file changed), including both byte-shift attacks, a lower-case address, a proof over an hour old or from the future, and every pinned field. Recording costs 222,035 gas on Monad's estimate (`GAS_LIMITS.recordSupplierProof` 250,000). Primus's contracts are a pinned Soldeer dependency of `contracts/` (only the interface is used by `src/`).
+- **The gateway** (`src/proofs/`): `WebsiteProofs` reads the file first (a missing or malformed file costs no proof), asks Primus (`PrimusProver`, Core SDK 0.3.7, WebAssembly, loaded only with keys), records through the relayers (`registryRecorder`, dry run first), and keeps each check in `website_proofs` (migration `0008`). One proof per file per 10 minutes, one at a time per file; failures are kept a minute.
+- **Proposals:** checked as soon as they are stored; `summary.websiteProof` on the approval page; approve actions wait while `checking`; `set_supplier` signs the proof hash when the site lists the proposed address; an approved supplier's website is recorded in `supplier_websites` (S15-4).
+- **Holds:** an `address_mismatch` hold (and a `website_changed` one) shows what the site on file lists, with `matches`; the check starts when the hold happens.
+- **Evidence that expires:** an hourly sweep checks each known site whose last check is a day old; `evaluate` holds a payment as `website_changed` (a new reason in `packages/shared`) when the site used to list the address on file and a later proof lists another. Only proofs count.
+- **Judge and test accounts:** Kalibre Studio is set up with Kalibre's latest proof (within a day).
+- **The demo site:** quotes and invoices print the supplier's website; Northwind Prints has its own domain, `northwind-prints-demo.vercel.app` (a production domain of the same Vercel project, so every deploy carries it), with its own address file and quote `nw-q-301`. Kalibre's file is byte for byte Slice 2's.
+- **Railway:** `PRIMUS_APP_ID` and `PRIMUS_APP_SECRET` set on the gateway from `.env` through stdin; `/health` reports `proofs: { primus: true, registry }`.
+- Tests: 41 new (Foundry 18, gateway 23, supplier 4 updated); 563 TypeScript tests and 138 Foundry tests pass.
+
+## Results (8 Oct 2026, Monad testnet)
+
+| Check | Result |
+|---|---|
+| Primus proves Kalibre's file from this machine (`proof-smoke`) | 5.5 s; recorded in 725 ms ([tx](https://testnet.monadexplorer.com/tx/0xc1f69e182104952d7a49106e107a0cb9e1c9de005c8ea46255cd257b23f22167)); the registry reads back the address |
+| Kalibre's quote Q-2210, proposed by a test account (`website-smoke`) | `verified` via the site on file, 12.3 s (proof and record) |
+| The poisoned quote Q-2211 | `not_listed`: "lists a different address: 0x90f9…5fEc", 0.9 s (the proof reused) |
+| Northwind's quote, a supplier new to the account | `verified` via the proposal's site, 9.4 s ([tx](https://testnet.monadexplorer.com/tx/0x0395a81236101ec099bafdff9567a00a6946a47f14be6335fbfb9ad22ea8264a)) |
+| Approving Northwind with the owner key | 2.9 s; the supplier record on chain names proof `0xceaf53ba…25f7c8` |
+| A changed-address invoice (KS-1002) | Held; the page said the site "still lists the address on file … not the invoice's", 223 ms after the hold; refused |
+
+Not run live: a supplier whose file actually changes (`website_changed`). It is covered by tests; changing a live file would mean a redeploy of the demo site with another address.
+
+**Found on the way:**
+
+1. The live gateway's daily limit on new demo accounts (10) was used up by the afternoon, so the live test reused a test account (`website-smoke` takes `COUNTERSIGN_*`). Judges and integrating teams share that limit: raising it is Afshal's call (MON).
+2. Northwind's domain, added only as an alias, was behind Vercel's deployment protection; added as a production domain of the project, it is public and follows each deploy.
+3. A proof takes about 10 s end to end (Primus about 5.5 s, the record about 1 s, the file read and polling the rest), so the approval waits that long the first time; later proposals of the same site reuse the proof for 10 minutes.
 
 ## Limits, stated
 
