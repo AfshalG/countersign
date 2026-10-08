@@ -452,6 +452,7 @@ export function createApp(deps: AppDeps) {
       });
       requests.push({ id: request.id, status: request.status });
     }
+    await store.addToRun(id, ids);
     return c.json({ runId: id, requests }, 201);
   });
 

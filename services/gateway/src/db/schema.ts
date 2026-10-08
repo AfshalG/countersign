@@ -110,6 +110,23 @@ export const runs = pgTable('runs', {
 
 export type RunRow = typeof runs.$inferSelect;
 
+/**
+ * Every invoice each run sent (Slice 16). A request pays its invoice once and keeps the run that
+ * first sent it (`payment_requests.run_id`); when two agents send the same invoice in different
+ * runs at once, each run still lists it here.
+ */
+export const runRequests = pgTable(
+  'run_requests',
+  {
+    runId: text('run_id').notNull(),
+    requestId: text('request_id').notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.runId, t.requestId] }),
+    index('run_requests_request_idx').on(t.requestId),
+  ],
+);
+
 /** The next nonce each relayer will use, so a restart resumes where it stopped. */
 export const relayerNonces = pgTable('relayer_nonces', {
   address: text('address').primaryKey(),

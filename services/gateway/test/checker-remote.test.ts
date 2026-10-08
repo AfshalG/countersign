@@ -82,6 +82,25 @@ describe('what the gateway tells the checker about the order (Slice 10)', () => 
     });
   });
 
+  it('gives a quote the agent read as a web page as HTML, so the checker reads its lines (Slice 16)', async () => {
+    const page = `<!doctype html><html><body><h1>Quote Q-2210</h1><table><tr><td>Product photos</td><td>50</td></tr></table></body></html>`;
+    const documentHash = keccak256(stringToHex(page));
+    await order(documentHash);
+    const { proposal } = await store.createProposal({
+      id: keccak256(stringToHex('proposal html')),
+      account: ACCOUNT,
+      supplierName: 'Kalibre Studio',
+      website: null,
+      payTo: KALIBRE,
+      amount: '5000',
+      expiry: 2_000_000_000,
+      documentHash,
+      document: page,
+    });
+    await store.decideProposal(proposal.id, 'approved');
+    expect((await orderFacts({ store }, row(null)))?.quote).toEqual({ html: page });
+  });
+
   it('gives a judge’s demo order its quote, and no quote for an order opened without one', async () => {
     await order(keccak256(stringToHex(DEMO_QUOTE)));
     expect((await orderFacts({ store }, row(null)))?.quote).toEqual({ text: DEMO_QUOTE });

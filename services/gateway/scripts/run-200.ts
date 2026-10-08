@@ -20,7 +20,8 @@ import { Countersign, type Order, type PayInput } from '@countersign/sdk';
 import { createTestAccount, TestOwner } from '@countersign/sdk/test-account';
 
 process.loadEnvFile(new URL('../../../.env', import.meta.url));
-const env = loadEnv(z.object({ DEMO_FUNDER_PRIVATE_KEY: z.string().regex(/^0x[0-9a-fA-F]{64}$/) }));
+// The deployer funds the run: never a wallet the gateway sends from (it counts its own nonces).
+const env = loadEnv(z.object({ DEPLOYER_PRIVATE_KEY: z.string().regex(/^0x[0-9a-fA-F]{64}$/) }));
 const gateway =
   process.argv.slice(2).find((a) => a.startsWith('http')) ??
   'https://gateway-production-e17a.up.railway.app';
@@ -72,7 +73,7 @@ const cs = new Countersign({
 const owner = TestOwner.fromPrivateKey(me.ownerKey);
 const perOrder = Math.ceil(SIZE / ORDERS) * 0.001 + 0.002;
 const usdcNeeded = parseUnits((perOrder * ORDERS + 0.01).toFixed(6), 6);
-const funder = privateKeyToAccount(env.DEMO_FUNDER_PRIVATE_KEY as Hex);
+const funder = privateKeyToAccount(env.DEPLOYER_PRIVATE_KEY as Hex);
 const reader = createPublicClient({ chain, transport: http() });
 const fundTx = await createWalletClient({
   account: funder,
@@ -177,6 +178,7 @@ type Summary = {
   blocked: { reason: string; count: number }[];
 };
 type RunView = {
+  byStatus: Record<string, number>;
   summary: Summary;
   requests: { id: string; status: string; reason: string | null; tx: { hash: string | null } }[];
 };
@@ -189,6 +191,7 @@ for (;;) {
   ).json()) as RunView;
   log(
     `${String(view.summary.decided)}/${String(SIZE)} decided, ${String(view.summary.settled.count)} paid`,
+    JSON.stringify(Object.fromEntries(Object.entries(view.byStatus).filter(([, n]) => n > 0))),
   );
   if (view.summary.done || Date.now() - started > 15 * 60_000) break;
   await new Promise((r) => setTimeout(r, 2_000));
