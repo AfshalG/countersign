@@ -1,6 +1,7 @@
 import {
   encodeAbiParameters,
   getAddress,
+  zeroHash,
   isAddress,
   keccak256,
   stringToHex,
@@ -8,7 +9,7 @@ import {
   type Hex,
 } from 'viem';
 import { supplierId, supplierSlug } from '@countersign/shared';
-import type { ProofError, ProposalRow, WebsiteProofRow } from '../db/schema.js';
+import type { PaymentRequestRow, ProofError, ProposalRow, WebsiteProofRow } from '../db/schema.js';
 import type { Store } from '../db/store.js';
 import { listedIn, toSolidityAttestation, type SolidityAttestation } from './attestation.js';
 
@@ -37,6 +38,8 @@ const REUSE_MS = 10 * 60_000;
 const FAILURE_MS = 60_000;
 /** A proposal's check ends by then; its approval waits for it (S15-5). */
 const PROPOSAL_TIMEOUT_MS = 60_000;
+/** Approved suppliers' sites are checked again once their last check is this old (S15-8). */
+const RECHECK_MS = 24 * 3_600_000;
 /** Reading the file before spending a proof on it. */
 const FETCH_TIMEOUT_MS = 5_000;
 
@@ -67,9 +70,13 @@ export type WebsiteProofDeps = {
     Store,
     | 'addWebsiteProof'
     | 'latestWebsiteProof'
+    | 'latestProvenWebsiteProof'
+    | 'websiteListedBefore'
+    | 'supplierWebsiteUrls'
     | 'startProposalCheck'
     | 'finishProposalCheck'
     | 'supplierWebsite'
+    | 'orderByVault'
   >;
   /** Absent without Primus keys: every check then says `not_configured` (the fallback). */
   prover: Prover | undefined;
@@ -83,7 +90,9 @@ export type WebsiteProofDeps = {
 
 /** The demo supplier's site, for accounts whose Kalibre Studio was set up without a proposal. */
 export const KALIBRE_FILE = `https://countersign-supplier-demo.vercel.app${FILE_PATH}`;
-const KNOWN_SITES: Record<string, string> = { [supplierId('kalibre-studio')]: KALIBRE_FILE };
+const KNOWN_SITES: Record<string, string> = {
+  [supplierId('kalibre-studio').toLowerCase()]: KALIBRE_FILE,
+};
 
 export class WebsiteProofs {
   private readonly inFlight = new Map<string, Promise<WebsiteProofRow>>();
@@ -180,11 +189,73 @@ export class WebsiteProofs {
     const account = p.account as Address;
     const id = supplierId(supplierSlug(p.supplierName));
     if (await this.deps.onFile(account, id)) {
-      const onFile = (await this.deps.store.supplierWebsite(account, id)) ?? KNOWN_SITES[id];
+      const onFile = await this.siteOnFile(account, id);
       if (onFile) return { url: onFile, source: 'on_file' };
     }
     const given = p.website === null ? null : fileUrlOf(p.website);
     return given ? { url: given, source: 'proposal' } : null;
+  }
+
+  /** The address file of the website a supplier was approved with, if it is known. */
+  async siteOnFile(account: Address, supplier: Hex): Promise<string | null> {
+    return (
+      (await this.deps.store.supplierWebsite(account, supplier)) ??
+      KNOWN_SITES[supplier.toLowerCase()] ??
+      null
+    );
+  }
+
+  /**
+   * Evidence that expires (D21, S15-8): whether the supplier's website on file used to list the
+   * address on file and a later proof shows it listing another. Only proofs count, so a check that
+   * could not be made never holds a payment. `payTo` is the address on file here: the contract's
+   * rules already passed.
+   */
+  async websiteChanged(
+    row: Pick<PaymentRequestRow, 'account' | 'vault' | 'payTo'>,
+  ): Promise<{ url: string; listed: string; onFile: string; proofHash: string } | null> {
+    const order = await this.deps.store.orderByVault(row.vault);
+    if (!order) return null;
+    const url = await this.siteOnFile(row.account as Address, order.supplierId as Hex);
+    if (!url) return null;
+    const latest = await this.deps.store.latestProvenWebsiteProof(url);
+    if (!latest?.listed || !latest.proofHash) return null;
+    if (latest.listed.toLowerCase() === row.payTo.toLowerCase()) return null;
+    if (!(await this.deps.store.websiteListedBefore(url, row.payTo, latest.createdAt))) return null;
+    return { url, listed: latest.listed, onFile: row.payTo, proofHash: latest.proofHash };
+  }
+
+  /**
+   * The latest proof that `url` lists `address`, if recorded within a day; zero otherwise (and a
+   * check starts, so the next caller has one). New accounts' demo supplier names it (Slice 15).
+   */
+  async freshListing(url: string, address: Address): Promise<Hex> {
+    const latest = await this.deps.store.latestProvenWebsiteProof(url);
+    const fresh =
+      latest?.proofHash &&
+      latest.signedAt &&
+      this.now() - latest.signedAt.getTime() < RECHECK_MS &&
+      latest.listed?.toLowerCase() === address.toLowerCase();
+    if (fresh) return latest.proofHash as Hex;
+    this.check(url).catch((e: unknown) => {
+      console.error(`website check ${url}: ${e instanceof Error ? e.message : String(e)}`);
+    });
+    return zeroHash;
+  }
+
+  /** The daily check (S15-8): every known supplier site whose last check is over a day old. */
+  async recheck(): Promise<void> {
+    const urls = new Set([
+      ...(await this.deps.store.supplierWebsiteUrls()),
+      ...Object.values(KNOWN_SITES),
+    ]);
+    for (const url of urls) {
+      const latest = await this.deps.store.latestWebsiteProof(url);
+      if (latest && this.now() - latest.createdAt.getTime() < RECHECK_MS) continue;
+      await this.check(url).catch((e: unknown) => {
+        console.error(`website recheck ${url}: ${e instanceof Error ? e.message : String(e)}`);
+      });
+    }
   }
 
   /** Checks a new proposal's website; the approval waits for it, at most a minute. */

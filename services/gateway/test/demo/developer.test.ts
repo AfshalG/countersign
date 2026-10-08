@@ -167,3 +167,31 @@ describe('getting an account token with the owner’s passkey', () => {
     expect((await a.request(`/v1/demo/accounts/${unknown}/token`)).status).toBe(404);
   });
 });
+
+describe('a new account’s demo supplier names its website proof (Slice 15)', () => {
+  it('sets Kalibre Studio up with the latest proof that its own site lists the address', async () => {
+    const proof = `0x${'5f'.repeat(32)}` as const;
+    const a = createApp({
+      store,
+      chain: new FakeChain(),
+      checker: new TestChecker(generatePrivateKey(), CHAIN_ID),
+      chainId: CHAIN_ID,
+      checkerTimeoutMs: 2_000,
+      token: SERVICE,
+      health: () => Promise.resolve({}),
+      demo: { ...deps, kalibreProof: () => Promise.resolve(proof) },
+    });
+    const view = await create(a, MY_AGENT);
+    const row = await store.getDemoAccount(view.account);
+    const plan = demoPlan.fromJson(row?.plan as Parameters<typeof demoPlan.fromJson>[0]);
+    expect(plan.supplier.proofHash).toBe(proof);
+    expect(view.actions[1]?.summary).toContain('its own website lists it');
+  });
+
+  it('without one, the supplier record names no proof, as before', async () => {
+    const view = await create(app(), MY_AGENT);
+    const row = await store.getDemoAccount(view.account);
+    const plan = demoPlan.fromJson(row?.plan as Parameters<typeof demoPlan.fromJson>[0]);
+    expect(plan.supplier.proofHash).toBe(`0x${'0'.repeat(64)}`);
+  });
+});

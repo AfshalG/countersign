@@ -1,4 +1,4 @@
-import { encodeFunctionData, getAddress, type Address, type Hex } from 'viem';
+import { encodeFunctionData, getAddress, zeroHash, type Address, type Hex } from 'viem';
 import { accountFactoryAbi, GAS_LIMITS } from '@countersign/chain';
 import { formatUsdc } from '@countersign/shared';
 import type { DemoAccountRow } from '../db/schema.js';
@@ -62,6 +62,11 @@ export type DemoDeps = {
   agentPrivateKey?: Hex;
   /** For tests: the demo agent itself. */
   agent?: DemoAgent;
+  /**
+   * Slice 15: the latest proof that Kalibre Studio's own website lists its address (zero if none
+   * is fresh), so a new account's supplier record names its evidence.
+   */
+  kalibreProof?: () => Promise<Hex>;
   finalTimeoutMs?: number;
 };
 
@@ -161,6 +166,7 @@ export function createDemoAccount(deps: DemoDeps, key: { qx: Hex; qy: Hex }, age
         checkerKey: deps.checkerKey,
         now: Math.floor(Date.now() / 1000),
         ownAgent: ownAgent !== undefined,
+        supplierProof: (await deps.kalibreProof?.().catch(() => undefined)) ?? zeroHash,
       });
       await deps.store.createDemoAccount({
         account,

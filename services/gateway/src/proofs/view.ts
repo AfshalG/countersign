@@ -130,3 +130,59 @@ export function websiteProofView(input: {
         text: `${site ?? 'The website'} lists this address (proven by Primus and recorded on Monad, ${ago(age)}).`,
       };
 }
+
+/**
+ * A changed-address hold (Slice 15 part 2): what the supplier's website on file lists, against the
+ * address on file and the invoice's. `status` is about the address on file (`verified`: the site
+ * still lists it); `matches` says which of the two the site lists.
+ */
+export function holdWebsiteView(input: {
+  url: string | null;
+  proof: WebsiteProofRow | undefined;
+  onFile: string;
+  invoice: string;
+  now: number;
+}): (WebsiteProofView & { matches: 'on_file' | 'invoice' | 'neither' | null }) | null {
+  const view = websiteProofView({
+    url: input.url,
+    source: 'on_file',
+    state: input.url === null ? 'done' : input.proof ? 'done' : 'checking',
+    error: input.url === null ? 'no_website' : null,
+    proof: input.proof,
+    payTo: input.onFile,
+    startedAt: new Date(input.now),
+    now: input.now,
+  });
+  if (!view) return null;
+  if (view.status === 'checking' || view.status === 'unavailable')
+    return { ...view, matches: null };
+  const listed = (view.listed ?? '').toLowerCase();
+  const site = view.site ?? 'The supplier’s website';
+  // The invoice pays the address on file (a website_changed hold): only the site moved.
+  if (
+    input.onFile.toLowerCase() === input.invoice.toLowerCase() &&
+    listed !== input.onFile.toLowerCase()
+  )
+    return {
+      ...view,
+      matches: 'neither',
+      text: `${site} no longer lists the address on file, ${input.onFile}; it lists ${view.listed ?? 'another address'} now. Ask the supplier before paying; if they really changed it, change it on file first.`,
+    };
+  if (listed === input.onFile.toLowerCase())
+    return {
+      ...view,
+      matches: 'on_file',
+      text: `${site} still lists the address on file, ${input.onFile}, not the invoice's (${view.status === 'stale' ? 'checked over a day ago' : 'proven by Primus, recorded on Monad'}).`,
+    };
+  if (listed === input.invoice.toLowerCase())
+    return {
+      ...view,
+      matches: 'invoice',
+      text: `${site} now lists the invoice's address, ${input.invoice}. If the supplier really changed it, change it on file first (a proposal, with the waiting period); this payment can only be refused.`,
+    };
+  return {
+    ...view,
+    matches: 'neither',
+    text: `${site} lists ${view.listed ?? 'another address'}: neither the address on file nor the invoice's.`,
+  };
+}

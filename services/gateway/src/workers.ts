@@ -1,4 +1,5 @@
 import type { Address, Hex } from 'viem';
+import type { WebsiteProofs } from './proofs/website.js';
 import type { Chain } from './chain/types.js';
 import type { Checker } from './checker.js';
 import type { PaymentRequestRow } from './db/schema.js';
@@ -20,6 +21,8 @@ export type WorkerOptions = {
   checkConcurrency: number;
   sendConcurrency: number;
   tickMs: number;
+  /** Slice 15 (D21): a supplier whose website stopped listing the address on file is held. */
+  websites?: Pick<WebsiteProofs, 'websiteChanged'>;
 };
 
 const sleep = (ms: number) =>
