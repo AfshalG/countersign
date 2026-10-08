@@ -14,11 +14,13 @@ import { Store } from './db/store.js';
 import { RelayerPool } from './relay/pool.js';
 import { WalletFunder } from './demo/funder.js';
 import { AgentDirectory } from './agents/identity.js';
-import { checkerMode, judgeMode, loadSettings, whatsappMode } from './settings.js';
+import { checkerMode, judgeMode, loadSettings, primusKeys, whatsappMode } from './settings.js';
 import { supplierNameOf } from './suppliers.js';
 import { WhatsAppApi } from './notify/whatsapp-api.js';
 import { WhatsAppNotifier } from './notify/whatsapp.js';
 import { Workers } from './workers.js';
+import { WebsiteProofs } from './proofs/website.js';
+import { PrimusProver, registryRecorder } from './proofs/primus.js';
 
 const settings = loadSettings();
 const chainId = settings.MONAD_CHAIN_ID;
@@ -129,6 +131,28 @@ const owner = {
   publicUrl: settings.PUBLIC_URL,
 };
 
+// Suppliers' websites (Slice 15): what a site lists, proven by Primus and recorded on Monad, shown
+// on each proposal's approval page and named by the supplier record the owner signs. Without
+// Primus keys every check says it could not be proven, and the owner confirms by hand.
+const primus = primusKeys(settings);
+const websites = new WebsiteProofs({
+  store,
+  prover: primus
+    ? new PrimusProver({ ...primus, recipient: deployments.supplierProofs })
+    : undefined,
+  recorder: registryRecorder(
+    { store, pool, finality: tracker, chain: monad },
+    deployments.supplierProofs,
+  ),
+  onFile: async (account, id) => (await monad.supplierOf(account, id)) !== null,
+});
+store.onProposal((proposal) => {
+  void websites.checkProposal(proposal).catch((e: unknown) => {
+    console.error(`website check ${proposal.id}: ${e instanceof Error ? e.message : String(e)}`);
+  });
+});
+console.log(`website proofs ${primus ? 'on' : 'off (no Primus keys)'}`);
+
 // ERC-8004 agents named on payments (Slice 19), each re-read from the registry at start.
 const agents = new AgentDirectory(monad, IDENTITY_REGISTRY_TESTNET, chainId);
 await agents.load(store);
@@ -203,6 +227,8 @@ const app = createApp({
     checker: { kind: checking.kind, signer: checking.address },
     // WhatsApp (Slice 14): on or off, and the template used outside the 24-hour window.
     whatsapp: wa ? { template: wa.template?.name ?? null } : null,
+    // Suppliers' website proofs (Slice 15): Primus on or off, and the registry on Monad.
+    proofs: { primus: primus !== undefined, registry: deployments.supplierProofs },
   }),
 });
 const server = serve({ fetch: app.fetch, port: settings.PORT }, (info) => {

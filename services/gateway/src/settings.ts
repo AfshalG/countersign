@@ -71,6 +71,9 @@ export function loadSettings(source?: Record<string, string | undefined>) {
         .string()
         .regex(/^[a-z]{2}(_[A-Z]{2})?$/)
         .optional(),
+      // Primus's Core SDK keys (Slice 15), both or none: suppliers' websites are proven with them.
+      PRIMUS_APP_ID: z.string().min(1).optional(),
+      PRIMUS_APP_SECRET: z.string().min(1).optional(),
       // New demo accounts per UTC day; each costs about 0.09 MON to set up.
       DEMO_ACCOUNTS_PER_DAY: z
         .string()
@@ -152,4 +155,13 @@ export function whatsappMode(settings: ReturnType<typeof loadSettings>) {
           },
         }),
   };
+}
+
+/** Primus's keys when website proofs are on (Slice 15); without them every check is unproven. */
+export function primusKeys(settings: ReturnType<typeof loadSettings>) {
+  const { PRIMUS_APP_ID: appId, PRIMUS_APP_SECRET: appSecret } = settings;
+  if (appId === undefined && appSecret === undefined) return undefined;
+  if (appId === undefined || appSecret === undefined)
+    throw new Error('Set PRIMUS_APP_ID and PRIMUS_APP_SECRET together, or none');
+  return { appId, appSecret };
 }

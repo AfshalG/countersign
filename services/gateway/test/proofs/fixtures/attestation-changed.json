@@ -1,0 +1,29 @@
+{
+  "recipient": "0xf8a69BdB48aeae88136C7F9D87FeB2B24458C79B",
+  "request": {
+    "url": "https://countersign-supplier-demo.vercel.app/.well-known/countersign.json",
+    "header": "",
+    "method": "GET",
+    "body": ""
+  },
+  "reponseResolve": [
+    {
+      "keyName": "payTo",
+      "parseType": "",
+      "parsePath": "$.payTo"
+    }
+  ],
+  "data": "{\"payTo\":\"0xc91f6a35D139E713eAF11D72C8b76B609fA11385\"}",
+  "attConditions": "[{\"op\":\"REVEAL_STRING\",\"field\":\"$.payTo\",\"reveal_id\":\"payTo\"}]",
+  "timestamp": 1791333229006,
+  "additionParams": "{\"algorithmType\":\"proxytls\"}",
+  "attestors": [
+    {
+      "attestorAddr": "0xdb736b13e2f522dbe18b2015d0291e4b193d8ef6",
+      "url": "https://primuslabs.xyz"
+    }
+  ],
+  "signatures": [
+    "0x5c30fddb15bd5f67e5dbe10df22a3a3bcaa026c0187b6c270f8a262b1ae61fb32911ba7a34600857e64d3bed8ca3669dd3ec98596a63e53a6bdf9fd85f17692e1c"
+  ]
+}

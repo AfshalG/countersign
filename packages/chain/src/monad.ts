@@ -63,6 +63,9 @@ export const GAS_LIMITS = {
   createAccount: 251_000n, // no passkey data: the D36 broadcast's limit, which landed
   setPolicy: 198_000n, // 169,255
   setSupplier: 126_000n, // 107,733
+  // Slice 15: SupplierProofs.record of a Primus proof (about 2 KB of calldata). Foundry measured
+  // 240,381 to execute; set from Monad's eth_estimateGas for a live proof (gas-calibrate) x 1.08.
+  recordSupplierProof: 330_000n,
   approveOrder: 332_000n, // 284,406
   // The stop button (Slice 9 part 3).
   pause: 107_000n, // 91,265

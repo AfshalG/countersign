@@ -14,6 +14,18 @@ import {
 } from 'drizzle-orm/pg-core';
 import type { DecidedBy, PaymentStatus, Reason } from '@countersign/shared';
 
+/** Why a website check has no proof (Slice 15). */
+export const PROOF_ERRORS = [
+  'no_website', // nothing to check: no website given or on file
+  'no_file', // the site has no /.well-known/countersign.json
+  'bad_file', // the file does not list one address as {"payTo":"0x…"}
+  'not_configured', // this gateway has no Primus keys
+  'primus_failed', // Primus could not prove it
+  'record_failed', // proven, but the registry on Monad did not record it
+  'timeout',
+] as const;
+export type ProofError = (typeof PROOF_ERRORS)[number];
+
 const at = (name: string) => timestamp(name, { withTimezone: true, mode: 'date' });
 
 /**
@@ -173,6 +185,14 @@ export const proposals = pgTable('proposals', {
   status: text('status').$type<ProposalStatus>().notNull(),
   createdAt: at('created_at').notNull().defaultNow(),
   decidedAt: at('decided_at'),
+  // Slice 15: the website check this proposal is shown and signed with. Fixed once it ends, so
+  // every owner signs the same challenge (D36). `proofUrl` is the file checked, `proofSource`
+  // whether it is the supplier's site on file or the one the proposal gave.
+  proofStatus: text('proof_status').$type<'checking' | 'done'>(),
+  proofUrl: text('proof_url'),
+  proofSource: text('proof_source').$type<'on_file' | 'proposal'>(),
+  proofId: bigint('proof_id', { mode: 'number' }),
+  proofError: text('proof_error').$type<ProofError>(),
 });
 
 /**
@@ -317,3 +337,41 @@ export const apiTokens = pgTable(
   },
   (t) => [uniqueIndex('api_tokens_generation_idx').on(t.account, t.generation)],
 );
+
+/**
+ * What a supplier's website listed (Slice 15): one row per check of a file URL. With a proof,
+ * `proofHash` is the record in the SupplierProofs registry on Monad and `txHash` the transaction
+ * that recorded it; without one, `error` says why. `listed` is the address the file listed, read
+ * from Primus's proof (or from the file itself when the proof failed after reading it).
+ */
+export const websiteProofs = pgTable(
+  'website_proofs',
+  {
+    id: bigserial('id', { mode: 'number' }).primaryKey(),
+    url: text('url').notNull(),
+    listed: text('listed'),
+    signedAt: at('signed_at'),
+    proofHash: text('proof_hash'),
+    txHash: text('tx_hash'),
+    error: text('error').$type<ProofError>(),
+    createdAt: at('created_at').notNull().defaultNow(),
+  },
+  (t) => [index('website_proofs_url_idx').on(t.url, t.createdAt)],
+);
+
+/**
+ * The website each supplier was approved with (S15-4): a changed address is checked against this
+ * site, never against one a new proposal gives.
+ */
+export const supplierWebsites = pgTable(
+  'supplier_websites',
+  {
+    account: text('account').notNull(),
+    supplierId: text('supplier_id').notNull(),
+    url: text('url').notNull(),
+    updatedAt: at('updated_at').notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.account, t.supplierId] })],
+);
+
+export type WebsiteProofRow = typeof websiteProofs.$inferSelect;

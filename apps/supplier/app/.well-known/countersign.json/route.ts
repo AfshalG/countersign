@@ -1,10 +1,12 @@
-import { ADDRESS_FILE } from '../../../lib/documents';
+import { addressFileFor } from '../../../lib/documents';
 
-// Kalibre Studio's address file, served exactly as in Slice 2 (the Primus proof pins it).
-export const dynamic = 'force-static';
+// Each supplier's address file on its own host (Slice 15): Kalibre Studio's exactly as in Slice 2
+// (the Primus proof pins it), Northwind Prints' on its own domain. Read per request: the host
+// decides which supplier's site this is.
+export const dynamic = 'force-dynamic';
 
-export function GET(): Response {
-  return new Response(ADDRESS_FILE, {
+export function GET(request: Request): Response {
+  return new Response(addressFileFor(request.headers.get('host') ?? undefined), {
     headers: { 'content-type': 'application/json', 'cache-control': 'no-store' },
   });
 }
