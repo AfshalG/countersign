@@ -66,6 +66,9 @@ function pageOf(document: unknown): { html: string } | { text: string } {
   return { text: '' };
 }
 
+/** Reading an order's facts (the index and the address on file) may take this long at volume. */
+const FACTS_TIMEOUT_MS = 10_000;
+
 export class RemoteChecker implements Checker {
   constructor(
     private readonly options: {
@@ -76,8 +79,18 @@ export class RemoteChecker implements Checker {
     },
   ) {}
 
-  async check(input: CheckInput, signal: AbortSignal): Promise<CheckResult> {
-    const facts = await this.options.facts(input.request);
+  async check(input: CheckInput, startTimer: () => AbortSignal): Promise<CheckResult> {
+    // Our own reads first (the database and the chain, paced at volume), with their own limit;
+    // the checker's time starts only when we ask it.
+    const facts = await Promise.race([
+      this.options.facts(input.request),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => {
+          reject(new Error('the order’s facts were not read in time'));
+        }, FACTS_TIMEOUT_MS).unref(),
+      ),
+    ]);
+    const signal = startTimer();
     if (!facts)
       return {
         verdict: 'hold',

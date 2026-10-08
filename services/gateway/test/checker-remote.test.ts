@@ -125,7 +125,7 @@ describe('asking the checker service', () => {
     const sig = `0x${'ab'.repeat(65)}`;
     const r = await checkerWith(
       answering(200, { verdict: 'release', checkerSig: sig, evidence: { ok: 1 } }, seen),
-    ).check(input({ text: 'Invoice KS-1' }), AbortSignal.timeout(1_000));
+    ).check(input({ text: 'Invoice KS-1' }), () => AbortSignal.timeout(1_000));
     expect(r).toEqual({ verdict: 'release', checkerSig: sig, evidence: { ok: 1 } });
     expect(seen.auth).toBe('Bearer checker-token');
     expect(seen.body).toMatchObject({
@@ -142,24 +142,49 @@ describe('asking the checker service', () => {
       { verdict: 'hold', reason: 'checker_unsure', evidence: {} },
       seen,
     );
-    await checkerWith(fetchFn).check(input({ html: '<p>x</p>' }), AbortSignal.timeout(1_000));
+    await checkerWith(fetchFn).check(input({ html: '<p>x</p>' }), () => AbortSignal.timeout(1_000));
     expect(seen.body).toMatchObject({ invoice: { html: '<p>x</p>' } });
-    await checkerWith(fetchFn).check(input('plain text'), AbortSignal.timeout(1_000));
+    await checkerWith(fetchFn).check(input('plain text'), () => AbortSignal.timeout(1_000));
     expect(seen.body).toMatchObject({ invoice: { text: 'plain text' } });
-    await checkerWith(fetchFn).check(input({ fields: 1 }), AbortSignal.timeout(1_000));
+    await checkerWith(fetchFn).check(input({ fields: 1 }), () => AbortSignal.timeout(1_000));
     expect(seen.body).toMatchObject({ invoice: { text: '' } });
+  });
+
+  it('starts its time limit only once the order’s facts are read (Slice 16: our own reads queue at volume)', async () => {
+    let started = 0;
+    const slowFacts = new RemoteChecker({
+      url: 'https://checker.test',
+      token: 't',
+      // The gateway's chain reads are paced; at volume they queue behind each other.
+      facts: async () => {
+        await new Promise((r) => setTimeout(r, 120));
+        return {
+          supplierId: KALIBRE_ID,
+          supplierName: 'Kalibre Studio',
+          addressOnFile: KALIBRE,
+          quote: null,
+        };
+      },
+      fetchFn: answering(200, { verdict: 'hold', reason: 'checker_unsure', evidence: {} }),
+    });
+    const r = await slowFacts.check(input(null), () => {
+      started++;
+      return AbortSignal.timeout(50); // shorter than the facts took: it must start after them
+    });
+    expect(r).toMatchObject({ verdict: 'hold', reason: 'checker_unsure' });
+    expect(started).toBe(1);
   });
 
   it('holds what it cannot trust: an unknown reason, a release without a signature, an order not indexed', async () => {
     expect(
       await checkerWith(
         answering(200, { verdict: 'hold', reason: 'nonsense', evidence: {} }),
-      ).check(input(null), AbortSignal.timeout(1_000)),
+      ).check(input(null), () => AbortSignal.timeout(1_000)),
     ).toMatchObject({ verdict: 'hold', reason: 'checker_unsure' });
     expect(
       await checkerWith(
         answering(200, { verdict: 'release', checkerSig: '0x', evidence: {} }),
-      ).check(input(null), AbortSignal.timeout(1_000)),
+      ).check(input(null), () => AbortSignal.timeout(1_000)),
     ).toMatchObject({ verdict: 'hold', reason: 'checker_unsure' });
     const unknown = new RemoteChecker({
       url: 'https://checker.test',
@@ -167,7 +192,7 @@ describe('asking the checker service', () => {
       facts: () => Promise.resolve(null),
       fetchFn: answering(200, {}),
     });
-    expect(await unknown.check(input(null), AbortSignal.timeout(1_000))).toMatchObject({
+    expect(await unknown.check(input(null), () => AbortSignal.timeout(1_000))).toMatchObject({
       verdict: 'hold',
       reason: 'checker_unsure',
     });
@@ -175,8 +200,7 @@ describe('asking the checker service', () => {
 
   it('throws when the checker does not answer properly, which the pipeline holds', async () => {
     await expect(
-      checkerWith(answering(500, { error: 'internal' })).check(
-        input(null),
+      checkerWith(answering(500, { error: 'internal' })).check(input(null), () =>
         AbortSignal.timeout(1_000),
       ),
     ).rejects.toThrow(/500/);

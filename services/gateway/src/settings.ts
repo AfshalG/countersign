@@ -74,6 +74,13 @@ export function loadSettings(source?: Record<string, string | undefined>) {
       // Primus's Core SDK keys (Slice 15), both or none: suppliers' websites are proven with them.
       PRIMUS_APP_ID: z.string().min(1).optional(),
       PRIMUS_APP_SECRET: z.string().min(1).optional(),
+      // How many payments are checked at once (D16): sized from a measured burst (Slice 16).
+      CHECK_CONCURRENCY: z
+        .string()
+        .regex(/^\d{1,3}$/)
+        .transform(Number)
+        .pipe(z.number().int().min(1).max(64))
+        .optional(),
       // New demo accounts per UTC day; each costs about 0.09 MON to set up.
       DEMO_ACCOUNTS_PER_DAY: z
         .string()

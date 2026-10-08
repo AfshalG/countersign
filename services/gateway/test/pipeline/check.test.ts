@@ -130,9 +130,9 @@ describe('the check step', () => {
   it('holds when the checker errors or runs out of time (fail closed)', async () => {
     const broken: Checker = { check: () => Promise.reject(new Error('model provider down')) };
     const slow: Checker = {
-      check: (_input, signal) =>
+      check: (_input, startTimer) =>
         new Promise((_resolve, reject) => {
-          signal.addEventListener('abort', () => {
+          startTimer().addEventListener('abort', () => {
             reject(new Error('aborted'));
           });
         }),
