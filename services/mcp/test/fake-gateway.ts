@@ -98,13 +98,17 @@ export function gateway(input: Parameters<typeof fetch>[0], init?: RequestInit):
     byInvoice.set(invoice, v);
     return reply(201, { created: true, request: v });
   }
-  if (url.pathname === '/v1/checks')
-    return reply(200, {
-      verdict: 'would_settle',
-      reason: null,
-      decidedBy: 'checker',
-      evidence: {},
-    });
+  if (url.pathname === '/v1/checks') {
+    const payTo = (body?.payment as { payTo: string }).payTo;
+    return payTo.toLowerCase() === ON_FILE.toLowerCase()
+      ? reply(200, { verdict: 'would_settle', reason: null, decidedBy: 'checker', evidence: {} })
+      : reply(200, {
+          verdict: 'held',
+          reason: 'address_mismatch',
+          decidedBy: 'rule',
+          evidence: { payTo: { onFile: ON_FILE, invoice: payTo } },
+        });
+  }
   if (url.pathname === '/v1/runs' && init?.method === 'POST')
     return reply(201, { runId: '0xrun', requests: [{ id: '0x1', status: 'requested' }] });
   if (url.pathname === '/v1/runs/0xrun')

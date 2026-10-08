@@ -235,7 +235,7 @@ export function createTools(cs: Countersign, options: { waitMs?: number } = {}) 
       config: {
         title: 'Check an invoice',
         description:
-          'Checks an invoice against its order without paying: would it be paid, held for the owner, or blocked? Use it for a dry run, or for an invoice paid by bank transfer (then it is advice only).',
+          'Checks an invoice against its order without paying: would it be paid, held for the owner, or blocked? A check is not a request: nothing is stored and the owner is not told. Use it for a dry run, or for an invoice paid by bank transfer (then it is advice only). For the owner to decide on an invoice, pay it with pay_invoice: if it is not clean it is held for them, with a link.',
         inputSchema: z.object(invoiceInput),
         outputSchema: z.object({
           verdict: z.string(),
@@ -250,10 +250,12 @@ export function createTools(cs: Countersign, options: { waitMs?: number } = {}) 
           const v = await cs.check(payInput(args));
           const evidence = v.evidence as { payTo?: { onFile?: string } } | null;
           const onFile = evidence?.payTo?.onFile ?? null;
+          // dots-3 (Slice 14) reported checked invoices as held for the owner; a check stores
+          // nothing, so the answer says plainly that the owner has not been told.
           const said =
             v.verdict === 'would_settle'
               ? 'It would be paid: the address, the order and the checker all agree. Nothing was paid.'
-              : `It would be ${v.verdict}: ${v.reasonText ?? v.reason ?? ''}${onFile ? ` (address on file ${onFile}, on the invoice ${args.payTo})` : ''}. Nothing was paid.`;
+              : `Not ${v.verdict} yet: this was only a check. It would be ${v.verdict}: ${v.reasonText ?? v.reason ?? ''}${onFile ? ` (address on file ${onFile}, on the invoice ${args.payTo})` : ''}. Nothing was paid and the owner has not been told. ${v.verdict === 'held' ? 'For the owner to decide, pay it with pay_invoice: it will be held for them, with a link.' : 'Paying it with pay_invoice would be refused by the account, and recorded.'}`;
           return text(said, {
             verdict: v.verdict,
             reason: v.reason,
