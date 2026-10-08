@@ -35,7 +35,7 @@ import type {
 export type CountersignOptions = {
   /** The gateway's URL, e.g. https://gateway-production-e17a.up.railway.app */
   gateway: string;
-  /** The gateway's service token (per-account sign-in replaces it in a later release). */
+  /** Your account's token (`cs_…`, from `countersign-test-account`), or the gateway's service token. */
   token: string;
   /** The Countersign account (the contract that holds the money). */
   account: Address;

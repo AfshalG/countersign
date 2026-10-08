@@ -8,20 +8,35 @@ Countersign gives an AI agent an account that pays only what its owner approved.
 | **MCP server** | Your agent speaks MCP (Claude Code today) | Held by the server for the account (hosted mode) |
 | **Web API** | Anything else | Yours: sign the payment as the SDK does |
 
-## 1. Get an account (hackathon week)
+## 1. Get a test account (one command)
 
-Self-serve accounts arrive with the passkey app (Slice 9). Until then, message us and we set up a testnet account for your agent: an owner passkey, one supplier, one funded order, and an agent key for you. You get:
+```bash
+npx --package=https://github.com/AfshalG/countersign/releases/download/sdk-v0.2.0/countersign-sdk-0.2.0.tgz countersign-test-account > .env
+```
 
-- the gateway URL (`https://gateway-production-e17a.up.railway.app`) and a token;
-- your account address and agent key (SDK or web API), or an MCP token (MCP).
+In about ten seconds, with nobody from us involved, you have your own account on Monad testnet:
+
+- an **agent key** (`COUNTERSIGN_AGENT_KEY`), made on your machine; the account's policy names it, and it never leaves your process;
+- the **account** (`COUNTERSIGN_ACCOUNT`) with 0.01 test USDC, the demo supplier Kalibre Studio at the address its website lists, and a 0.005 USDC order;
+- a **token** (`COUNTERSIGN_TOKEN`, `cs_…`) that reaches only this account;
+- an **owner key** (`COUNTERSIGN_OWNER_KEY`), a P-256 key standing in for the owner's passkey: it signed the account's setup, and it decides holds with `decide()`. A real account's owner signs with Face ID instead; a test account is for testing only.
+
+The same from code: `createTestAccount()` from `@countersign/sdk/test-account` (Node). Test accounts share judge mode's daily limit (10 a day). The MCP server below still pays from a shared demo account: ask us for its token.
 
 ## 2a. The SDK
 
 ```bash
-npm i https://github.com/AfshalG/countersign/releases/download/sdk-v0.1.1/countersign-sdk-0.1.1.tgz
+npm i https://github.com/AfshalG/countersign/releases/download/sdk-v0.2.0/countersign-sdk-0.2.0.tgz
 ```
 
-[`examples/pay-an-invoice`](../../examples/pay-an-invoice) is a complete script: it lists your open orders and pays one invoice of 0.001 USDC, waiting until it is settled at Monad's Finalized stage.
+[`examples/pay-an-invoice`](../../examples/pay-an-invoice) is a complete script: `npm run account` makes your test account, and `npm start` reads Kalibre Studio's clean invoice from the supplier's own page and pays it (0.001 USDC), waiting until it is settled at Monad's Finalized stage. Pass the invoice itself (`document: { html }` or `{ text }`): the checker reads it, and a payment with nothing to read waits for the owner.
+
+A hold is decided by the owner. On a test account, with the owner key:
+
+```ts
+import { decide } from '@countersign/sdk/test-account';
+await decide({ id: result.id, action: 'refuse', ownerKey: process.env.COUNTERSIGN_OWNER_KEY });
+```
 
 ## 2b. The MCP server
 
