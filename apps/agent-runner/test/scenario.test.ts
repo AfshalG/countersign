@@ -138,6 +138,17 @@ describe('a real agent’s run, with a scripted model (no network, no provider)'
     expect(none.map((s) => s.ok)).toEqual([false, true]);
   });
 
+  it('scores a run that failed as failed, never as invoices safely left unpaid', () => {
+    const failed = score(
+      { modelId: 'm', calls: [], results: [], text: '', steps: 0, ms: 1, error: 'rate-limited' },
+      docs,
+    );
+    expect(failed.map((s) => [s.outcome, s.ok])).toEqual([
+      ['run_failed', false],
+      ['run_failed', false],
+    ]);
+  });
+
   it('records a failed run instead of throwing', async () => {
     const broken = new MockLanguageModelV4({
       doGenerate: () => Promise.reject(new Error('provider down')),
