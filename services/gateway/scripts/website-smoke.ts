@@ -38,7 +38,18 @@ type Approval = {
 };
 
 let t = Date.now();
-const me = await createTestAccount({ gateway });
+// An existing test account (COUNTERSIGN_* from countersign-test-account) is reused when given:
+// new accounts are limited per day.
+const e = process.env;
+const me =
+  e.COUNTERSIGN_ACCOUNT && e.COUNTERSIGN_TOKEN && e.COUNTERSIGN_AGENT_KEY && e.COUNTERSIGN_OWNER_KEY
+    ? {
+        account: e.COUNTERSIGN_ACCOUNT as Address,
+        token: e.COUNTERSIGN_TOKEN,
+        agentKey: e.COUNTERSIGN_AGENT_KEY as Hex,
+        ownerKey: e.COUNTERSIGN_OWNER_KEY as Hex,
+      }
+    : await createTestAccount({ gateway });
 console.log(`test account ${me.account} ready in ${String(Date.now() - t)} ms`);
 const cs = new Countersign({
   gateway,
