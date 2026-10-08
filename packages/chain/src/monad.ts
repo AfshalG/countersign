@@ -54,9 +54,9 @@ export const GAS_LIMITS = {
   // Owner actions with one owner's signature: the limits Monad charged in the D36 testnet run
   // (7 Oct; the node's estimate plus 8%), rounded up. Each extra signature adds
   // GAS_PER_EXTRA_SIGNER.
-  // payWithOwner with two signatures cost 286,392 on testnet; one is about 233,000-240,000 (the
-  // second signature adds about 53,000 there), checked with eth_estimateGas in the live smoke.
-  payWithOwner: 249_000n,
+  // payWithOwner with one owner: Monad's eth_estimateGas said 243,693 for a vault's first payment
+  // (approvals-smoke, 7 Oct), plus 8%. Two signatures cost 286,392 (also estimate plus 8%).
+  payWithOwner: 264_000n,
   recordDecision: 94_000n,
   // Judge mode's account setup (Slice 9 part 4): 250,965, 164,302, 116,351 and 307,145.
   createAccount: 251_000n,
@@ -73,10 +73,11 @@ export const GAS_LIMITS = {
 
 /**
  * What each signature beyond the first adds (D36): one more P-256 check and its calldata. On
- * testnet, 21,798 (setSupplier) and 21,981 (approveOrder); payWithOwner passes the signatures on
- * from the vault to the account (60,292 in Foundry, about 53,000 on testnet).
+ * testnet, 21,798 (setSupplier), 21,981 (approveOrder) and about 21,500 (payWithOwner, whose
+ * vault passes the signatures on to the account; 60,292 in Foundry, which prices the copy
+ * higher than Monad does).
  */
-export const GAS_PER_EXTRA_SIGNER = { account: 24_000n, payWithOwner: 60_000n } as const;
+export const GAS_PER_EXTRA_SIGNER = { account: 24_000n, payWithOwner: 24_000n } as const;
 /** Each owner key beyond two in setOwners: two new storage slots, priced high on Monad. */
 export const GAS_PER_OWNER_KEY = 50_000n;
 
