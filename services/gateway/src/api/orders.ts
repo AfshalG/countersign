@@ -3,6 +3,7 @@ import { encodeAbiParameters, keccak256, type Address, type Hex } from 'viem';
 import type { Chain } from '../chain/types.js';
 import type { ProposalRow } from '../db/schema.js';
 import type { Store } from '../db/store.js';
+import { mayUse, wrongAccount } from './account-tokens.js';
 import {
   accountParam,
   accountView,
@@ -31,7 +32,8 @@ const json = <T extends z.ZodType>(schema: T, description: string) => ({
 });
 const errors = {
   400: json(apiError, 'Malformed: the issues name each field'),
-  401: json(apiError, 'Missing or wrong service token'),
+  401: json(apiError, 'Missing or wrong token'),
+  403: json(apiError, 'An account token for another account (wrong_account)'),
 };
 const secured = [{ Bearer: [] }];
 
@@ -126,8 +128,9 @@ export function registerOrderRoutes(app: OpenAPIHono, deps: OrderDeps): void {
   const { store, chain, publicUrl } = deps;
 
   app.openapi(registerAccount, async (c) => {
-    if (!deps.indexing) return c.json({ error: 'indexing_unavailable' }, 503);
     const body = c.req.valid('json');
+    if (!mayUse(c, body.account)) return c.json(wrongAccount, 403);
+    if (!deps.indexing) return c.json({ error: 'indexing_unavailable' }, 503);
     const known = (await store.listAccounts()).find((a) => a.address === body.account);
     const fromBlock = body.fromBlock ?? (await deps.indexing.latestFinalized());
     const row = await store.registerAccount(body.account, fromBlock, body.label);
@@ -141,6 +144,7 @@ export function registerOrderRoutes(app: OpenAPIHono, deps: OrderDeps): void {
 
   app.openapi(listOrders, async (c) => {
     const { account } = c.req.valid('param');
+    if (!mayUse(c, account)) return c.json(wrongAccount, 403);
     const registered = (await store.listAccounts()).find((a) => a.address === account);
     if (!registered) return c.json({ error: 'unknown_account' }, 404);
     const open = await store.openOrders(account, Math.floor(Date.now() / 1000));
@@ -173,6 +177,7 @@ export function registerOrderRoutes(app: OpenAPIHono, deps: OrderDeps): void {
 
   app.openapi(propose, async (c) => {
     const body = c.req.valid('json');
+    if (!mayUse(c, body.account)) return c.json(wrongAccount, 403);
     const { proposal, created } = await store.createProposal({
       id: proposalId(body.account, body.documentHash as Hex),
       account: body.account,
@@ -190,7 +195,7 @@ export function registerOrderRoutes(app: OpenAPIHono, deps: OrderDeps): void {
 
   app.openapi(getProposal, async (c) => {
     const p = await store.getProposal(c.req.valid('param').id);
-    return p
+    return p && mayUse(c, p.account)
       ? c.json(proposalViewOf(p, publicUrl), 200)
       : c.json({ error: 'unknown_proposal' }, 404);
   });

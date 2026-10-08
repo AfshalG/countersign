@@ -1,4 +1,4 @@
-import { encodeFunctionData, type Address, type Hex } from 'viem';
+import { encodeFunctionData, getAddress, type Address, type Hex } from 'viem';
 import { accountFactoryAbi, GAS_LIMITS } from '@countersign/chain';
 import { formatUsdc } from '@countersign/shared';
 import type { DemoAccountRow } from '../db/schema.js';
@@ -8,11 +8,14 @@ import type { FinalityTracker } from '../chain/finality.js';
 import type { DemoAgent } from './invoices.js';
 import { finalOf, OwnerActionError, sendAndWait } from '../owner/send.js';
 import { AssertionError, fromBrowser, type BrowserAssertion } from '../api/webauthn.js';
+import { hashToken, newAccountToken, tokenChallenge } from '../api/account-tokens.js';
+import { ownerSigOf } from '../owner/signers.js';
+import type { OwnerKey } from '../chain/types.js';
 import {
   DEMO_FUNDING,
-  DEMO_SALT,
   DEMO_WAITING_PERIOD,
   demoPlan,
+  demoSalt,
   SETUP_ACTIONS,
   setupAction,
   setupCall,
@@ -33,6 +36,8 @@ export interface DemoChain {
   finalizedReceipt(
     hash: Hex,
   ): Promise<{ status: 'success' | 'reverted'; blockNumber: number } | null>;
+  /** The account's owner passkeys (an account token is issued to any one of them). */
+  ownership(account: Address): Promise<{ owners: OwnerKey[] }>;
 }
 
 /** Sends test USDC from the demo funding wallet (not a relayer: relayers never hold money). */
@@ -81,6 +86,7 @@ export function demoView(row: DemoAccountRow, chainId: number) {
   return {
     account,
     status: row.status,
+    agent: { address: plan.policy.agentKey, hosted: !plan.ownAgent },
     waitingPeriodSeconds: Number(DEMO_WAITING_PERIOD),
     fundedUsdc: formatUsdc(DEMO_FUNDING),
     signBy: new Date(Number(plan.deadline) * 1000).toISOString(),
@@ -123,16 +129,22 @@ function serially<T>(key: string, work: () => Promise<T>): Promise<T> {
  * step checks the chain first, so calling again after a crash finishes the job without repeating
  * a step. The same passkey always gets the same account (the factory's deterministic address).
  */
-export function createDemoAccount(deps: DemoDeps, key: { qx: Hex; qy: Hex }) {
-  return serially(`${key.qx}:${key.qy}`, async () => {
-    const account = await deps.chain.predictAccount(key.qx, key.qy, DEMO_WAITING_PERIOD, DEMO_SALT);
+export function createDemoAccount(deps: DemoDeps, key: { qx: Hex; qy: Hex }, agent?: Address) {
+  // Naming the hosted demo agent is the judge account; any other agent is a developer's own.
+  const ownAgent =
+    agent === undefined || agent.toLowerCase() === deps.agentKey.toLowerCase()
+      ? undefined
+      : getAddress(agent);
+  const salt = demoSalt(ownAgent);
+  return serially(`${key.qx}:${key.qy}:${salt}`, async () => {
+    const account = await deps.chain.predictAccount(key.qx, key.qy, DEMO_WAITING_PERIOD, salt);
     const row = await deps.store.getDemoAccount(account);
     if (row && row.status !== 'creating') return demoView(row, deps.chainId);
 
     const create = encodeFunctionData({
       abi: accountFactoryAbi,
       functionName: 'createAccount',
-      args: [key.qx, key.qy, DEMO_WAITING_PERIOD, DEMO_SALT],
+      args: [key.qx, key.qy, DEMO_WAITING_PERIOD, salt],
     });
     if (!row) {
       if ((await deps.store.demoAccountsSince(startOfUtcDay())) >= deps.perDay)
@@ -145,9 +157,10 @@ export function createDemoAccount(deps: DemoDeps, key: { qx: Hex; qy: Hex }) {
           contract: refusal,
         });
       const plan: DemoPlan = demoPlan({
-        agentKey: deps.agentKey,
+        agentKey: ownAgent ?? deps.agentKey,
         checkerKey: deps.checkerKey,
         now: Math.floor(Date.now() / 1000),
+        ownAgent: ownAgent !== undefined,
       });
       await deps.store.createDemoAccount({
         account,
@@ -241,4 +254,50 @@ export function setUpDemoAccount(deps: DemoDeps, account: Address, assertions: u
     }
     return demoView(await deps.store.setDemoStatus(account, 'ready'), deps.chainId);
   });
+}
+
+/** What an owner signs for the account's next token (Slice 12 part 2). */
+export async function tokenAsk(deps: Pick<DemoDeps, 'store' | 'chainId'>, account: Address) {
+  const row = await deps.store.getDemoAccount(account);
+  if (!row) throw new DemoError(404, 'unknown_account', 'no demo account at this address');
+  const generation = await deps.store.nextTokenGeneration(account);
+  return {
+    account: row.account as Address,
+    generation,
+    challenge: tokenChallenge(deps.chainId, row.account as Address, generation),
+    summary: 'Get an API token for this account (it replaces any earlier one)',
+  };
+}
+
+/**
+ * An account token for the owner who signed: checked off chain against the account's owner keys
+ * (nothing on chain checks it later), stored only as its hash, and shown once.
+ */
+export async function issueAccountToken(
+  deps: Pick<DemoDeps, 'store' | 'chain' | 'chainId'>,
+  account: Address,
+  assertion: unknown,
+) {
+  const ask = await tokenAsk(deps, account);
+  const row = await deps.store.getDemoAccount(account);
+  if (row?.status === 'creating')
+    throw new DemoError(409, 'not_created', 'the account is still being created');
+  let auth;
+  try {
+    auth = fromBrowser(assertion as BrowserAssertion, ask.challenge);
+  } catch (e) {
+    if (!(e instanceof AssertionError)) throw e;
+    throw new DemoError(e.code === 'challenge_mismatch' ? 422 : 400, e.code, e.message);
+  }
+  if (!(await ownerSigOf(deps.chain, ask.account, auth, true)))
+    throw new DemoError(422, 'invalid_passkey', 'not this account’s passkey');
+  const token = newAccountToken();
+  if (!(await deps.store.issueApiToken(ask.account, hashToken(token), ask.generation)))
+    throw new DemoError(409, 'token_used', 'that signature already made a token; sign again');
+  return {
+    account: ask.account,
+    token,
+    generation: ask.generation,
+    note: 'Shown once. It reaches only this account; getting a new one revokes it.',
+  };
 }

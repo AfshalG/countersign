@@ -37,8 +37,10 @@ export class FakeDemoChain implements DemoChain {
   accountRefusal: string | undefined;
   ownerKeyValid = true;
   dryRuns = 0;
-  predictAccount(qx: Hex, qy: Hex): Promise<Address> {
-    return Promise.resolve(getAddress(slice(keccak256(concat([qx, qy])), 12)));
+  predictAccount(qx: Hex, qy: Hex, _waitingPeriod?: bigint, salt?: Hex): Promise<Address> {
+    return Promise.resolve(
+      getAddress(slice(keccak256(concat(salt === undefined ? [qx, qy] : [qx, qy, salt])), 12)),
+    );
   }
   hasCode(a: Address) {
     return Promise.resolve(this.code.has(a.toLowerCase()));
@@ -114,8 +116,10 @@ export function demoDeps(store: Store) {
         sent.push(tx);
         if (tx.to === FACTORY) {
           const { args } = decodeFunctionData({ abi: accountFactoryAbi, data: tx.data });
-          const [qx, qy] = args as unknown as [Hex, Hex];
-          chain.code.add((await chain.predictAccount(qx, qy)).toLowerCase());
+          const [qx, qy, waitingPeriod, salt] = args as unknown as [Hex, Hex, bigint, Hex];
+          const created = (await chain.predictAccount(qx, qy, waitingPeriod, salt)).toLowerCase();
+          chain.code.add(created);
+          if (!chain.ownerKeys.has(created)) chain.ownerKeys.set(created, { qx, qy });
         } else {
           const key = tx.to.toLowerCase();
           chain.nonces.set(key, (chain.nonces.get(key) ?? 0n) + 1n);

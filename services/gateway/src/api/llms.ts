@@ -8,7 +8,7 @@ import { readFile } from 'node:fs/promises';
 
 const REPO = 'https://github.com/AfshalG/countersign';
 const RAW = 'https://raw.githubusercontent.com/AfshalG/countersign/development';
-const SDK_TGZ = `${REPO}/releases/download/sdk-v0.1.1/countersign-sdk-0.1.1.tgz`;
+const SDK_TGZ = `${REPO}/releases/download/sdk-v0.2.0/countersign-sdk-0.2.0.tgz`;
 const MCP_URL = 'https://countersign-mcp.vercel.app/api/mcp';
 
 export function llmsTxt(publicUrl: string): string {
@@ -18,7 +18,7 @@ export function llmsTxt(publicUrl: string): string {
 
 Three ways in, all to the same gateway (${publicUrl}):
 
-- **SDK** (TypeScript, the agent's key signs locally): \`npm i ${SDK_TGZ}\`
+- **SDK** (TypeScript, the agent's key signs locally): \`npm i ${SDK_TGZ}\`. A test account of your own, in one command: \`npx --package=${SDK_TGZ} countersign-test-account > .env\` (an agent key, a funded account with an open order, and a token for that account alone)
 - **MCP server** (six tools: list_open_orders, check_invoice, pay_invoice, pay_invoices, payment_status, propose_order): ${MCP_URL}, with \`Authorization: Bearer <token>\`
 - **Web API**: [reference](${publicUrl}/docs), [OpenAPI 3.1](${publicUrl}/openapi.json)
 
@@ -33,7 +33,7 @@ Key rules for an agent: a payment names an open order and the invoice's number, 
 
 ## Examples
 
-- [Pay an invoice with the SDK](${RAW}/examples/pay-an-invoice/index.mjs): lists the open orders and pays one 0.001 USDC invoice, waiting until it is final
+- [Pay an invoice with the SDK](${RAW}/examples/pay-an-invoice/index.mjs): makes a test account, reads the supplier's invoice page and pays it (0.001 USDC), waiting until it is final
 - [Connect Claude Code](${RAW}/examples/claude-code/README.md)
 
 ## Optional

@@ -19,7 +19,7 @@ export function loadSettings(source?: Record<string, string | undefined>) {
         .string()
         .transform((v) => v.split(',').map((k) => k.trim()))
         .pipe(z.array(privateKey).min(1)),
-      // Sent by the MCP server and the apps; per-account sign-in replaces it in Slice 13.
+      // Sent by the MCP server and the apps; developers' accounts use account tokens instead.
       GATEWAY_SERVICE_TOKEN: z
         .string()
         .min(24)

@@ -1,4 +1,5 @@
 import {
+  encodeAbiParameters,
   encodeFunctionData,
   hashTypedData,
   keccak256,
@@ -21,6 +22,18 @@ import type { OwnerSig } from '../chain/types.js';
 
 /** Every demo account is created with this salt: one account per passkey. */
 export const DEMO_SALT = keccak256(stringToHex('countersign demo account'));
+
+/**
+ * A developer's test account (Slice 12 part 2) names their own agent, and is a separate account
+ * for that passkey and agent, so the judge account of the same passkey is untouched.
+ */
+export function demoSalt(ownAgent?: Address): Hex {
+  return ownAgent === undefined
+    ? DEMO_SALT
+    : keccak256(
+        encodeAbiParameters([{ type: 'bytes32' }, { type: 'address' }], [DEMO_SALT, ownAgent]),
+      );
+}
 
 /**
  * No waiting period, so a judge can pay at once; real accounts keep the default (48 hours, D28).
@@ -50,12 +63,19 @@ export type DemoPlan = {
   order: { orderId: Hex; supplierId: Hex; orderHash: Hex; amount: bigint; expiry: bigint };
   /** The three signatures are valid until then. */
   deadline: bigint;
+  /** The policy names the developer's own agent, not the hosted demo agent (Slice 12 part 2). */
+  ownAgent: boolean;
 };
 
 /** What the gateway funds a demo account with: twice the order, in USDC base units. */
 export const DEMO_FUNDING = 10_000n;
 
-function plan(input: { agentKey: Address; checkerKey: Address; now: number }): DemoPlan {
+function plan(input: {
+  agentKey: Address;
+  checkerKey: Address;
+  now: number;
+  ownAgent?: boolean;
+}): DemoPlan {
   const month = BigInt(input.now + 30 * DAY);
   return {
     policy: {
@@ -77,10 +97,11 @@ function plan(input: { agentKey: Address; checkerKey: Address; now: number }): D
       expiry: month,
     },
     deadline: BigInt(input.now + DAY),
+    ownAgent: input.ownAgent ?? false,
   };
 }
 
-type Json = Record<string, Record<string, string | boolean> | string>;
+type Json = Record<string, Record<string, string | boolean> | string | boolean>;
 
 /** Stored as JSON (bigints as strings) and read back exactly. */
 export const demoPlan = Object.assign(plan, {
@@ -94,6 +115,7 @@ export const demoPlan = Object.assign(plan, {
       supplier: strings(p.supplier),
       order: strings(p.order),
       deadline: p.deadline.toString(),
+      ownAgent: p.ownAgent,
     };
   },
   fromJson(j: Json): DemoPlan {
@@ -126,6 +148,8 @@ export const demoPlan = Object.assign(plan, {
         expiry: big(order.expiry),
       },
       deadline: BigInt(j.deadline as string),
+      // Plans stored before Slice 12 part 2 have no flag: they name the hosted demo agent.
+      ownAgent: j.ownAgent === true,
     };
   },
 });
@@ -144,7 +168,7 @@ function messageOf(p: DemoPlan, index: SetupIndex) {
 }
 
 const SUMMARY = (p: DemoPlan): Record<SetupIndex, string> => ({
-  0: `Let the demo agent pay up to ${formatUsdc(p.policy.perPaymentCap)} USDC per invoice, checked by Countersign`,
+  0: `Let ${p.ownAgent ? `your agent ${p.policy.agentKey}` : 'the demo agent'} pay up to ${formatUsdc(p.policy.perPaymentCap)} USDC per invoice, checked by Countersign`,
   1: `Add Kalibre Studio as a supplier, paid only at ${p.supplier.payTo}`,
   2: `Open an order with Kalibre Studio for ${formatUsdc(p.order.amount)} USDC`,
 });

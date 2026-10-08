@@ -64,7 +64,7 @@ Start with the [developer quickstart](docs/developers/quickstart.md). Coding age
 - **The contract is the boundary; the checker is a detector.** The contract makes paying the wrong party impossible. The checker catches the right supplier billing the wrong amount; we publish its catch rate and false holds rather than claim it is perfect.
 - **The checker reads the invoice the agent sends.** A hijacked agent could send a clean text with a padded payment; the contract still keeps it to an approved supplier and order. Reading the invoice from the supplier's own site is next.
 - **Hosted mode** (the MCP server) holds the agent key and the checker key for you, in separate services. The contract's limits still bound what they could pay: suppliers on file, within approved orders.
-- **Self-serve accounts arrive with the passkey app (Slice 9).** Until then, ask us for a testnet account and token.
+- **Test accounts are self-serve, with a key standing in for the passkey.** `countersign-test-account` makes a developer's own testnet account and a token for it alone; its owner is a P-256 key in a file, not Face ID on a phone. The hosted MCP server still pays from a shared demo account.
 - **Name.** Another project uses the name Countersign (countersign.network, an off-chain spend guard for agent wallets); we may rename after the hackathon.
 
 The full plan, decisions and limits are in [`docs/plan/00-architecture.md`](docs/plan/00-architecture.md).
