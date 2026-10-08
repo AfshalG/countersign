@@ -170,3 +170,68 @@ describe('the send step', () => {
     expect(sender.sent.filter((s) => s.raw !== signed.raw)).toHaveLength(0);
   });
 });
+
+describe('the send step at volume (Slice 16: one chain read fewer per payment)', () => {
+  /** An order on file for the vault, holding `amount` base units. */
+  const order = (amount: string) =>
+    store.upsertOrder({
+      vault: VAULT,
+      account: ACCOUNT,
+      orderId: keccak256(toHex('order at volume')),
+      supplierId: keccak256(toHex('kalibre-studio')),
+      orderHash: keccak256(toHex('quote')),
+      amount,
+      expiry: Math.floor(Date.now() / 1000) + 86_400,
+      approvedBlock: 1,
+    });
+  /** Released by the checker `msAgo` milliseconds ago. */
+  const fresh = async (invoice: string, msAgo = 0) => {
+    const row = await released(invoice);
+    await store.update(row.id, 'released', { checkedAt: new Date(Date.now() - msAgo) });
+    const after = await store.get(row.id);
+    if (!after) throw new Error('missing');
+    return after;
+  };
+
+  it('sends a payment checked moments ago without simulating it again, when its order has room', async () => {
+    await order('30000');
+    const row = await fresh('INV-fresh');
+    const before = chain.simulations;
+    await sendOne(deps(), row);
+    expect(chain.simulations).toBe(before);
+    expect((await store.get(row.id))?.status).toBe('settling');
+  });
+
+  it('simulates when the check is old, or the order has no room left by the gateway’s count', async () => {
+    await order('1500');
+    const old = await fresh('INV-old', 60_000);
+    let before = chain.simulations;
+    await sendOne(deps(), old);
+    expect(chain.simulations).toBe(before + 1); // checked a minute ago: looked at again
+    // 1,000 of the 1,500 is now sent; another 1,000 would not fit, so the chain decides.
+    const over = await fresh('INV-over');
+    before = chain.simulations;
+    await sendOne(deps(), over);
+    expect(chain.simulations).toBe(before + 1);
+  });
+
+  it('sends to one order one at a time, so payments sent together never overrun it', async () => {
+    await order('2500');
+    const rows = [await fresh('INV-a'), await fresh('INV-b'), await fresh('INV-c')];
+    const before = chain.simulations;
+    await Promise.all(rows.map((r) => sendOne(deps(), r)));
+    // Two fit the order by the gateway's own count; the third is left to the chain.
+    expect(chain.simulations).toBe(before + 1);
+  });
+
+  it('always simulates an owner’s pay-once', async () => {
+    await order('30000');
+    const row = await released('INV-owner-fresh', 'owner');
+    await store.update(row.id, 'released', { checkedAt: new Date() });
+    const again = await store.get(row.id);
+    if (!again) throw new Error('missing');
+    const before = chain.simulations;
+    await sendOne(deps(), again);
+    expect(chain.simulations).toBe(before + 1);
+  });
+});
