@@ -43,6 +43,9 @@ type Pending = {
   /** Its maximum gas cost, reserved from the wallet's balance until it is included. */
   cost: bigint;
   error?: string;
+  /** Sends kept failing with a transient error since then (Slice 16: such a lane must move too). */
+  failingSince?: number | undefined;
+  lastError?: string;
 };
 
 type Lane = {
@@ -280,6 +283,33 @@ export class RelayerPool {
     return this.lanes.reduce((n, l) => n + l.pending.size, 0);
   }
 
+  /** Each wallet's lane, for /health (Slice 16: a stuck lane must be visible). */
+  lanesView() {
+    const now = Date.now();
+    return this.lanes.map((lane) => {
+      const pending = [...lane.pending.values()].sort((a, b) => a.nonce - b.nonce);
+      const head = pending[0];
+      return {
+        relayer: lane.account.address,
+        endpoint: lane.endpoint,
+        chainNonce: lane.chainNonce,
+        pending: pending.length,
+        starved: lane.starved,
+        reservedMon: Number(lane.reserved) / 1e18,
+        balanceMon: Number(lane.balance) / 1e18,
+        head: head
+          ? {
+              nonce: head.nonce,
+              needsSend: head.needsSend,
+              acceptedMsAgo: head.lastAcceptedAt === undefined ? null : now - head.lastAcceptedAt,
+              failingMsAgo: head.failingSince === undefined ? null : now - head.failingSince,
+              error: head.error ?? head.lastError ?? null,
+            }
+          : null,
+      };
+    });
+  }
+
   moves(): readonly Move[] {
     return this.moveLog;
   }
@@ -318,8 +348,15 @@ export class RelayerPool {
       }
       if (outcome === 'accepted' || outcome === 'known') {
         next.lastAcceptedAt = Date.now();
+        next.failingSince = undefined;
       } else if (outcome.retry) {
         next.needsSend = true; // still transient after retries: try again on the next round
+        next.failingSince ??= Date.now();
+        if (next.lastError !== outcome.error)
+          console.error(
+            `relayer ${lane.account.address} nonce ${String(next.nonce)} on endpoint ${String(endpoint)}: ${outcome.error}`,
+          );
+        next.lastError = outcome.error;
         await sleep(this.options.tickMs);
       } else {
         next.error = outcome.error;
@@ -346,8 +383,20 @@ export class RelayerPool {
             included: false,
             failed: false,
           }));
-        const stalled = stalledNonce(records, now, this.options.stallMs);
+        // Stalled: accepted and not included, or (Slice 16) the lowest one has kept failing to send
+        // with a transient error for as long: either way the lane moves to another endpoint.
+        const failing = [...lane.pending.values()]
+          .filter((p) => p.error === undefined)
+          .sort((a, b) => a.nonce - b.nonce)[0];
+        const stalled =
+          stalledNonce(records, now, this.options.stallMs) ??
+          (failing?.failingSince !== undefined && now - failing.failingSince >= this.options.stallMs
+            ? failing.nonce
+            : undefined);
         if (stalled === undefined || now - lane.lastMoveAt < this.options.stallMs) continue;
+        console.error(
+          `relayer ${lane.account.address} stalled at nonce ${String(stalled)}: moving from endpoint ${String(lane.endpoint)}`,
+        );
         this.setAsideUntil[lane.endpoint] = now + 30_000;
         const to = nextEndpoint(lane.endpoint, this.setAsideUntil, now);
         this.moveLog.push({
@@ -363,6 +412,7 @@ export class RelayerPool {
           if (p.error !== undefined) continue;
           p.needsSend = true;
           p.lastAcceptedAt = undefined;
+          p.failingSince = undefined;
         }
       }
       await sleep(this.options.tickMs);

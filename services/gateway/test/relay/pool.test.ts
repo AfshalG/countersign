@@ -121,6 +121,29 @@ describe('relayer pool', () => {
     }
   });
 
+  it('moves a wallet whose oldest transaction keeps failing to send with a transient error (Slice 16)', async () => {
+    pool.stop();
+    pool = new RelayerPool({
+      keys: [key0],
+      store,
+      sender,
+      chainId: 10143,
+      endpoints: 3,
+      stallMs: 150,
+      tickMs: 20,
+    });
+    await pool.start();
+    // The wallet's endpoint answers every send with a transient error (rate limited, unreachable).
+    const stuckOn = pool.lanesView()[0]?.endpoint;
+    sender.reply = (endpoint) =>
+      endpoint === stuckOn ? { error: 'HTTP 429 rate limited', retry: true } : 'accepted';
+    const s = await pool.sign({ to: VAULT, data: '0x12345678', gas: 266_000n });
+    pool.enqueue(s);
+    await waitFor(() => sender.sent.some((x) => x.endpoint !== stuckOn && x.raw === s.raw), 3_000);
+    expect(pool.moves().length).toBeGreaterThan(0);
+    expect(pool.lanesView()[0]?.endpoint).not.toBe(stuckOn);
+  });
+
   it('moves a stalled wallet to the next endpoint and re-sends its pending transactions in order', async () => {
     pool.stop();
     pool = new RelayerPool({
