@@ -129,7 +129,7 @@ console.log(`  refused with the judge's passkey: ${String(refused.status)} ${ref
 const amount = await invoice('amount_mismatch');
 const amountView = await approval(amount.requestId);
 console.log(
-  `amount hold: ${amount.status}; actions offered: ${Object.keys(amountView.actions).join(', ')}`,
+  `amount hold: ${amount.status} (${amount.reasonText ?? ''}); actions offered: ${Object.keys(amountView.actions).join(', ')}`,
 );
 t = Date.now();
 const once = await decide(

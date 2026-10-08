@@ -92,3 +92,17 @@ describe('the checker’s code checks (they alone decide clear, D27)', () => {
     expect(r.unmatched).toHaveLength(1);
   });
 });
+
+describe('what the evidence says about the quote', () => {
+  it('tells a quote it cannot read apart from no quote at all', () => {
+    const unreadable = codeChecks(read('ks-1001'), paymentFor('ks-1001'), {
+      ...order,
+      quote: { text: 'Kalibre Studio — a quote with no priced lines' },
+    });
+    expect(unreadable.findings.find((f) => f.check === 'price')?.detail).toMatch(
+      /quote has no lines the checker can read/,
+    );
+    const none = codeChecks(read('ks-1001'), paymentFor('ks-1001'), { ...order, quote: null });
+    expect(none.findings.find((f) => f.check === 'price')?.detail).toMatch(/no quote on file/);
+  });
+});

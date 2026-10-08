@@ -149,8 +149,9 @@ export function codeChecks(
     findings.push({
       check: 'price',
       ok: true,
-      detail:
-        'no quote on file for this order: its lines are not compared with one; the order and the contract bound the amount',
+      detail: quote
+        ? "the order's quote has no lines the checker can read: its prices are not compared; the order and the contract bound the amount"
+        : 'no quote on file for this order: its lines are not compared with one; the order and the contract bound the amount',
     });
   }
 
