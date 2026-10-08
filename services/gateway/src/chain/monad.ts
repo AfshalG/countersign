@@ -55,7 +55,14 @@ const ORDER_EVENTS: Hex[] = (['OrderApproved', 'OrderClosed'] as const).map(
 export class MonadClient
   implements Chain, Sender, Receipts, LogSource, DemoChain, ProposalChain, PauseChain, IdentityChain
 {
+  /** Everything but payment simulations: receipts, blocks, nonces, an owner's dry runs. */
   private readonly reads: Pacer;
+  /**
+   * Payment simulations, the bulk of a run (Slice 16): their own share of each endpoint's budget,
+   * so a burst of checks never starves the finality tracker (in the first fast run of 200, 149
+   * payments sat sent but not marked final until the checks were done).
+   */
+  private readonly simulations: Pacer;
   private readonly started = Date.now();
   private socketOpen = false;
   private lastHeadAt = 0;
@@ -66,12 +73,18 @@ export class MonadClient
     /** The address eth_call simulates from; any address works (signatures carry the authority). */
     private readonly simulator: Address,
   ) {
-    this.reads = new Pacer(endpoints.map((e) => e.readsPerSecond));
+    // A quarter of each endpoint's read budget (at least 2 a second) for everything but payment
+    // simulations; the rest for those.
+    const kept = endpoints.map((e) => Math.max(2, Math.round(e.readsPerSecond / 4)));
+    this.reads = new Pacer(kept);
+    this.simulations = new Pacer(
+      endpoints.map((e, i) => Math.max(1, e.readsPerSecond - (kept[i] as number))),
+    );
   }
 
-  private async read<T>(method: string, params: unknown[]): Promise<T> {
+  private async read<T>(method: string, params: unknown[], pacer = this.reads): Promise<T> {
     for (let attempt = 1; ; attempt++) {
-      const slot = this.reads.take(Date.now() - this.started);
+      const slot = pacer.take(Date.now() - this.started);
       await sleep(slot.at - (Date.now() - this.started));
       const endpoint = this.endpoints[slot.index] ?? this.endpoints[0];
       if (!endpoint) throw new Error('no endpoints configured');
@@ -104,7 +117,11 @@ export class MonadClient
             args: [payment, call.ownerSigs],
           });
     try {
-      await this.read('eth_call', [{ from: this.simulator, to: vault, data }, 'latest']);
+      await this.read(
+        'eth_call',
+        [{ from: this.simulator, to: vault, data }, 'latest'],
+        this.simulations,
+      );
       return undefined;
     } catch (e) {
       if (e instanceof RpcError && e.kind === 'rpc' && e.data !== undefined)
