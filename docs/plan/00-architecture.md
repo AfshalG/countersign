@@ -475,7 +475,8 @@ CORE PIPELINE (a scripted agent pays a clean invoice, no prompt):
   Slice 8:   Rule checks + scripted agent: first end-to-end payment   TODO
 
 THE HOLD:
-  Slice 9:   Passkey owner: factory, suppliers, orders, pay once      BUILDING (APPROVALS API)
+  Slice 9:   Passkey owner: factory, suppliers, orders, pay once      DONE (FIVE PARTS ON TESTNET,
+             several approvers (D36) included                         INCL. SEVERAL APPROVERS)
   Slice 10:  Invoice check: own read, exact compare, guard model,     TODO
              scored on the set (catch rate, false holds); the
              checker spec, so anyone can run one (D33)
@@ -484,9 +485,9 @@ THE HOLD:
 AGENT DOOR:
   Slice 12:  Developer kit: TypeScript SDK, MCP server and web API    DONE (SDK RELEASED, MCP LIVE)
              (six tools incl. batch runs), quickstart docs (D33)
-  Slice 13:  Sign-in from the agent app with one link                 TODO
-             (OAuth for grok.com, ChatGPT/dots, claude.ai: WorkOS AuthKit
-             recommended, waiting on Afshal's account)
+  Slice 13:  Sign-in from the agent app with one link                 DONE (CLAUDE.AI SIGNED IN)
+             (OAuth for grok.com, ChatGPT/dots, claude.ai: WorkOS AuthKit,
+             chosen by Afshal 7 Oct)
   Slice 14:  Proposals and holds in the chat (every agent that        TODO
              connected in Spike 4) and on WhatsApp
 
@@ -495,7 +496,7 @@ DEPTH AND PROOF:
   Slice 16:  Payment run: 200 invoices in parallel, run board         TODO
   Slice 17:  Advice-only check for bank-transfer invoices             TODO
   Slice 18:  Audit record export                                      TODO
-  Slice 19:  ERC-8004 agent identity; built right after Slice 12      TODO
+  Slice 19:  ERC-8004 agent identity; built right after Slice 12      DONE (ERC-8004 IDENTITY, A2A DOOR)
              (D33: the track names the registry)
              (+ an A2A door; agentWallet = the policy's agent key, no
              redeploy: the A2A and ERC-8004 research)
@@ -661,6 +662,7 @@ None of these has had an explicit yes, except that Afshal has said parallel exec
 | D33 | Countersign as an open primitive (Track 04) | 7 Oct, after reading the track's judging criteria (65% is about developers building on the entry): a developer kit (TypeScript SDK, MCP connector, web API, quickstart docs), a checker anyone can run (the owner sets the checker key), ERC-8004 agent identity right after the kit, one other Metropolis team integrating during the hackathon; the invoice flow is the reference app. Afshal: "change all the existing slices and other md files as needed" |
 | D34 | The name stays for now; the SDK ships as a GitHub release file | 7 Oct: another project has used "Countersign" since June 2026 (countersign.network: an off-chain, cross-vendor kill switch and spend guard for agent wallets; owns `@countersign` on npm; hosted service paused 18 Sep). Afshal: keep the name for the hackathon, decide after; Payseal is the preferred rename. The SDK is installed from a GitHub release tarball, not npm. The pitch's originality rests on what they do not do: the rule in the contract that holds the money, payee provenance, invoice checks. |
 | D35 | Sophie's API proposal, taken where it improves the plan | 7 Oct, from Sophie's `countersign-api.ts` and plan (Afshal: "damn good shit"). Taken: an approvals API for the phone (`GET /v1/approvals/:id` returns the summary, the differences and the exact typed data per action; `POST` takes the passkey assertion as the browser gives it, and the gateway derives the WebAuthn indexes and low-s), built next so the approver app works against the real gateway; `differences[]` (`field`, `onFile`, `onInvoice`) on every view; her invoice-input shape (`sourceUrl` the checker fetches itself, `fileBase64`, `claimed` fields) for Slice 10; website-proof states (`verified`, `not_listed`, `stale`, `unavailable`) and an `address_change` proposal for Slice 15; judge mode (a demo account for a new passkey, demo invoices) for Slices 21–22; the bypass moment in the demo (a correctly signed payment to another address reverts with `PayToNotOnFile`); the README's security model with evidence (done); checkpoints: a backup demo video Sat 10, a full run by someone who did not build it Sun 11, code frozen Mon 12 noon, submitted Tue 13 noon. Not taken: her EIP-712 names and `Payment` struct (they differ from the deployed contracts; `packages/shared` is the source, checked against Foundry fixtures), her reason names (the typed reasons already in use stay; the contract's error name in the evidence gives the detail), and `agentId` inside the signed payment (Slice 19 decides; it would mean redeploying the vaults). Cutting P1 on Fri 9 is Afshal's call, not adopted here |
+| D36 | Several approvers (dual control) | 7 Oct, Afshal: "Add multi-approver now" (asked whether one person approving every supplier reads consumer rather than B2B; our sizing targets firms with 100+ employees, where no one person may add a vendor or change bank details alone). An account holds up to five owner passkeys and two thresholds: **manage** (set the policy, add or change a supplier, open or close an order, withdraw, change the owners, unpause) and **release** (pay a held payment once). Safety actions need one owner: any owner can **pause** or **refuse** a hold, because stopping money must never wait for a second person. Each owner signs the same EIP-712 digest with their own passkey; the contract verifies each, refuses a repeated owner, and counts them. New accounts start with one owner (judge mode unchanged); `setOwners` adds owners and sets the thresholds. New account and vault templates from a new factory; the main demo account is recreated on them; accounts already on testnet keep working as history. Bulk onboarding from accounting systems and policy-based onboarding are the next steps, not this one. **Built 7 Oct** (Slice 9 part 5): factory `0x7b21a2FF0C13f2d1c8D985232663BA6B08082464`, main demo account `0xC127e7Dbc29d0d38Be3b2e557ce7d796bd2403A9`; on testnet one owner of two was refused (`NotEnoughSigners`) for a supplier, an unpause and a pay-once, and both went through; the live gateway answers `202` with "1 of 2 signed" until the threshold is met |
 | — | Who builds | Sophie and Roshan are busy this week; Claude drafts and builds their slices, Afshal reviews. Ownership in D6 returns when they are free |
 
 ---
