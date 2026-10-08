@@ -1,0 +1,6 @@
+{
+  "accountTemplate": "0x282cf7AD04f666C1b704B91f1911C8A21c705f02",
+  "chainId": 10143,
+  "factory": "0x094250cCC1dDBd8530e4FC9A1C900db3D0D9EB5f",
+  "vaultTemplate": "0x9950941673E7479c5b20c8603cC24981c386A59D"
+}

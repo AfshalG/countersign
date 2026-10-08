@@ -1,0 +1,21 @@
+{
+  "name": "@countersign/agent-runner",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "run-agents": "tsx src/run.ts"
+  },
+  "dependencies": {
+    "@ai-sdk/mcp": "2.0.67",
+    "@countersign/scripted-agent": "workspace:*",
+    "@openrouter/ai-sdk-provider": "3.1.0",
+    "ai": "7.0.128",
+    "zod": "4.6.5"
+  },
+  "devDependencies": {
+    "@types/node": "24.19.1",
+    "tsx": "4.23.15"
+  }
+}

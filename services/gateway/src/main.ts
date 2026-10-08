@@ -1,0 +1,237 @@
+import { serve } from '@hono/node-server';
+import { formatEther, type Address } from 'viem';
+import { privateKeyToAccount } from 'viem/accounts';
+import { deployments, ENDPOINTS } from '@countersign/chain';
+import { IDENTITY_REGISTRY_TESTNET, REASONS, type Reason } from '@countersign/shared';
+import { createApp } from './app.js';
+import { TestChecker, type Checker } from './checker.js';
+import { RemoteChecker, orderFacts } from './checker-remote.js';
+import { FinalityTracker } from './chain/finality.js';
+import { OrderIndexer } from './chain/indexer.js';
+import { MonadClient } from './chain/monad.js';
+import { connect } from './db/client.js';
+import { Store } from './db/store.js';
+import { RelayerPool } from './relay/pool.js';
+import { WalletFunder } from './demo/funder.js';
+import { AgentDirectory } from './agents/identity.js';
+import { checkerMode, judgeMode, loadSettings, whatsappMode } from './settings.js';
+import { supplierNameOf } from './suppliers.js';
+import { WhatsAppApi } from './notify/whatsapp-api.js';
+import { WhatsAppNotifier } from './notify/whatsapp.js';
+import { Workers } from './workers.js';
+
+const settings = loadSettings();
+const chainId = settings.MONAD_CHAIN_ID;
+const judge = judgeMode(settings); // throws at start if only one of its keys is set
+const checking = checkerMode(settings); // likewise for the checker service's three settings
+
+/**
+ * Without the checker service (Slice 10) the stand-in checker releases every payment, except that
+ * a request whose document says `{ "testHold": "<reason>" }` is held with that reason.
+ */
+function testHold(document: unknown): Reason | undefined {
+  if (typeof document !== 'object' || document === null || !('testHold' in document))
+    return undefined;
+  const reason = document.testHold;
+  return (REASONS as readonly unknown[]).includes(reason) ? (reason as Reason) : 'checker_unsure';
+}
+
+const database = await connect(settings.DATABASE_URL);
+const store = new Store(database.db);
+const relayers = settings.RELAYER_PRIVATE_KEYS;
+const monad = new MonadClient(
+  ENDPOINTS,
+  settings.MONAD_WS_URL,
+  privateKeyToAccount(relayers[0] as `0x${string}`).address,
+);
+const pool = new RelayerPool({
+  keys: relayers,
+  store,
+  sender: monad,
+  chainId,
+  endpoints: ENDPOINTS.length,
+  stallMs: 3_000, // a payment is final in about 1.2 s at p95 (Spike 3)
+  tickMs: 25,
+  onRefused: (hash, error) => {
+    console.error(`endpoint refused ${hash}: ${error}`);
+  },
+});
+const indexer = new OrderIndexer({ store, source: monad });
+const tracker = new FinalityTracker({
+  store,
+  receipts: monad,
+  pool,
+  onFinalizedBlock: (blockNumber, logs) => indexer.onBlock(blockNumber, logs),
+});
+const catchUp = () => {
+  indexer.catchUp().catch((e: unknown) => {
+    console.error(`indexer catch-up: ${e instanceof Error ? e.message : String(e)}`);
+  });
+};
+const checker: Checker =
+  checking.kind === 'remote'
+    ? new RemoteChecker({
+        url: checking.url,
+        token: checking.token,
+        facts: (row) => orderFacts({ store, chain: monad }, row),
+      })
+    : new TestChecker(checking.key, chainId, (input) => testHold(input.request.document));
+const CHECKER_TIMEOUT_MS = 2_000;
+const workers = new Workers({
+  store,
+  chain: monad,
+  checker,
+  pool,
+  chainId,
+  checkerTimeoutMs: CHECKER_TIMEOUT_MS,
+  leaseMs: 30_000,
+  checkConcurrency: 8,
+  sendConcurrency: 8,
+  tickMs: 50,
+});
+
+await pool.start();
+const recovered = await workers.recover();
+console.log(
+  `recovered: ${String(recovered.settled)} settled from receipts, ${String(recovered.resent)} re-sent`,
+);
+workers.start();
+// Accounts behind (just registered, or the gateway was down) are brought up to date in windows.
+catchUp();
+const catchUpTimer = setInterval(catchUp, 15_000);
+const heads = monad.subscribeHeads((head) => {
+  void tracker.onHead(head);
+});
+tracker.startPolling(1_000);
+
+// Judge mode: an account for a new passkey, set up with that passkey (Slice 9 part 4).
+const demo = judge && {
+  store,
+  chain: monad,
+  pool,
+  finality: tracker,
+  funder: new WalletFunder(judge.funderKey, monad, chainId),
+  chainId,
+  factory: deployments.accountFactory,
+  agentKey: judge.agent,
+  checkerKey: checking.address,
+  perDay: judge.perDay,
+  agentPrivateKey: judge.agentKey,
+};
+
+// The owner's passkey actions: approving proposals (Slice 9 part 2) and the stop button (part 3).
+const owner = {
+  store,
+  chain: monad,
+  pool,
+  finality: tracker,
+  chainId,
+  publicUrl: settings.PUBLIC_URL,
+};
+
+// ERC-8004 agents named on payments (Slice 19), each re-read from the registry at start.
+const agents = new AgentDirectory(monad, IDENTITY_REGISTRY_TESTNET, chainId);
+await agents.load(store);
+console.log(
+  `agents named on payments: ${
+    agents
+      .list()
+      .map((a) => `#${a.agentId}`)
+      .join(', ') || 'none'
+  }`,
+);
+
+// WhatsApp (Slice 14, D31): held payments and proposals reach the people connected to the account,
+// with the approval link. Sending never holds up a payment: it runs after the change is stored.
+const wa = whatsappMode(settings);
+const whatsapp = wa
+  ? new WhatsAppNotifier({
+      store,
+      api: new WhatsAppApi({ phoneNumberId: wa.phoneNumberId, accessToken: wa.accessToken }),
+      chain: monad,
+      chainId,
+      publicUrl: settings.PUBLIC_URL.replace(/\/$/, ''),
+      number: wa.number,
+      ...(wa.template ? { template: wa.template } : {}),
+      supplierName: (account, vault) => supplierNameOf(store, account, vault),
+    })
+  : undefined;
+if (whatsapp) {
+  const failed = (what: string) => (e: unknown) => {
+    console.error(`whatsapp ${what}: ${e instanceof Error ? e.message : String(e)}`);
+  };
+  store.onChange((change) => {
+    if (change.to === 'held') void whatsapp.held(change.requestId).catch(failed('held'));
+  });
+  store.onProposal((proposal) => {
+    void whatsapp.proposed(proposal).catch(failed('proposal'));
+  });
+}
+console.log(
+  `whatsapp ${wa ? `on (${wa.template ? `template ${wa.template.name}` : 'no template: only within 24 hours'})` : 'off'}`,
+);
+
+const app = createApp({
+  agents,
+  ...(demo ? { demo } : {}),
+  proposals: owner,
+  pause: owner,
+  ...(whatsapp && wa
+    ? { whatsapp: { notifier: whatsapp, verifyToken: wa.verifyToken, appSecret: wa.appSecret } }
+    : {}),
+  store,
+  chain: monad,
+  checker,
+  chainId,
+  checkerTimeoutMs: CHECKER_TIMEOUT_MS,
+  indexing: { latestFinalized: () => monad.latestFinalized(), catchUp: () => indexer.catchUp() },
+  publicUrl: settings.PUBLIC_URL,
+  token: settings.GATEWAY_SERVICE_TOKEN,
+  health: async () => ({
+    chainId,
+    finality: monad.socketState(),
+    relayers: await Promise.all(
+      pool.relayers.map(async (address: Address) => ({
+        address,
+        mon: formatEther(await monad.balanceOf(address)),
+      })),
+    ),
+    moves: pool.moves().length,
+    // Wallets a node refused for low balance; their payments wait until they are topped up.
+    starved: pool.starved(),
+    // Which checker decides: the service (Slice 10) or the stand-in.
+    checker: { kind: checking.kind, signer: checking.address },
+    // WhatsApp (Slice 14): on or off, and the template used outside the 24-hour window.
+    whatsapp: wa ? { template: wa.template?.name ?? null } : null,
+  }),
+});
+const server = serve({ fetch: app.fetch, port: settings.PORT }, (info) => {
+  console.log(
+    `gateway listening on ${String(info.port)} with ${String(relayers.length)} relayers; judge mode ${demo ? `on (${String(demo.perDay)} accounts a day)` : 'off'}`,
+  );
+});
+
+let stopping = false;
+function shutdown(signal: string) {
+  if (stopping) return;
+  stopping = true;
+  console.log(`${signal}: stopping`);
+  workers.stop();
+  pool.stop();
+  tracker.stopPolling();
+  clearInterval(catchUpTimer);
+  heads.close();
+  server.close(() => {
+    database.pool
+      .end()
+      .then(() => process.exit(0))
+      .catch(() => process.exit(1));
+  });
+  setTimeout(() => process.exit(1), 10_000).unref();
+}
+process.on('SIGINT', () => {
+  shutdown('SIGINT');
+});
+process.on('SIGTERM', () => {
+  shutdown('SIGTERM');
+});

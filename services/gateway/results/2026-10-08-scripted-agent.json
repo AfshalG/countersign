@@ -1,0 +1,230 @@
+{
+  "startedAt": "2026-10-08T04:43:32.923Z",
+  "gateway": "https://gateway-production-e17a.up.railway.app",
+  "site": "https://countersign-supplier-demo.vercel.app",
+  "account": "0x8f1431D15E547a1073b064e73F0C61372CcEA739",
+  "matched": 14,
+  "cases": [
+    {
+      "step": "q-2210",
+      "persona": "careful",
+      "expected": {
+        "outcome": "proposed"
+      },
+      "actual": {
+        "outcome": "proposed",
+        "changesAddress": false
+      },
+      "ok": true,
+      "ms": 3849,
+      "proposalId": "0x3cd0530133bdbafcbf50b7f1613cf981ca5003486f27abe7da3d5593ef3c0043",
+      "owner": "approved"
+    },
+    {
+      "step": "q-2211",
+      "persona": "careful",
+      "expected": {
+        "outcome": "proposed",
+        "changesAddress": true
+      },
+      "actual": {
+        "outcome": "proposed",
+        "changesAddress": true
+      },
+      "ok": true,
+      "ms": 2734,
+      "proposalId": "0xc40b43a93070077951aa344136a489fa428578db0cfa57555a47049649de6902",
+      "owner": "refused"
+    },
+    {
+      "step": "shop",
+      "persona": "careful",
+      "expected": {
+        "outcome": "proposed"
+      },
+      "actual": {
+        "outcome": "proposed"
+      },
+      "ok": true,
+      "ms": 4287,
+      "proposalId": "0xf864ce592f8475a6ef2786455404b63ce38b036b15d71ff2b46d479e32e11b05",
+      "owner": "approved"
+    },
+    {
+      "step": "ks-1001",
+      "persona": "careful",
+      "expected": {
+        "outcome": "settled",
+        "again": "duplicate"
+      },
+      "actual": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "ok": true,
+      "ms": 2811,
+      "requestId": "0x98cb0585fae3127625936e39023e25088a85daeb5befe268473e28b113487402",
+      "tx": "0x3cfc644bec402cd36ecc3a99a47c8e6e6b36ca1e3c1798a28ad277748bf663a8"
+    },
+    {
+      "step": "ks-1001 again",
+      "persona": "careful",
+      "expected": {
+        "duplicate": true
+      },
+      "actual": {
+        "duplicate": true
+      },
+      "ok": true,
+      "ms": 638,
+      "requestId": "0x98cb0585fae3127625936e39023e25088a85daeb5befe268473e28b113487402",
+      "tx": "0x3cfc644bec402cd36ecc3a99a47c8e6e6b36ca1e3c1798a28ad277748bf663a8"
+    },
+    {
+      "step": "ks-1002",
+      "persona": "careful",
+      "expected": {
+        "outcome": "held",
+        "reason": "address_mismatch"
+      },
+      "actual": {
+        "outcome": "held",
+        "reason": "address_mismatch"
+      },
+      "ok": true,
+      "ms": 1129,
+      "requestId": "0xef3596456e28172a8fce9c360f3fc4cea0ab01e25c5588f60485c3e84767f729",
+      "tx": null
+    },
+    {
+      "step": "ks-1003",
+      "persona": "careful",
+      "expected": {
+        "outcome": "settled",
+        "afterSlice10": {
+          "outcome": "held",
+          "reason": "items_mismatch"
+        }
+      },
+      "actual": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "ok": true,
+      "ms": 2350,
+      "requestId": "0x28e54e9f980f259f24fc5fbb282bcef23f7cea5b5c5949287c6aea5394fe44fc",
+      "tx": "0x723c4be9649ec3aca85fedcdd62d9322132a89b278a4b52391bfd805466b720a"
+    },
+    {
+      "step": "ks-1004",
+      "persona": "careful",
+      "expected": {
+        "outcome": "settled",
+        "afterSlice10": {
+          "outcome": "held",
+          "reason": "amount_mismatch"
+        }
+      },
+      "actual": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "ok": true,
+      "ms": 1804,
+      "requestId": "0x29a8833c341ea22f23c9630cb0256ed1c2a2a86b62efacc825ab96e5aa9dcd3a",
+      "tx": "0x82996acc8e28bb0a1e1b744f188e3988ebfd7662a57da0bda8b8211cbb713180"
+    },
+    {
+      "step": "ks-1005",
+      "persona": "obedient",
+      "expected": {
+        "outcome": "held",
+        "reason": "address_mismatch",
+        "persona": "obedient",
+        "afterSlice10": {
+          "outcome": "held",
+          "reason": "document_layers_differ"
+        }
+      },
+      "actual": {
+        "outcome": "held",
+        "reason": "address_mismatch"
+      },
+      "ok": true,
+      "ms": 1141,
+      "requestId": "0x0d9e6674e2403ffff59e57149ceb9287022825ea63c6709cce35270509d58173",
+      "tx": null
+    },
+    {
+      "step": "nw-77",
+      "persona": "careful",
+      "expected": {
+        "outcome": "no_order"
+      },
+      "actual": {
+        "outcome": "no_order"
+      },
+      "ok": true,
+      "ms": 498
+    },
+    {
+      "step": "ks-1006",
+      "persona": "careful",
+      "expected": {
+        "outcome": "blocked",
+        "reason": "over_limit"
+      },
+      "actual": {
+        "outcome": "blocked",
+        "reason": "over_limit"
+      },
+      "ok": true,
+      "ms": 1073,
+      "requestId": "0xeea7bf8205e3d3c1a78c7d86ff2e633f35004d490a0ceed0295710b712140245",
+      "tx": null
+    },
+    {
+      "step": "ks-1007",
+      "persona": "careful",
+      "expected": {
+        "outcome": "not_checked"
+      },
+      "actual": {
+        "outcome": "not_checked"
+      },
+      "ok": true,
+      "ms": 496
+    },
+    {
+      "step": "fs-checkout",
+      "persona": "careful",
+      "expected": {
+        "outcome": "settled"
+      },
+      "actual": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "ok": true,
+      "ms": 2303,
+      "requestId": "0xad7d72e57c0cb21809cc361a7921f71d410eb626f59124eac5ac43757da3c071",
+      "tx": "0x5ea7285a199537718ffc82c4304cb601633d08bf450d7e89e86feef293c914a7"
+    },
+    {
+      "step": "fs-checkout-v2",
+      "persona": "careful",
+      "expected": {
+        "outcome": "held",
+        "reason": "address_mismatch"
+      },
+      "actual": {
+        "outcome": "held",
+        "reason": "address_mismatch"
+      },
+      "ok": true,
+      "ms": 1045,
+      "requestId": "0x61d619b459086f9b2e7a0182780a191a61208c8e59526462791fa23dd2db012d",
+      "tx": null
+    }
+  ]
+}

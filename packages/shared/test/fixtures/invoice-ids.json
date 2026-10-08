@@ -1,0 +1,32 @@
+{
+  "about": "Invoice identity test vectors (Slice 12, S12-3). The hash is keccak256(abi.encode(bytes32 supplierId, string normalizedNumber)); computed with Foundry's cast, not with the code under test. Every implementation (SDK, MCP server, checker) must match these.",
+  "supplier": "kalibre-studio",
+  "supplierId": "0x4f16e9bbfc45cf143da653ab5b4c8ac2e781e7a393badffb9cbc896c53d8c5b1",
+  "cases": [
+    {
+      "input": "INV-0042",
+      "normalized": "INV-0042",
+      "hash": "0x8b604573c997a05fcf9baa87b9bf2120ce26a0215c990c3dd9fdfa2222f0ed36"
+    },
+    {
+      "input": "  inv-0042 ",
+      "normalized": "INV-0042",
+      "hash": "0x8b604573c997a05fcf9baa87b9bf2120ce26a0215c990c3dd9fdfa2222f0ed36"
+    },
+    {
+      "input": "ＩＮＶ－００４２",
+      "normalized": "INV-0042",
+      "hash": "0x8b604573c997a05fcf9baa87b9bf2120ce26a0215c990c3dd9fdfa2222f0ed36"
+    },
+    {
+      "input": "inv\t0042\n  a",
+      "normalized": "INV 0042 A",
+      "hash": "0x5fdad45232c6d5135dff9b7709b29e2511352aab53cb82714156c6284a1d261d"
+    },
+    {
+      "input": "INV-0045",
+      "normalized": "INV-0045",
+      "hash": "0x986f5d2b142b31bd5a0f4338df3b1ee4d80fa2ec57ed717815eb12a0e990bc8a"
+    }
+  ]
+}

@@ -1,0 +1,63 @@
+[profile.default]
+src = "src"
+out = "out"
+test = "test"
+libs = ["dependencies"]
+solc_version = "0.8.37"
+optimizer = true
+optimizer_runs = 200
+# OpenZeppelin's P256 (the passkey check) hits "stack too deep" without the IR pipeline.
+via_ir = true
+# Monad's Foundry guide asks for no IPFS hash and inlined sources so verification is
+# reproducible. Its `metadata_hash` key is outdated; Foundry 1.8 calls it `bytecode_hash`.
+bytecode_hash = "none"
+use_literal_content = true
+# The EIP-712 fixture shared with packages/shared (test/Eip712Fixture.t.sol).
+fs_permissions = [
+    { access = "read-write", path = "../packages/shared/test/fixtures" },
+    { access = "read-write", path = "deployments" },
+]
+
+[lint]
+# Deadlines, waiting periods and expiries are hours to days long; the few seconds a block
+# producer can move a timestamp do not matter to any rule here.
+# Every external call made before an event is a read (the P256 precompile, the account's
+# paymentContext, a token balance) or a call into our own vault or account clone, and USDC
+# transfers come after their events; none can re-enter. Checked one by one, 7 Oct.
+# The reverts inside loops (owner signatures, owner sets; D36) are all-or-nothing on purpose:
+# one bad signature, unknown owner or repeated key rejects the whole action. Checked 7 Oct.
+exclude_lints = ["block-timestamp", "reentrancy-events", "require-revert-in-loop"]
+
+[fuzz]
+runs = 256
+
+[profile.ci.fuzz]
+runs = 5000
+
+# Each invariant run is a random sequence of `depth` actions by the handler, after each of
+# which every invariant is checked. Payments carry real passkey and ECDSA signatures.
+[invariant]
+runs = 64
+depth = 64
+fail_on_revert = false
+
+[profile.ci.invariant]
+runs = 256
+depth = 128
+fail_on_revert = false
+
+[rpc_endpoints]
+monad_testnet = "${MONAD_RPC_URL}"
+
+# Soldeer keeps dependencies out of git (no submodules). Version-free prefixes keep
+# imports stable across upgrades: `@openzeppelin-contracts/utils/...`.
+[soldeer]
+remappings_generate = true
+# false keeps the hand-fixed forge-std line (its sources are under src/).
+remappings_regenerate = false
+remappings_version = false
+remappings_location = "txt"
+
+[dependencies]
+"@openzeppelin-contracts" = "5.7.0"
+forge-std = "1.17.0"

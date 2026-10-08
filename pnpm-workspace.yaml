@@ -1,0 +1,20 @@
+packages:
+  - packages/*
+  - services/*
+  - apps/*
+  - spikes/*
+
+# Install scripts run only for packages listed here (pnpm blocks the rest).
+# esbuild's script installs its native binary; tsx needs it.
+allowBuilds:
+  esbuild: true
+  # Primus's script compiles a wrapper around its closed-source native library.
+  # Not needed: the SDK falls back to the WebAssembly build it ships (Slice 2).
+  '@primuslabs/zktls-core-sdk': false
+
+# Primus's SDK requires tslib but does not declare it (seen in 0.3.7). pnpm's
+# strict layout hides undeclared packages, so declare it for that package only.
+packageExtensions:
+  '@primuslabs/zktls-core-sdk':
+    dependencies:
+      tslib: 2.8.1

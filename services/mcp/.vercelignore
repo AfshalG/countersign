@@ -1,0 +1,5 @@
+agent
+**/*.test.ts
+.next
+test
+scripts

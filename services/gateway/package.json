@@ -1,0 +1,48 @@
+{
+  "name": "@countersign/gateway",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "dev": "tsx src/main.ts",
+    "start": "tsx src/main.ts",
+    "db:generate": "drizzle-kit generate",
+    "testnet-run": "tsx scripts/testnet-run.ts",
+    "approvals-smoke": "tsx scripts/approvals-smoke.ts",
+    "sample-approvals": "tsx scripts/sample-approvals.ts",
+    "top-up": "tsx scripts/top-up.ts",
+    "fund-demo-wallet": "tsx scripts/fund-demo-wallet.ts",
+    "judge-smoke": "tsx scripts/judge-smoke.ts",
+    "proposal-smoke": "tsx scripts/proposal-smoke.ts",
+    "pause-smoke": "tsx scripts/pause-smoke.ts",
+    "owners-smoke": "tsx scripts/owners-smoke.ts",
+    "gas-calibrate": "tsx scripts/gas-calibrate.ts",
+    "register-agent": "tsx scripts/register-agent.ts",
+    "agent-run": "tsx scripts/agent-run.ts",
+    "main-account-order": "tsx scripts/main-account-order.ts",
+    "whatsapp-connect": "tsx scripts/whatsapp-connect.ts",
+    "whatsapp-template": "tsx scripts/whatsapp-template.ts"
+  },
+  "dependencies": {
+    "@countersign/chain": "workspace:*",
+    "@countersign/shared": "workspace:*",
+    "@hono/node-server": "2.1.3",
+    "@hono/zod-openapi": "1.6.3",
+    "@hono/zod-validator": "0.9.1",
+    "@scalar/hono-api-reference": "0.12.10",
+    "drizzle-orm": "0.45.3",
+    "hono": "4.13.13",
+    "pg": "8.23.1",
+    "viem": "2.57.3",
+    "zod": "4.6.5"
+  },
+  "devDependencies": {
+    "@countersign/scripted-agent": "workspace:*",
+    "@countersign/sdk": "workspace:*",
+    "@scalar/openapi-parser": "0.29.11",
+    "@types/pg": "8.23.1",
+    "drizzle-kit": "0.31.11",
+    "tsx": "4.23.15"
+  }
+}

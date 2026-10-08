@@ -1,0 +1,48 @@
+# Secrets live in environment variables, never in git
+.env
+.env.*
+!.env.example
+
+# Dependencies and build output
+node_modules/
+.next/
+dist/
+out/
+coverage/
+.turbo/
+*.tsbuildinfo
+
+# Foundry
+contracts/out/
+contracts/cache/
+contracts/dependencies/
+contracts/broadcast/*/31337/
+# forge script simulations (rehearsals): only real broadcasts are kept as evidence
+contracts/broadcast/**/dry-run/
+
+# Tests
+playwright-report/
+test-results/
+
+# OS and editors
+.DS_Store
+.vscode/*
+!.vscode/extensions.json
+.idea/
+
+# Spikes (Foundry)
+spikes/*/out/
+spikes/*/cache/
+spikes/*/dependencies/
+spikes/*/broadcast/*/31337/
+
+# Vercel project links
+.vercel/
+spikes/*/broadcast/**/*.lock
+
+# Next.js build output
+**/.next/
+**/next-env.d.ts
+
+# SDK release tarballs (pnpm pack); published as GitHub release assets
+*.tgz

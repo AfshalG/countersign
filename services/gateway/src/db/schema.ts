@@ -1,0 +1,301 @@
+import {
+  bigint,
+  bigserial,
+  boolean,
+  index,
+  integer,
+  jsonb,
+  numeric,
+  pgTable,
+  primaryKey,
+  text,
+  timestamp,
+} from 'drizzle-orm/pg-core';
+import type { DecidedBy, PaymentStatus, Reason } from '@countersign/shared';
+
+const at = (name: string) => timestamp(name, { withTimezone: true, mode: 'date' });
+
+/**
+ * One payment request per (account, vault, invoice hash): the id is derived from those
+ * (src/ids.ts), so a second submission finds the first. Each status change is written with
+ * its row in `payment_events`, in the same transaction.
+ */
+export const paymentRequests = pgTable(
+  'payment_requests',
+  {
+    id: text('id').primaryKey(),
+    runId: text('run_id'),
+    account: text('account').notNull(),
+    vault: text('vault').notNull(),
+    invoiceHash: text('invoice_hash').notNull(),
+    payTo: text('pay_to').notNull(),
+    /** USDC base units as a decimal string (uint256). */
+    amount: numeric('amount', { precision: 78, scale: 0 }).notNull(),
+    deadline: bigint('deadline', { mode: 'number' }).notNull(),
+    agentSig: text('agent_sig').notNull(),
+    /** The address the agent's signature recovers to (Slice 19): its ERC-8004 agent, if registered. */
+    agentAddress: text('agent_address'),
+    /** What the checker reads: the invoice's source or file reference and its fields. */
+    document: jsonb('document'),
+
+    status: text('status').$type<PaymentStatus>().notNull(),
+    reason: text('reason').$type<Reason>(),
+    decidedBy: text('decided_by').$type<DecidedBy>(),
+    evidence: jsonb('evidence'),
+
+    /** How the payment is released: the checker's signature, or the owner's passkey. */
+    checkerSig: text('checker_sig'),
+    ownerAuth: jsonb('owner_auth'),
+
+    relayer: text('relayer'),
+    relayerNonce: integer('relayer_nonce'),
+    /** The signed transaction, kept so a crash between signing and sending re-sends the same one. */
+    rawTx: text('raw_tx'),
+    txHash: text('tx_hash'),
+    blockNumber: bigint('block_number', { mode: 'number' }),
+
+    requestedAt: at('requested_at').notNull().defaultNow(),
+    checkedAt: at('checked_at'),
+    decidedAt: at('decided_at'),
+    sentAt: at('sent_at'),
+    proposedAt: at('proposed_at'),
+    votedAt: at('voted_at'),
+    finalizedAt: at('finalized_at'),
+    updatedAt: at('updated_at').notNull().defaultNow(),
+    /** A worker's claim on the row; another worker may take it once this has passed. */
+    leaseUntil: at('lease_until'),
+  },
+  (t) => [
+    index('payment_requests_status_idx').on(t.status, t.leaseUntil),
+    index('payment_requests_run_idx').on(t.runId),
+    index('payment_requests_tx_idx').on(t.txHash),
+  ],
+);
+
+export const paymentEvents = pgTable(
+  'payment_events',
+  {
+    id: bigserial('id', { mode: 'number' }).primaryKey(),
+    requestId: text('request_id')
+      .notNull()
+      .references(() => paymentRequests.id),
+    fromStatus: text('from_status').$type<PaymentStatus>(),
+    toStatus: text('to_status').$type<PaymentStatus>().notNull(),
+    reason: text('reason').$type<Reason>(),
+    at: at('at').notNull().defaultNow(),
+    detail: jsonb('detail'),
+  },
+  (t) => [index('payment_events_request_idx').on(t.requestId, t.id)],
+);
+
+export const runs = pgTable('runs', {
+  id: text('id').primaryKey(),
+  account: text('account').notNull(),
+  size: integer('size').notNull(),
+  createdAt: at('created_at').notNull().defaultNow(),
+});
+
+/** The next nonce each relayer will use, so a restart resumes where it stopped. */
+export const relayerNonces = pgTable('relayer_nonces', {
+  address: text('address').primaryKey(),
+  nextNonce: integer('next_nonce').notNull(),
+});
+
+/**
+ * Relayer transactions that are not payments (judge-mode setup): stored with their nonce in the
+ * same database transaction, as payments store theirs on the request, so a restart re-sends them
+ * unchanged and no relayer is left stuck behind a nonce that was reserved but never sent.
+ */
+export const relayerTxs = pgTable('relayer_txs', {
+  hash: text('hash').primaryKey(),
+  relayer: text('relayer').notNull(),
+  nonce: integer('nonce').notNull(),
+  raw: text('raw').notNull(),
+  purpose: text('purpose').notNull(),
+  createdAt: at('created_at').notNull().defaultNow(),
+  finalAt: at('final_at'),
+  status: text('status').$type<'success' | 'reverted'>(),
+});
+
+/**
+ * Accounts whose orders the gateway indexes (Slice 12). `indexedTo` is the last finalized block
+ * whose order events have been applied; the indexer resumes from there after a restart.
+ */
+export const accounts = pgTable('accounts', {
+  address: text('address').primaryKey(),
+  label: text('label'),
+  indexedTo: bigint('indexed_to', { mode: 'number' }).notNull(),
+  registeredAt: at('registered_at').notNull().defaultNow(),
+});
+
+/**
+ * Orders the accounts approved, from `OrderApproved` and `OrderClosed` events. What is left in an
+ * order and its supplier's address on file are read from the chain when asked, never stored, so
+ * they cannot go stale.
+ */
+export const orders = pgTable(
+  'orders',
+  {
+    vault: text('vault').primaryKey(),
+    account: text('account').notNull(),
+    orderId: text('order_id').notNull(),
+    supplierId: text('supplier_id').notNull(),
+    orderHash: text('order_hash').notNull(),
+    /** USDC base units set aside for the order (uint256 as a decimal string). */
+    amount: numeric('amount', { precision: 78, scale: 0 }).notNull(),
+    expiry: bigint('expiry', { mode: 'number' }).notNull(),
+    closed: boolean('closed').notNull().default(false),
+    approvedBlock: bigint('approved_block', { mode: 'number' }).notNull(),
+  },
+  (t) => [index('orders_account_idx').on(t.account, t.closed)],
+);
+
+export const PROPOSAL_STATUSES = ['pending', 'approved', 'refused', 'expired'] as const;
+export type ProposalStatus = (typeof PROPOSAL_STATUSES)[number];
+
+/**
+ * A supplier and an order an agent proposed from a quote it read (money rule 8: nothing changes
+ * until the owner's passkey signs). The id is derived from (account, document hash), so the same
+ * quote proposed twice is one proposal.
+ */
+export const proposals = pgTable('proposals', {
+  id: text('id').primaryKey(),
+  account: text('account').notNull(),
+  supplierName: text('supplier_name').notNull(),
+  website: text('website'),
+  /** The payment address as the agent read it; the website check (Slice 15) confirms it or not. */
+  payTo: text('pay_to').notNull(),
+  amount: numeric('amount', { precision: 78, scale: 0 }).notNull(),
+  expiry: bigint('expiry', { mode: 'number' }).notNull(),
+  documentHash: text('document_hash').notNull(),
+  document: jsonb('document'),
+  status: text('status').$type<ProposalStatus>().notNull(),
+  createdAt: at('created_at').notNull().defaultNow(),
+  decidedAt: at('decided_at'),
+});
+
+/**
+ * Judge mode (Slice 9 part 4): an account created for a new passkey. `plan` fixes the three setup
+ * actions its passkey signs (src/demo/plan.ts), so the challenges shown are the ones checked.
+ */
+export const DEMO_STATUSES = ['creating', 'awaiting_passkey', 'setting_up', 'ready'] as const;
+export type DemoStatus = (typeof DEMO_STATUSES)[number];
+
+export const demoAccounts = pgTable('demo_accounts', {
+  account: text('account').primaryKey(),
+  qx: text('qx').notNull(),
+  qy: text('qy').notNull(),
+  plan: jsonb('plan').notNull(),
+  status: text('status').$type<DemoStatus>().notNull(),
+  createdAt: at('created_at').notNull().defaultNow(),
+  readyAt: at('ready_at'),
+});
+
+/**
+ * ERC-8004 agents the gateway names on payments (Slice 19): an agent's id in the Identity
+ * Registry and its `agentWallet`, the key that signs its payments, read from the chain when added
+ * and again when the gateway starts.
+ */
+export const agents = pgTable('agents', {
+  agentId: text('agent_id').primaryKey(),
+  registry: text('registry').notNull(),
+  wallet: text('wallet').notNull(),
+  addedAt: at('added_at').notNull().defaultNow(),
+});
+
+export type PaymentRequestRow = typeof paymentRequests.$inferSelect;
+export type AccountRow = typeof accounts.$inferSelect;
+export type OrderRow = typeof orders.$inferSelect;
+export type ProposalRow = typeof proposals.$inferSelect;
+export type DemoAccountRow = typeof demoAccounts.$inferSelect;
+/**
+ * Owners' passkey assertions gathered for one owner action until the account's threshold is met
+ * (D36). Keyed by the digest signed (the action itself: its nonce and deadline, or the payment)
+ * and the owner's key, not their index, since `setOwners` can renumber owners. `detail` is what
+ * another owner needs to rebuild the same challenge (an unpause's deadline, an owner change's
+ * keys). An action exists here only once a real owner has signed it.
+ */
+export const ownerSignatures = pgTable(
+  'owner_signatures',
+  {
+    digest: text('digest').notNull(),
+    qx: text('qx').notNull(),
+    qy: text('qy').notNull(),
+    account: text('account').notNull(),
+    purpose: text('purpose').notNull(),
+    auth: jsonb('auth').notNull(),
+    detail: jsonb('detail'),
+    createdAt: at('created_at').notNull().defaultNow(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.digest, t.qx, t.qy] }),
+    index('owner_signatures_account_idx').on(t.account, t.purpose),
+  ],
+);
+
+export type OwnerSignatureRow = typeof ownerSignatures.$inferSelect;
+export type RelayerTxRow = typeof relayerTxs.$inferSelect;
+export type AgentRow = typeof agents.$inferSelect;
+
+/**
+ * WhatsApp (Slice 14, D31): a person who connected a WhatsApp number to an account. An owner signs
+ * a one-off challenge with their passkey for a code (`whatsapp_links`), and sends the code to
+ * Countersign's number from WhatsApp: that message is their consent, and it opens WhatsApp's
+ * 24-hour window for free-form messages (`lastInboundAt`). STOP removes them.
+ */
+export const whatsappContacts = pgTable(
+  'whatsapp_contacts',
+  {
+    account: text('account').notNull(),
+    waId: text('wa_id').notNull(),
+    connectedAt: at('connected_at').notNull().defaultNow(),
+    lastInboundAt: at('last_inbound_at').notNull().defaultNow(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.account, t.waId] }),
+    index('whatsapp_contacts_wa_idx').on(t.waId),
+  ],
+);
+
+/** A connect code: issued for an account, usable once an owner has signed for it, then once. */
+export const whatsappLinks = pgTable(
+  'whatsapp_links',
+  {
+    code: text('code').primaryKey(),
+    account: text('account').notNull(),
+    expiresAt: at('expires_at').notNull(),
+    signedAt: at('signed_at'),
+    usedAt: at('used_at'),
+    createdAt: at('created_at').notNull().defaultNow(),
+  },
+  (t) => [index('whatsapp_links_account_idx').on(t.account, t.createdAt)],
+);
+
+/**
+ * One message per decision and person: `subject` is the held payment's or the proposal's id, so
+ * the same hold never messages a person twice. `status` follows WhatsApp's webhooks (sent,
+ * delivered, read, failed); `skipped` records a message not sent, and why.
+ */
+export const whatsappMessages = pgTable(
+  'whatsapp_messages',
+  {
+    subject: text('subject').notNull(),
+    waId: text('wa_id').notNull(),
+    account: text('account').notNull(),
+    kind: text('kind').$type<'held' | 'proposal'>().notNull(),
+    via: text('via').$type<'link' | 'template'>(),
+    messageId: text('message_id'),
+    status: text('status').notNull(),
+    error: text('error'),
+    createdAt: at('created_at').notNull().defaultNow(),
+    updatedAt: at('updated_at').notNull().defaultNow(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.subject, t.waId] }),
+    index('whatsapp_messages_id_idx').on(t.messageId),
+    index('whatsapp_messages_recent_idx').on(t.waId, t.createdAt),
+  ],
+);
+
+export type WhatsappContactRow = typeof whatsappContacts.$inferSelect;
+export type WhatsappMessageRow = typeof whatsappMessages.$inferSelect;
