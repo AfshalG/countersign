@@ -2,7 +2,7 @@
 
 ## Status
 
-**PLANNED (7 Oct 2026).** Technical decisions made by Claude (Afshal, 7 Oct: decide technical choices; go slice by slice). The look of the pages is Sophie's to restyle; this slice builds them plain and correct.
+**DONE (7 Oct 2026): the site is live** at `https://countersign-supplier-demo.vercel.app` (`/demo` lists every case). An agent paying these documents end to end is Slice 8, which also runs this slice's claude.ai test. Technical decisions made by Claude (Afshal, 7 Oct: decide technical choices; go slice by slice). The look of the pages is Sophie's to restyle; this slice builds them plain and correct.
 
 ## Goal
 
@@ -62,6 +62,25 @@ Each case renders its fields and its expected outcome; the hijack's instruction 
 ## Manual testing
 
 Open each case on a phone; give claude.ai (signed in, Slice 13) a clean invoice link and a changed-address link and watch one settle and one be held; the address file still verifies with Slice 2's probe.
+
+## As built (7 Oct), two changes from the design
+
+1. **The site holds no Countersign token and imports none of Countersign's code** (design point 2 said it would read the account's open orders from the gateway with a read-only token). A supplier is a second party: what an agent reads must not depend on our systems, and a token on a public demo site is one more secret to leak. Instead a document carries the account in its number (`KS-1002-403A9`), so numbers repeat only in the duplicate case, and the amounts are fixed small values: 0.001 USDC an invoice, under the 0.002 cap for a new address's first week (Slice 5), and above an order's 0.005 for the over-the-order case.
+2. **The shop's checkout is `/shop/fs-checkout` and `/shop/fs-checkout-v2`**, like the other cases' paths, rather than `/shop/checkout?item=…&v=2`. Every document also answers `?format=text` (what an agent's page reader sees, the hijack's hidden text included) and `?format=json` (the fields, and what Countersign does today and after the slice that changes it).
+
+## Results (7 Oct 2026)
+
+| Check | Result |
+|---|---|
+| Tests | 12 for the documents (`apps/supplier/test/documents.test.ts`): every case present with its outcome; the clean invoice pays the address on file at 0.001 USDC; numbers per account, repeating only for the duplicate; the look-alike keeps the first six and last four characters; both kinds of padding; the hijack's text hidden from a person but in the text an agent reads; over the order; the wrong supplier and the bank invoice; the shop clean and swapped; an unknown case refused |
+| Deployed (`7a7d727`, Vercel project `countersign-supplier-demo`, `rootDirectory` `apps/supplier`) | every route answers: `/`, `/demo`, `/quotes/*`, `/invoices/*`, `/shop`, `/shop/*`, as HTML, text and JSON; an unknown case 404 |
+| The address file | byte-for-byte Slice 2's (checked against `spikes/02-primus/supplier-site/public/.well-known/countersign.json`, again on the live site after D36), `application/json`. Cache headers differ (`no-store` now): the Primus proof pins the URL, the request and the content, not caching |
+| For the new main demo account (after D36), `?account=0xC127…03A9` | the changed-address invoice is `KS-1002-403A9`, pays `0x90f9931F…5feC` (Kalibre's `0x90f9931B…5fEc` with the middle changed), 0.001 USDC, "Held: the address is not the one on file" |
+
+### Findings, carried forward
+
+1. **A first look-alike was too obvious (fixed 7 Oct).** The A2A smoke's look-alike was a run of one repeated character; the demo's look-alike was already made the way address poisoning makes them (the same first six and last four characters, a random-looking middle). → Slice 8, Slice 22 (the demo script).
+2. **The site never needs Countersign's credentials** (as built, point 1): anyone can run the same documents against their own account. → Slice 8 (the scripted agent reads them like any agent), D33 (an open primitive).
 
 ## Next
 
