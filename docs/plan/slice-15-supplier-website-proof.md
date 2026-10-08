@@ -88,7 +88,7 @@ Not run live: a supplier whose file actually changes (`website_changed`). It is 
 
 **Found on the way:**
 
-1. The live gateway's daily limit on new demo accounts (10) was used up by the afternoon, so the live test reused a test account (`website-smoke` takes `COUNTERSIGN_*`). Judges and integrating teams share that limit: raising it is Afshal's call (MON).
+1. The live gateway's daily limit on new demo accounts (10) was used up by the afternoon, so the live test reused a test account (`website-smoke` takes `COUNTERSIGN_*`). Judges and integrating teams share that limit; Afshal raised it to 30 a day (8 Oct), and the relayers were topped up to 1 MON each (4.48 MON) and the funding wallet by 1 MON.
 2. Northwind's domain, added only as an alias, was behind Vercel's deployment protection; added as a production domain of the project, it is public and follows each deploy.
 3. A proof takes about 10 s end to end (Primus about 5.5 s, the record about 1 s, the file read and polling the rest), so the approval waits that long the first time; later proposals of the same site reuse the proof for 10 minutes.
 

@@ -21,7 +21,7 @@ In about ten seconds, with nobody from us involved, you have your own account on
 - a **token** (`COUNTERSIGN_TOKEN`, `cs_…`) that reaches only this account;
 - an **owner key** (`COUNTERSIGN_OWNER_KEY`), a P-256 key standing in for the owner's passkey: it signed the account's setup, and it decides holds with `decide()`. A real account's owner signs with Face ID instead; a test account is for testing only.
 
-The same from code: `createTestAccount()` from `@countersign/sdk/test-account` (Node). Test accounts share judge mode's daily limit (10 a day). The MCP server below still pays from a shared demo account: ask us for its token.
+The same from code: `createTestAccount()` from `@countersign/sdk/test-account` (Node). Test accounts share judge mode's daily limit (30 a day). The MCP server below still pays from a shared demo account: ask us for its token.
 
 ## 2a. The SDK
 
