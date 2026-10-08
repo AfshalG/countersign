@@ -4,6 +4,7 @@ import { bearerAuth } from 'hono/bearer-auth';
 import { except } from 'hono/combine';
 import { cors } from 'hono/cors';
 import { HTTPException } from 'hono/http-exception';
+import { NoRelayerFunds } from './relay/pool.js';
 import { streamSSE } from 'hono/streaming';
 import type { Address, Hex } from 'viem';
 import { PAYMENT_STATUSES } from '@countersign/shared';
@@ -314,6 +315,15 @@ export function createApp(deps: AppDeps) {
 
   app.onError((err, c) => {
     if (err instanceof HTTPException) return err.getResponse(); // e.g. the token check's 401
+    // An operational state, not a fault: no relayer can pay the network fee until topped up.
+    if (err instanceof NoRelayerFunds)
+      return c.json(
+        {
+          error: 'relayers_low',
+          message: 'The gateway’s relayers need MON to pay network fees; try again shortly',
+        },
+        503,
+      );
     console.error(`gateway: ${err.message}`);
     return c.json({ error: 'internal' }, 500);
   });

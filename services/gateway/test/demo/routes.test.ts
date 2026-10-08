@@ -6,6 +6,7 @@ import type { Database } from '../../src/db/client.js';
 import { createApp } from '../../src/app.js';
 import { TestChecker } from '../../src/checker.js';
 import type { DemoDeps } from '../../src/demo/accounts.js';
+import { NoRelayerFunds } from '../../src/relay/pool.js';
 import { SoftPasskey } from '../../scripts/passkey.js';
 import { freshDatabase, truncate } from '../db/helpers.js';
 import { FakeChain } from '../fakes.js';
@@ -193,6 +194,19 @@ describe('judge mode over HTTP (what the approver app calls, with no token)', ()
       (await post(app, `/v1/demo/accounts/${created.account}/invoices`, { kind: 'nonsense' }))
         .status,
     ).toBe(400);
+  });
+
+  it('says the relayers need MON (503), not an internal error, when none can pay the gas', async () => {
+    const app = appWith({
+      ...deps,
+      pool: {
+        ...deps.pool,
+        sign: () => Promise.reject(new NoRelayerFunds(42_000_000_000_000_000n)),
+      },
+    });
+    const res = await post(app, '/v1/demo/accounts', { publicKey: { x: judge.qx, y: judge.qy } });
+    expect(res.status).toBe(503);
+    expect(await res.json()).toMatchObject({ error: 'relayers_low' });
   });
 
   it('answers the browser’s CORS preflight', async () => {
