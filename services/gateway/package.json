@@ -20,7 +20,9 @@
     "gas-calibrate": "tsx scripts/gas-calibrate.ts",
     "register-agent": "tsx scripts/register-agent.ts",
     "agent-run": "tsx scripts/agent-run.ts",
-    "main-account-order": "tsx scripts/main-account-order.ts"
+    "main-account-order": "tsx scripts/main-account-order.ts",
+    "whatsapp-connect": "tsx scripts/whatsapp-connect.ts",
+    "whatsapp-template": "tsx scripts/whatsapp-template.ts"
   },
   "dependencies": {
     "@countersign/chain": "workspace:*",
