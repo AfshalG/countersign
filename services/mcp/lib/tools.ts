@@ -1,3 +1,4 @@
+import { CLIENT_CAPABILITIES_META_KEY, inputRequired } from '@modelcontextprotocol/server';
 import { z } from 'zod';
 import {
   CountersignError,
@@ -68,6 +69,32 @@ const text = (t: string, structured?: Record<string, unknown>): ToolResult => ({
   content: [{ type: 'text', text: t }],
   ...(structured === undefined ? {} : { structuredContent: structured }),
 });
+
+/** What a tool handler sees of the request: its per-request envelope and any answers (2026-07-28). */
+type Ctx =
+  | { mcpReq?: { envelope?: Record<string, unknown>; inputResponses?: Record<string, unknown> } }
+  | undefined;
+
+/**
+ * Whether the client said, on this request, that it can send the person to a link (URL
+ * elicitation, protocol 2026-07-28). Asking one that did not fails the whole call, so only these
+ * are asked; every other client gets the link in the answer (Slice 14, S4-4).
+ */
+function canOpenLinks(ctx: Ctx): boolean {
+  const caps = ctx?.mcpReq?.envelope?.[CLIENT_CAPABILITIES_META_KEY] as
+    { elicitation?: { url?: unknown } } | undefined;
+  return caps?.elicitation?.url !== undefined;
+}
+
+/** The call is the client's retry after the question: the person has been to the page. */
+const askedBefore = (ctx: Ctx) => ctx?.mcpReq?.inputResponses?.decide !== undefined;
+
+/**
+ * Asks the person, in the agent app, to decide on the approval page. The tool never waits on
+ * them: the client re-sends the call once they are back, and the tool answers with the status.
+ */
+const askToDecide = (message: string, url: string) =>
+  inputRequired({ inputRequests: { decide: inputRequired.elicitUrl({ message, url }) } });
 
 /** A gateway or input error, said plainly; the agent should tell the person, not guess. */
 function failure(e: unknown): ToolResult {
@@ -253,9 +280,16 @@ export function createTools(cs: Countersign, options: { waitMs?: number } = {}) 
           openWorldHint: true,
         },
       },
-      handler: async (args: InvoiceArgs): Promise<ToolResult> => {
+      handler: async (args: InvoiceArgs, ctx?: Ctx) => {
         try {
+          // The same invoice is the same request, so the retry after the question pays nothing new.
           const r = await cs.pay({ ...payInput(args), wait: { timeoutMs: waitMs, pollMs: 250 } });
+          if (askedBefore(ctx)) return text(describePayment(r), paymentStructured(r));
+          if (r.status === 'held' && canOpenLinks(ctx))
+            return askToDecide(
+              `Held, not paid: ${r.reasonText ?? 'it needs the owner'} Open the approval page to pay it once or refuse it with your passkey.`,
+              r.statusUrl,
+            );
           return text(describeResult(r), paymentStructured(r));
         } catch (e) {
           return failure(e);
@@ -381,14 +415,17 @@ export function createTools(cs: Countersign, options: { waitMs?: number } = {}) 
           openWorldHint: true,
         },
       },
-      handler: async (args: {
-        supplierName: string;
-        website?: string | undefined;
-        payTo: string;
-        amount: string | number;
-        validForDays: number;
-        quoteText: string;
-      }): Promise<ToolResult> => {
+      handler: async (
+        args: {
+          supplierName: string;
+          website?: string | undefined;
+          payTo: string;
+          amount: string | number;
+          validForDays: number;
+          quoteText: string;
+        },
+        ctx?: Ctx,
+      ) => {
         try {
           const p = await cs.proposeOrder({
             supplier: {
@@ -400,6 +437,18 @@ export function createTools(cs: Countersign, options: { waitMs?: number } = {}) 
             expiry: new Date(Date.now() + args.validForDays * 86_400_000),
             document: args.quoteText,
           });
+          if (askedBefore(ctx)) {
+            const now = await cs.proposal(p.id);
+            return text(
+              `Proposal for ${args.supplierName}: ${now.status}${now.status === 'approved' ? '. The order is open; its invoices can be paid once it is listed' : now.status === 'pending' ? `. Still waiting for the owner: ${p.approvalUrl}` : ''}.`,
+              { id: p.id, status: now.status, approvalUrl: p.approvalUrl },
+            );
+          }
+          if (p.status === 'pending' && canOpenLinks(ctx))
+            return askToDecide(
+              `Approve or refuse ${args.supplierName} as a supplier, with an order of ${amountText(args.amount)} USDC, with your passkey.`,
+              p.approvalUrl,
+            );
           return text(
             `Proposed ${args.supplierName} for ${amountText(args.amount)} USDC. Nothing changes until the owner approves it with their passkey: ${p.approvalUrl}`,
             { id: p.id, status: p.status, approvalUrl: p.approvalUrl },
