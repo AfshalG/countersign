@@ -91,6 +91,12 @@ describe('contract refusals', () => {
   });
 });
 
+describe('the checker’s reasons (Slice 10)', () => {
+  it('has a reason for instructions aimed at an automated reader', () => {
+    expect(REASONS).toContain('hidden_instructions');
+  });
+});
+
 describe('reason wording', () => {
   it('says every reason in plain words, without contract names', async () => {
     const { REASONS, REASON_TEXT } = await import('../src/payment-state.js');
