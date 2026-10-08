@@ -81,6 +81,7 @@ Open each case on a phone; give claude.ai (signed in, Slice 13) a clean invoice 
 
 1. **A first look-alike was too obvious (fixed 7 Oct).** The A2A smoke's look-alike was a run of one repeated character; the demo's look-alike was already made the way address poisoning makes them (the same first six and last four characters, a random-looking middle). → Slice 8, Slice 22 (the demo script).
 2. **The site never needs Countersign's credentials** (as built, point 1): anyone can run the same documents against their own account. → Slice 8 (the scripted agent reads them like any agent), D33 (an open primitive).
+3. **A document page said what was wrong with it (found planning Slice 8, fixed 7 Oct).** Each page ended with "About this demo document: what is wrong", which an agent reads with the rest, so a real agent (Slice 14) would refuse a look-alike because the page said so, not because it noticed. Pages no longer say it; `/demo` and the JSON (`case`, `case.expect`) do. → Slice 14, Slice 20 (only a clean page measures an agent).
 
 ## Next
 

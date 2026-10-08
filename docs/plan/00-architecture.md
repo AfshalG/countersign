@@ -472,7 +472,7 @@ CORE PIPELINE (a scripted agent pays a clean invoice, no prompt):
   Slice 6:   Gateway: requests, runs queue, relayer pool, finality    BUILT (TESTNET RUN PASSED)
   Slice 7:   Supplier portal and demo shop: invoices and orders,      DONE (SITE LIVE)
              clean and doctored, as the scored invoice set
-  Slice 8:   Rule checks + scripted agent: first end-to-end payment   TODO
+  Slice 8:   Rule checks + scripted agent: first end-to-end payment   DONE (14 OF 14 CASES LIVE)
 
 THE HOLD:
   Slice 9:   Passkey owner: factory, suppliers, orders, pay once      DONE (FIVE PARTS ON TESTNET,
