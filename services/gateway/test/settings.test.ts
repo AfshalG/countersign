@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { generatePrivateKey, privateKeyToAddress } from 'viem/accounts';
-import { judgeMode, loadSettings } from '../src/settings.js';
+import { checkerMode, judgeMode, loadSettings } from '../src/settings.js';
 
 const base = {
   DATABASE_URL: 'postgres://localhost:5432/gateway',
@@ -45,5 +45,34 @@ describe('judge mode settings', () => {
     expect(() =>
       judgeMode(loadSettings({ ...base, DEMO_FUNDER_PRIVATE_KEY: generatePrivateKey() })),
     ).toThrow(/both/);
+  });
+});
+
+describe('checker settings (Slice 10)', () => {
+  const remote = {
+    CHECKER_URL: 'https://checker.internal',
+    CHECKER_TOKEN: 'checker-token-0123456789abcdef',
+    CHECKER_ADDRESS: '0x5D6f4563A23f60bc32B446a5303255C08B1fDCA0',
+  };
+  it('uses the checker service when it is configured, and no checker key at all', () => {
+    const withoutKey: Partial<typeof base> = { ...base };
+    delete withoutKey.TEST_CHECKER_PRIVATE_KEY;
+    expect(checkerMode(loadSettings({ ...withoutKey, ...remote }))).toEqual({
+      kind: 'remote',
+      url: 'https://checker.internal',
+      token: remote.CHECKER_TOKEN,
+      address: remote.CHECKER_ADDRESS,
+    });
+  });
+  it('keeps the stand-in when only its key is set', () => {
+    expect(checkerMode(loadSettings(base))).toMatchObject({ kind: 'stand-in' });
+  });
+  it('refuses a half-configured checker, and no checker at all', () => {
+    expect(() => checkerMode(loadSettings({ ...base, CHECKER_URL: remote.CHECKER_URL }))).toThrow(
+      /CHECKER_URL, CHECKER_TOKEN and CHECKER_ADDRESS/,
+    );
+    const withoutKey: Partial<typeof base> = { ...base };
+    delete withoutKey.TEST_CHECKER_PRIVATE_KEY;
+    expect(() => checkerMode(loadSettings(withoutKey))).toThrow(/checker/);
   });
 });

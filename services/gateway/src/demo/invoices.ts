@@ -14,6 +14,25 @@ export type DemoInvoiceKind = (typeof DEMO_INVOICE_KINDS)[number];
 /** 0.001 USDC: under the 0.002 cap a new supplier address has for its first week (Slice 5). */
 export const DEMO_INVOICE_AMOUNT = '0.001';
 
+const HEADER = 'Kalibre Studio — Product photography for online shops';
+const PHOTOS = 'Product photos, white background';
+
+/**
+ * The quote a judge's demo order is opened on (Slice 10): its hash is the order's `orderHash`, so
+ * the checker compares each demo invoice with the quote the judge's passkey approved. Written in
+ * the same text form as the supplier site's documents (`?format=text`).
+ */
+export const DEMO_QUOTE = [
+  HEADER,
+  'Quote Q-2210',
+  'Issued 7 October 2026',
+  `${PHOTOS} x50 at 0.0001 USDC: 0.005 USDC`,
+  'Total: 0.005 USDC',
+  'Valid for 30 days. Paid in USDC on Monad to the address below, which our website also lists.',
+  'Pay in USDC on Monad to 0x90f9931B748B26763161a8191C178Fe425C25fEc',
+  'Questions: billing@kalibre.example',
+].join('\n');
+
 /**
  * A look-alike of an address, made the way address poisoning makes them: the same first six and
  * last four characters, which is all most people check. Nobody holds a key for it, and the vault
@@ -25,25 +44,30 @@ export function lookAlike(address: Address): Address {
   return getAddress(`${lower.slice(0, 8)}${middle}${lower.slice(-4)}`);
 }
 
-/** One demo invoice from Kalibre Studio, numbered uniquely so it is never taken for a resent one. */
+/**
+ * One demo invoice from Kalibre Studio, numbered uniquely so it is never taken for a resent one,
+ * as text the checker reads (Slice 10): ten photos at the quote's price; the amount demo bills
+ * them at 0.00012, above the quote, which the checker holds.
+ */
 export function demoInvoice(kind: DemoInvoiceKind, addressOnFile: Address): Invoice {
   const number = `KS-DEMO-${Date.now().toString(36).toUpperCase()}-${randomBytes(3).toString('hex').toUpperCase()}`;
   const payTo = kind === 'changed_address' ? lookAlike(addressOnFile) : addressOnFile;
-  return {
-    number,
-    amount: DEMO_INVOICE_AMOUNT,
-    payTo,
-    document: {
-      supplier: 'Kalibre Studio',
-      invoice: number,
-      lines: [{ description: 'Product photos, batch of 10', amount: DEMO_INVOICE_AMOUNT }],
-      payTo,
-      ...(kind === 'changed_address' ? { note: 'We have changed our payment details.' } : {}),
-      // The stand-in checker holds an invoice whose document asks it to, until Slice 10's checker
-      // compares the invoice with the order itself. Stated as such, never as Jev's finding.
-      ...(kind === 'amount_mismatch' ? { testHold: 'amount_mismatch' } : {}),
-    },
-  };
+  const [unit, amount] =
+    kind === 'amount_mismatch' ? ['0.00012', '0.0012'] : ['0.0001', DEMO_INVOICE_AMOUNT];
+  const text = [
+    HEADER,
+    `Invoice ${number}`,
+    'Issued 7 October 2026, due 21 October 2026',
+    'Reference: Kalibre Studio quote Q-2210: 50 product photos',
+    `${PHOTOS} x10 at ${unit} USDC: ${amount} USDC`,
+    `Total: ${amount} USDC`,
+    ...(kind === 'changed_address'
+      ? ['We have changed our payment details: please pay our new address below.']
+      : []),
+    `Pay in USDC on Monad to ${payTo}`,
+    'Questions: billing@kalibre.example',
+  ].join('\n');
+  return { number, amount, payTo, document: { text } };
 }
 
 export type DemoPayment = {

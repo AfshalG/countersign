@@ -9,6 +9,7 @@ import {
 } from 'viem';
 import { countersignAccountAbi } from '@countersign/chain';
 import { accountDomain, formatUsdc, ownerActionTypes } from '@countersign/shared';
+import { DEMO_QUOTE } from './invoices.js';
 import type { OwnerSig } from '../chain/types.js';
 
 /**
@@ -70,7 +71,8 @@ function plan(input: { agentKey: Address; checkerKey: Address; now: number }): D
     order: {
       orderId: keccak256(stringToHex('demo order 001')),
       supplierId: KALIBRE.supplierId,
-      orderHash: keccak256(stringToHex('Kalibre Studio quote Q-2210: 50 product photos')),
+      // The quote it is opened on (Slice 10): the checker compares each invoice with it.
+      orderHash: keccak256(stringToHex(DEMO_QUOTE)),
       amount: 5_000n, // 0.005 USDC
       expiry: month,
     },

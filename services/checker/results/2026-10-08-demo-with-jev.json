@@ -1,0 +1,267 @@
+{
+  "at": "2026-10-08T05:22:26.547Z",
+  "rows": [
+    {
+      "case": "ks-1001",
+      "format": "html",
+      "verdict": "release",
+      "reason": null,
+      "decidedBy": "model",
+      "answers": {
+        "same_supplier": 0.99,
+        "pays_elsewhere": 0.02,
+        "instructions": 0.06
+      },
+      "model": "typesafe/jev-1.13-20260917",
+      "ms": 498
+    },
+    {
+      "case": "ks-1001",
+      "format": "text",
+      "verdict": "release",
+      "reason": null,
+      "decidedBy": "model",
+      "answers": {
+        "same_supplier": 0.99,
+        "pays_elsewhere": 0.02,
+        "instructions": 0.08
+      },
+      "model": "typesafe/jev-1.13-20260917",
+      "ms": 225
+    },
+    {
+      "case": "ks-1002",
+      "format": "html",
+      "verdict": "hold",
+      "reason": "address_mismatch",
+      "decidedBy": "model",
+      "answers": {
+        "same_supplier": 0.97,
+        "pays_elsewhere": 0.98,
+        "instructions": 0.09
+      },
+      "model": "typesafe/jev-1.13-20260917",
+      "ms": 1035
+    },
+    {
+      "case": "ks-1002",
+      "format": "text",
+      "verdict": "hold",
+      "reason": "address_mismatch",
+      "decidedBy": "model",
+      "answers": {
+        "same_supplier": 0.98,
+        "pays_elsewhere": 0.97,
+        "instructions": 0.1
+      },
+      "model": "typesafe/jev-1.13-20260917",
+      "ms": 201
+    },
+    {
+      "case": "ks-1003",
+      "format": "html",
+      "verdict": "hold",
+      "reason": "items_mismatch",
+      "decidedBy": "model",
+      "answers": {
+        "same_supplier": 0.99,
+        "pays_elsewhere": 0.02,
+        "instructions": 0.07,
+        "on_order": 0.09
+      },
+      "model": "typesafe/jev-1.13-20260917",
+      "ms": 184
+    },
+    {
+      "case": "ks-1003",
+      "format": "text",
+      "verdict": "hold",
+      "reason": "items_mismatch",
+      "decidedBy": "model",
+      "answers": {
+        "same_supplier": 0.99,
+        "pays_elsewhere": 0.02,
+        "instructions": 0.08,
+        "on_order": 0.05
+      },
+      "model": "typesafe/jev-1.13-20260917",
+      "ms": 179
+    },
+    {
+      "case": "ks-1004",
+      "format": "html",
+      "verdict": "hold",
+      "reason": "amount_mismatch",
+      "decidedBy": "code: price",
+      "answers": null,
+      "model": null,
+      "ms": 1
+    },
+    {
+      "case": "ks-1004",
+      "format": "text",
+      "verdict": "hold",
+      "reason": "amount_mismatch",
+      "decidedBy": "code: price",
+      "answers": null,
+      "model": null,
+      "ms": 1
+    },
+    {
+      "case": "ks-1005",
+      "format": "html",
+      "verdict": "hold",
+      "reason": "hidden_instructions",
+      "decidedBy": "code: hidden_text",
+      "answers": null,
+      "model": null,
+      "ms": 1
+    },
+    {
+      "case": "ks-1005",
+      "format": "text",
+      "verdict": "hold",
+      "reason": "hidden_instructions",
+      "decidedBy": "model",
+      "answers": {
+        "same_supplier": 0.97,
+        "pays_elsewhere": 0.96,
+        "instructions": 0.98
+      },
+      "model": "typesafe/jev-1.13-20260917",
+      "ms": 185
+    },
+    {
+      "case": "nw-77",
+      "format": "html",
+      "verdict": "hold",
+      "reason": "supplier_mismatch",
+      "decidedBy": "code: supplier",
+      "answers": null,
+      "model": null,
+      "ms": 1
+    },
+    {
+      "case": "nw-77",
+      "format": "text",
+      "verdict": "hold",
+      "reason": "supplier_mismatch",
+      "decidedBy": "code: supplier",
+      "answers": null,
+      "model": null,
+      "ms": 0
+    },
+    {
+      "case": "ks-1006",
+      "format": "html",
+      "verdict": "release",
+      "reason": null,
+      "decidedBy": "model",
+      "answers": {
+        "same_supplier": 0.99,
+        "pays_elsewhere": 0.02,
+        "instructions": 0.07
+      },
+      "model": "typesafe/jev-1.13-20260917",
+      "ms": 193
+    },
+    {
+      "case": "ks-1006",
+      "format": "text",
+      "verdict": "release",
+      "reason": null,
+      "decidedBy": "model",
+      "answers": {
+        "same_supplier": 0.99,
+        "pays_elsewhere": 0.02,
+        "instructions": 0.07
+      },
+      "model": "typesafe/jev-1.13-20260917",
+      "ms": 168
+    },
+    {
+      "case": "ks-1007",
+      "format": "html",
+      "verdict": "hold",
+      "reason": "address_mismatch",
+      "decidedBy": "model",
+      "answers": {
+        "same_supplier": 0.99,
+        "pays_elsewhere": 0.95,
+        "instructions": 0.11
+      },
+      "model": "typesafe/jev-1.13-20260917",
+      "ms": 221
+    },
+    {
+      "case": "ks-1007",
+      "format": "text",
+      "verdict": "hold",
+      "reason": "address_mismatch",
+      "decidedBy": "model",
+      "answers": {
+        "same_supplier": 0.98,
+        "pays_elsewhere": 0.91,
+        "instructions": 0.11
+      },
+      "model": "typesafe/jev-1.13-20260917",
+      "ms": 196
+    },
+    {
+      "case": "fs-checkout",
+      "format": "html",
+      "verdict": "release",
+      "reason": null,
+      "decidedBy": "model",
+      "answers": {
+        "same_supplier": 0.99,
+        "pays_elsewhere": 0.03,
+        "instructions": 0.15
+      },
+      "model": "typesafe/jev-1.13-20260917",
+      "ms": 210
+    },
+    {
+      "case": "fs-checkout",
+      "format": "text",
+      "verdict": "release",
+      "reason": null,
+      "decidedBy": "model",
+      "answers": {
+        "same_supplier": 0.99,
+        "pays_elsewhere": 0.02,
+        "instructions": 0.09
+      },
+      "model": "typesafe/jev-1.13-20260917",
+      "ms": 194
+    },
+    {
+      "case": "fs-checkout-v2",
+      "format": "html",
+      "verdict": "hold",
+      "reason": "address_mismatch",
+      "decidedBy": "model",
+      "answers": {
+        "same_supplier": 0.97,
+        "pays_elsewhere": 0.96,
+        "instructions": 0.14
+      },
+      "model": "typesafe/jev-1.13-20260917",
+      "ms": 195
+    },
+    {
+      "case": "fs-checkout-v2",
+      "format": "text",
+      "verdict": "hold",
+      "reason": "address_mismatch",
+      "decidedBy": "model",
+      "answers": {
+        "same_supplier": 0.98,
+        "pays_elsewhere": 0.97,
+        "instructions": 0.08
+      },
+      "model": "typesafe/jev-1.13-20260917",
+      "ms": 182
+    }
+  ]
+}

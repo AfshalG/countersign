@@ -92,6 +92,23 @@ describe('the demo documents', () => {
     }
   });
 
+  it('bills in the quote’s units, so prices compare exactly; the padded total’s unit price is higher', () => {
+    const quoted = documentFor('q-2210', JUDGE).lines[0];
+    for (const id of ['ks-1001', 'ks-1002', 'ks-1005', 'ks-1007'] as const) {
+      const [l] = documentFor(id, JUDGE).lines;
+      expect(l).toMatchObject({ description: quoted?.description, unitUsdc: quoted?.unitUsdc });
+    }
+    expect(documentFor('ks-1004', JUDGE).lines[0]).toMatchObject({
+      description: quoted?.description,
+      unitUsdc: '0.00018',
+    });
+    for (const c of CASES) {
+      const d = documentFor(c.id, JUDGE);
+      for (const l of d.lines)
+        expect(Number(l.unitUsdc) * l.quantity).toBeCloseTo(Number(l.totalUsdc), 10);
+    }
+  });
+
   it('asks for more than the order holds in the over-the-order case', () => {
     expect(Number(documentFor('ks-1006', JUDGE).totalUsdc)).toBeGreaterThan(0.005);
   });

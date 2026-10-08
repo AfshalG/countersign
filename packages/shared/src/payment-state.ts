@@ -37,6 +37,8 @@ export const REASON_TEXT: Record<Reason, string> = {
   amount_mismatch: "The invoice's amount differs from what the order allows.",
   duplicate_invoice: 'This invoice has already been paid.',
   document_layers_differ: "The PDF's text and its rendered page disagree.",
+  hidden_instructions:
+    'The invoice contains instructions aimed at an automated reader, which a person reading it would not see or expect.',
   checker_unavailable: 'The checker did not answer in time, so the payment waits for a person.',
   checker_unsure: 'The checker could not tell, so the payment waits for a person.',
   paused: 'The owner has paused the account.',
@@ -70,6 +72,7 @@ export const REASONS = [
   'amount_mismatch',
   'duplicate_invoice',
   'document_layers_differ',
+  'hidden_instructions',
   'checker_unavailable',
   'checker_unsure',
   'paused',

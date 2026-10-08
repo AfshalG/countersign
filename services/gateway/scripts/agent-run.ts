@@ -52,6 +52,10 @@ const gateway = process.argv[2] ?? 'https://gateway-production-e17a.up.railway.a
 const site = process.argv[3] ?? 'https://countersign-supplier-demo.vercel.app';
 const owner = SoftPasskey.fromScalar(`0x${randomBytes(32).toString('hex')}`);
 const startedAt = new Date();
+// Which checker decides (Slice 10): with the real one, cases are scored by `afterSlice10`.
+const health = (await (await fetch(`${gateway}/health`)).json()) as { checker?: { kind?: string } };
+const realChecker = health.checker?.kind === 'remote';
+console.log(`checker: ${realChecker ? 'the checker service (Slice 10)' : 'the stand-in'}`);
 
 const assertion = (challenge: Hex) => {
   const a = owner.sign(challenge);
@@ -173,10 +177,17 @@ async function runCase(path: string, ownerDecision?: 'approve' | 'refuse', again
   const html = await (await fetch(`${site}${path}?account=${account}`)).text();
   const json = (await (await fetch(`${site}${path}?account=${account}&format=json`)).json()) as {
     id: string;
-    case: { expect: Expected & { persona?: Persona } };
+    case: {
+      expect: Expected & {
+        persona?: Persona;
+        afterSlice10?: Expected & { persona?: Persona };
+      };
+    };
   };
-  const expected = json.case.expect;
-  const persona = expected.persona ?? 'careful';
+  const today = json.case.expect;
+  const after = realChecker ? today.afterSlice10 : undefined;
+  const expected: Expected = after ?? today;
+  const persona = after?.persona ?? today.persona ?? 'careful';
   const doc = readDocument(pageText(html));
   const action = decide(doc, persona, await cs.orders(), memory);
   const step = again ? `${json.id} again` : json.id;
@@ -282,11 +293,16 @@ const matched = rows.filter((r) => r.ok).length;
 console.log(`\n${String(matched)} of ${String(rows.length)} cases ended as their documents say`);
 console.log(`explorer: https://testnet.monadexplorer.com/address/${account}`);
 const day = startedAt.toISOString().slice(0, 10);
-const out = new URL(`../results/${day}-scripted-agent.json`, import.meta.url);
+const out = new URL(
+  `../results/${day}-scripted-agent${realChecker ? '-checker' : ''}.json`,
+  import.meta.url,
+);
 mkdirSync(new URL('../results/', import.meta.url), { recursive: true });
 writeFileSync(
   out,
-  `${JSON.stringify({ startedAt: startedAt.toISOString(), gateway, site, account, matched, cases: rows }, null, 2)}\n`,
+  `${JSON.stringify({ startedAt: startedAt.toISOString(), gateway, site, account, checker: realChecker ? 'service' : 'stand-in', matched, cases: rows }, null, 2)}\n`,
 );
-console.log(`results: services/gateway/results/${day}-scripted-agent.json`);
+console.log(
+  `results: services/gateway/results/${day}-scripted-agent${realChecker ? '-checker' : ''}.json`,
+);
 if (matched !== rows.length) process.exitCode = 1;
