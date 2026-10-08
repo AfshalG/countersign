@@ -25,7 +25,8 @@ const model = new FallbackModel([
 ]);
 const signer = keySigner(settings.CHECKER_PRIVATE_KEY as Hex);
 const app = createApp({ token: settings.CHECKER_TOKEN, model, signer });
-const server = serve({ fetch: app.fetch, port: settings.PORT }, (info) => {
+// '::' so the gateway reaches it over Railway's private network (IPv6, and IPv4 in new projects).
+const server = serve({ fetch: app.fetch, port: settings.PORT, hostname: '::' }, (info) => {
   console.log(
     `checker listening on ${String(info.port)}; signs as ${signer.address}; model ${model.name}`,
   );
