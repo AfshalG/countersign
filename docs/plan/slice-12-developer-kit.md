@@ -188,6 +188,18 @@ Slice 19: ERC-8004 agent identity (D33 build order), then Slice 7. Before the de
 
 **Tests first.** Creating with an agent (the policy names it, a different account from the judge's, `not_hosted` on demo invoices); the token route (wrong passkey, wrong challenge, rotation revokes, a replayed signature refused); scoping on every route (own account allowed, another account 403 or 404, a gateway-wide route 403, an unknown token 401, the feed filtered); the SDK end to end against the in-process gateway (create, set up, token, pay, hold, decide).
 
+**Results (8 Oct, Monad testnet).** Built test-first (24 new tests; 521 in the repo pass). SDK 0.2.0 released as `sdk-v0.2.0` (14 kB). Run from an empty folder with the published tarball, as an outside developer would:
+
+| Step | Result |
+|---|---|
+| `npm run account` (`countersign-test-account`) | Account `0xb786EA615545D92994Fc088990CD052b608F096c` made, set up and its order indexed in 16 s; `.env` written |
+| `npm start`: Kalibre Studio's clean invoice, read from the supplier's page | Settled in 2.5 s, checker included ([transaction](https://testnet.monadexplorer.com/tx/0xb597fb9d12e067bdac6bbd3021cafa9ea2e73cf894d178a1911672c69826bbb8)) |
+| The changed-address invoice (`ks-1002`) | Held, `address_mismatch`; refused with `decide()` and the test owner key |
+| The account token on the main demo account | `403 wrong_account` |
+| The account token on a gateway-wide route (`/v1/agents`) | `403 not_for_account_tokens` |
+
+**Found on the way:** the old example paid with no invoice to read, which the real checker (Slice 10) holds; the example now reads the supplier's own page and passes it, as an agent would. A plain `cp` of this file over the workspace copy dropped the workspace's footer; restored.
+
 ## Decisions (made 7 Oct)
 
 | # | Decision | Decided |
