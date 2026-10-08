@@ -71,8 +71,8 @@ export type AppDeps = {
   agents?: AgentDirectory;
   /** WhatsApp (Slice 14); without it its routes do not exist and nothing is sent. */
   whatsapp?: WhatsAppRouteDeps;
-  /** Slice 15: suppliers' websites, shown on changed-address holds. */
-  websites?: Pick<WebsiteProofs, 'siteOnFile' | 'check'>;
+  /** Slice 15: suppliers' websites, shown on changed-address holds and checked on payments (D21). */
+  websites?: Pick<WebsiteProofs, 'siteOnFile' | 'check' | 'websiteChanged'>;
 };
 
 // ---------- views ----------

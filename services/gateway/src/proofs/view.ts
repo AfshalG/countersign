@@ -158,6 +158,16 @@ export function holdWebsiteView(input: {
     return { ...view, matches: null };
   const listed = (view.listed ?? '').toLowerCase();
   const site = view.site ?? 'The supplier’s website';
+  // The invoice pays the address on file (a website_changed hold): only the site moved.
+  if (
+    input.onFile.toLowerCase() === input.invoice.toLowerCase() &&
+    listed !== input.onFile.toLowerCase()
+  )
+    return {
+      ...view,
+      matches: 'neither',
+      text: `${site} no longer lists the address on file, ${input.onFile}; it lists ${view.listed ?? 'another address'} now. Ask the supplier before paying; if they really changed it, change it on file first.`,
+    };
   if (listed === input.onFile.toLowerCase())
     return {
       ...view,

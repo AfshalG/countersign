@@ -998,6 +998,38 @@ export class Store {
     return row;
   }
 
+  /** The newest proven check of a file URL (a proof Primus signed and the registry recorded). */
+  async latestProvenWebsiteProof(url: string): Promise<WebsiteProofRow | undefined> {
+    const [row] = await this.db
+      .select()
+      .from(websiteProofs)
+      .where(and(eq(websiteProofs.url, url), isNotNull(websiteProofs.proofHash)))
+      .orderBy(desc(websiteProofs.createdAt), desc(websiteProofs.id))
+      .limit(1);
+    return row;
+  }
+
+  /** Whether a proven check of `url` before `before` showed it listing `address`. */
+  async websiteListedBefore(url: string, address: string, before: Date): Promise<boolean> {
+    const rows = await this.db
+      .select({ listed: websiteProofs.listed })
+      .from(websiteProofs)
+      .where(
+        and(
+          eq(websiteProofs.url, url),
+          isNotNull(websiteProofs.proofHash),
+          lt(websiteProofs.createdAt, before),
+        ),
+      );
+    return rows.some((r) => r.listed?.toLowerCase() === address.toLowerCase());
+  }
+
+  /** Every supplier website on file, once each. */
+  async supplierWebsiteUrls(): Promise<string[]> {
+    const rows = await this.db.selectDistinct({ url: supplierWebsites.url }).from(supplierWebsites);
+    return rows.map((r) => r.url);
+  }
+
   async websiteProof(id: number): Promise<WebsiteProofRow | undefined> {
     const [row] = await this.db.select().from(websiteProofs).where(eq(websiteProofs.id, id));
     return row;

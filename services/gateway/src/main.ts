@@ -78,59 +78,6 @@ const checker: Checker =
         facts: (row) => orderFacts({ store, chain: monad }, row),
       })
     : new TestChecker(checking.key, chainId, (input) => testHold(input.request.document));
-const CHECKER_TIMEOUT_MS = 2_000;
-const workers = new Workers({
-  store,
-  chain: monad,
-  checker,
-  pool,
-  chainId,
-  checkerTimeoutMs: CHECKER_TIMEOUT_MS,
-  leaseMs: 30_000,
-  checkConcurrency: 8,
-  sendConcurrency: 8,
-  tickMs: 50,
-});
-
-await pool.start();
-const recovered = await workers.recover();
-console.log(
-  `recovered: ${String(recovered.settled)} settled from receipts, ${String(recovered.resent)} re-sent`,
-);
-workers.start();
-// Accounts behind (just registered, or the gateway was down) are brought up to date in windows.
-catchUp();
-const catchUpTimer = setInterval(catchUp, 15_000);
-const heads = monad.subscribeHeads((head) => {
-  void tracker.onHead(head);
-});
-tracker.startPolling(1_000);
-
-// Judge mode: an account for a new passkey, set up with that passkey (Slice 9 part 4).
-const demo = judge && {
-  store,
-  chain: monad,
-  pool,
-  finality: tracker,
-  funder: new WalletFunder(judge.funderKey, monad, chainId),
-  chainId,
-  factory: deployments.accountFactory,
-  agentKey: judge.agent,
-  checkerKey: checking.address,
-  perDay: judge.perDay,
-  agentPrivateKey: judge.agentKey,
-};
-
-// The owner's passkey actions: approving proposals (Slice 9 part 2) and the stop button (part 3).
-const owner = {
-  store,
-  chain: monad,
-  pool,
-  finality: tracker,
-  chainId,
-  publicUrl: settings.PUBLIC_URL,
-};
-
 // Suppliers' websites (Slice 15): what a site lists, proven by Primus and recorded on Monad, shown
 // on each proposal's approval page and named by the supplier record the owner signs. Without
 // Primus keys every check says it could not be proven, and the owner confirms by hand.
@@ -170,6 +117,69 @@ store.onChange((change) => {
   });
 });
 console.log(`website proofs ${primus ? 'on' : 'off (no Primus keys)'}`);
+
+const CHECKER_TIMEOUT_MS = 2_000;
+const workers = new Workers({
+  store,
+  chain: monad,
+  checker,
+  pool,
+  chainId,
+  checkerTimeoutMs: CHECKER_TIMEOUT_MS,
+  websites,
+  leaseMs: 30_000,
+  checkConcurrency: 8,
+  sendConcurrency: 8,
+  tickMs: 50,
+});
+
+await pool.start();
+const recovered = await workers.recover();
+console.log(
+  `recovered: ${String(recovered.settled)} settled from receipts, ${String(recovered.resent)} re-sent`,
+);
+workers.start();
+// Accounts behind (just registered, or the gateway was down) are brought up to date in windows.
+catchUp();
+const catchUpTimer = setInterval(catchUp, 15_000);
+// Approved suppliers' websites, checked again once a day (Slice 15, D21): hourly, each site whose
+// last check is over a day old.
+const recheckSites = () => {
+  websites.recheck().catch((e: unknown) => {
+    console.error(`website recheck: ${e instanceof Error ? e.message : String(e)}`);
+  });
+};
+const recheckTimer = setInterval(recheckSites, 3_600_000);
+setTimeout(recheckSites, 60_000).unref();
+const heads = monad.subscribeHeads((head) => {
+  void tracker.onHead(head);
+});
+tracker.startPolling(1_000);
+
+// Judge mode: an account for a new passkey, set up with that passkey (Slice 9 part 4).
+const demo = judge && {
+  store,
+  chain: monad,
+  pool,
+  finality: tracker,
+  funder: new WalletFunder(judge.funderKey, monad, chainId),
+  chainId,
+  factory: deployments.accountFactory,
+  agentKey: judge.agent,
+  checkerKey: checking.address,
+  perDay: judge.perDay,
+  agentPrivateKey: judge.agentKey,
+};
+
+// The owner's passkey actions: approving proposals (Slice 9 part 2) and the stop button (part 3).
+const owner = {
+  store,
+  chain: monad,
+  pool,
+  finality: tracker,
+  chainId,
+  publicUrl: settings.PUBLIC_URL,
+};
 
 // ERC-8004 agents named on payments (Slice 19), each re-read from the registry at start.
 const agents = new AgentDirectory(monad, IDENTITY_REGISTRY_TESTNET, chainId);
@@ -265,6 +275,7 @@ function shutdown(signal: string) {
   pool.stop();
   tracker.stopPolling();
   clearInterval(catchUpTimer);
+  clearInterval(recheckTimer);
   heads.close();
   server.close(() => {
     database.pool

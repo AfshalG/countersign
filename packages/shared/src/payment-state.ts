@@ -32,6 +32,8 @@ export const REASON_TEXT: Record<Reason, string> = {
   supplier_inactive: 'The owner has switched this supplier off.',
   address_mismatch: "The invoice's payment address is not the supplier's address on file.",
   address_not_yet_active: "The supplier's address on file is new and still in its waiting period.",
+  website_changed:
+    "The supplier's own website no longer lists the address on file, so payments to it wait for the owner.",
   supplier_mismatch: "The invoice is from a different supplier than the order's.",
   items_mismatch: "The invoice's items differ from the order's.",
   amount_mismatch: "The invoice's amount differs from what the order allows.",
@@ -67,6 +69,7 @@ export const REASONS = [
   'supplier_inactive',
   'address_mismatch',
   'address_not_yet_active',
+  'website_changed',
   'supplier_mismatch',
   'items_mismatch',
   'amount_mismatch',

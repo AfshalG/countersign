@@ -312,8 +312,16 @@ export async function paymentApprovalView(
   publicUrl: string,
 ): Promise<z.infer<typeof approvalView>> {
   const v = paymentApproval(row, deps.chainId, publicUrl);
-  const onFile = v.summary.addressOnFile;
-  if (deps.websites && row.status === 'held' && typeof onFile === 'string' && onFile !== row.payTo)
+  // A changed address, or (D21) a supplier whose own site stopped listing the address on file:
+  // there, the invoice pays the address on file, so that is the one to compare with.
+  const onFile =
+    row.reason === 'website_changed' ? row.payTo : (v.summary.addressOnFile as string | null);
+  if (
+    deps.websites &&
+    row.status === 'held' &&
+    typeof onFile === 'string' &&
+    (onFile !== row.payTo || row.reason === 'website_changed')
+  )
     try {
       v.summary.websiteProof = await holdWebsite(deps.store, deps.websites, row, onFile);
     } catch (e) {

@@ -161,6 +161,35 @@ describe('the supplier’s website on a changed-address hold', () => {
     expect(proves).toBe(0);
   });
 
+  it('a website_changed hold (D21) says the site no longer lists the address on file', async () => {
+    chain.onFile = KALIBRE;
+    lists = '0x7777777777777777777777777777777777777777';
+    const res = await app.request('/v1/payments', {
+      method: 'POST',
+      headers: { authorization: `Bearer ${TOKEN}`, 'content-type': 'application/json' },
+      body: JSON.stringify({
+        account: ACCOUNT,
+        vault: VAULT,
+        payment: {
+          amount: '1000',
+          invoiceHash: keccak256(toHex('website changed')),
+          payTo: KALIBRE,
+          deadline: 1_791_400_000,
+        },
+        agentSig: AGENT_SIG,
+      }),
+    });
+    const { request } = (await res.json()) as { request: { id: Hex } };
+    await store.transition(request.id, 'requested', 'checking');
+    await store.transition(request.id, 'checking', 'held', {
+      reason: 'website_changed',
+      decidedBy: 'rule',
+    });
+    const proof = await websiteOf(request.id);
+    expect(proof).toMatchObject({ status: 'not_listed', matches: 'neither' });
+    expect(proof?.text).toContain('no longer lists the address on file');
+  });
+
   it('a hold for another reason shows no website check', async () => {
     chain.onFile = KALIBRE;
     const res = await app.request('/v1/payments', {

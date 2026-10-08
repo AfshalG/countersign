@@ -1,4 +1,5 @@
 import type { Address, Hex } from 'viem';
+import type { WebsiteProofs } from '../proofs/website.js';
 import type { Reason } from '@countersign/shared';
 import type { Chain, PaymentCall } from '../chain/types.js';
 import type { DecodedRefusal } from '../chain/refusals.js';
@@ -13,6 +14,8 @@ export type EvaluateDeps = {
   checker: Checker;
   chainId: number;
   checkerTimeoutMs: number;
+  /** Slice 15 (D21): whether the supplier's website stopped listing the address on file. */
+  websites?: Pick<WebsiteProofs, 'websiteChanged'>;
 };
 
 export type CheckDeps = EvaluateDeps & {
@@ -111,6 +114,21 @@ export async function evaluate(
       detail: { contract: refusal.error },
     };
   }
+
+  // Evidence that expires (D21): the supplier's own website no longer lists the address on file.
+  // A failure to look never holds a payment; only a proven change does.
+  const changed = await deps.websites?.websiteChanged(row).catch((e: unknown) => {
+    console.error(`website evidence ${row.id}: ${e instanceof Error ? e.message : String(e)}`);
+    return null;
+  });
+  if (changed)
+    return {
+      status: 'held',
+      reason: 'website_changed',
+      decidedBy: 'rule',
+      evidence: { website: changed },
+      detail: { website: changed.url },
+    };
 
   let result: CheckResult;
   try {
