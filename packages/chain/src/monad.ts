@@ -51,33 +51,30 @@ export const WS_URL = 'wss://testnet-rpc.monad.xyz';
  */
 export const GAS_LIMITS = {
   pay: 266_000n,
-  // Owner actions with one owner's signature: the limits Monad charged in the D36 testnet run
-  // (7 Oct; the node's estimate plus 8%), rounded up. Each extra signature adds
-  // GAS_PER_EXTRA_SIGNER.
-  // payWithOwner with one owner: Monad's eth_estimateGas said 243,693 for a vault's first payment
-  // (approvals-smoke, 7 Oct), plus 8%. Two signatures cost 286,392 (also estimate plus 8%).
-  payWithOwner: 264_000n,
-  recordDecision: 94_000n,
-  // Judge mode's account setup (Slice 9 part 4): 250,965, 164,302, 116,351 and 307,145.
-  createAccount: 251_000n,
-  setPolicy: 165_000n,
-  setSupplier: 117_000n,
-  approveOrder: 308_000n,
-  // The stop button (Slice 9 part 3): pause 98,579; unpause with two signatures 104,401, so
-  // about 82,500 with one.
-  pause: 99_000n,
-  unpause: 84_000n,
-  // Owners (D36): one owner adding a second, 132,325; more keys add GAS_PER_OWNER_KEY each.
-  setOwners: 133_000n,
+  // Owner actions with one owner's signature (D36). Each is Monad's eth_estimateGas for the call
+  // the gateway makes (scripts/gas-calibrate.ts, 7 Oct), times 1.08 for the estimate and 1.08
+  // again for a phone's longer client data (Slice 5's rule), rounded up. Fees are charged on the
+  // limit on Monad, so these are fixed, not estimated per call.
+  payWithOwner: 285_000n, // 243,681
+  recordDecision: 94_000n, // 86,592 (the checker's signature only)
+  // Judge mode's account setup (Slice 9 part 4).
+  createAccount: 251_000n, // no passkey data: the D36 broadcast's limit, which landed
+  setPolicy: 198_000n, // 169,255
+  setSupplier: 126_000n, // 107,733
+  approveOrder: 332_000n, // 284,406
+  // The stop button (Slice 9 part 3).
+  pause: 107_000n, // 91,265
+  unpause: 90_000n, // 76,369
+  // Owners (D36): one signer setting two keys; more keys add GAS_PER_OWNER_KEY each.
+  setOwners: 143_000n, // 122,512
 } as const;
 
 /**
- * What each signature beyond the first adds (D36): one more P-256 check and its calldata. On
- * testnet, 21,798 (setSupplier), 21,981 (approveOrder) and about 21,500 (payWithOwner, whose
- * vault passes the signatures on to the account; 60,292 in Foundry, which prices the copy
- * higher than Monad does).
+ * What each signature beyond the first adds (D36): one more P-256 check and its client data. On
+ * Monad, 20,195 (setSupplier), 20,353 (approveOrder), 20,287 (unpause) and 21,509
+ * (payWithOwner, whose vault passes the signatures on to the account), times 1.08 twice.
  */
-export const GAS_PER_EXTRA_SIGNER = { account: 24_000n, payWithOwner: 24_000n } as const;
+export const GAS_PER_EXTRA_SIGNER = { account: 26_000n, payWithOwner: 26_000n } as const;
 /** Each owner key beyond two in setOwners: two new storage slots, priced high on Monad. */
 export const GAS_PER_OWNER_KEY = 50_000n;
 

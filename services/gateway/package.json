@@ -17,6 +17,7 @@
     "proposal-smoke": "tsx scripts/proposal-smoke.ts",
     "pause-smoke": "tsx scripts/pause-smoke.ts",
     "owners-smoke": "tsx scripts/owners-smoke.ts",
+    "gas-calibrate": "tsx scripts/gas-calibrate.ts",
     "register-agent": "tsx scripts/register-agent.ts"
   },
   "dependencies": {
