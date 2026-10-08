@@ -30,22 +30,6 @@ const sleep = (ms: number) =>
     setTimeout(resolve, ms);
   });
 
-/** Runs `fn` over `items`, at most `limit` at a time. */
-async function each<T>(
-  items: readonly T[],
-  limit: number,
-  fn: (item: T) => Promise<void>,
-): Promise<void> {
-  let next = 0;
-  const runners = Array.from({ length: Math.min(limit, items.length) }, async () => {
-    while (next < items.length) {
-      const item = items[next++] as T;
-      await fn(item);
-    }
-  });
-  await Promise.all(runners);
-}
-
 const log = (what: string, row: PaymentRequestRow) => (e: unknown) => {
   // The request keeps its status and its lease runs out, so it is taken again; nothing is lost.
   console.error(`${what} ${row.id}: ${e instanceof Error ? e.message : String(e)}`);
@@ -126,30 +110,25 @@ export class Workers {
 
   start(): void {
     this.running = true;
-    void this.loop('check', async () => {
-      const fresh = await this.o.store.claim(
-        'requested',
-        this.o.checkConcurrency * 2,
-        this.o.leaseMs,
-      );
-      const abandoned = await this.o.store.claim(
-        'checking',
-        this.o.checkConcurrency,
-        this.o.leaseMs,
-      );
-      const rows = [...fresh, ...abandoned];
-      await each(rows, this.o.checkConcurrency, (row) =>
-        checkOne(this.o, row).catch(log('check', row)),
-      );
-      return rows.length;
-    });
-    void this.loop('send', async () => {
-      const rows = await this.o.store.claim('released', this.o.sendConcurrency * 4, this.o.leaseMs);
-      await each(rows, this.o.sendConcurrency, (row) =>
-        sendOne(this.o, row).catch(log('send', row)),
-      );
-      return rows.length;
-    });
+    void this.pipeline(
+      'check',
+      this.o.checkConcurrency,
+      async (free) => {
+        const fresh = await this.o.store.claim('requested', free, this.o.leaseMs);
+        const abandoned =
+          fresh.length < free
+            ? await this.o.store.claim('checking', free - fresh.length, this.o.leaseMs)
+            : [];
+        return [...fresh, ...abandoned];
+      },
+      (row) => checkOne(this.o, row).catch(log('check', row)),
+    );
+    void this.pipeline(
+      'send',
+      this.o.sendConcurrency,
+      (free) => this.o.store.claim('released', free, this.o.leaseMs),
+      (row) => sendOne(this.o, row).catch(log('send', row)),
+    );
     let lastExpiry = 0;
     void this.loop('expire', async () => {
       if (Date.now() - lastExpiry < 5_000) return 0;
@@ -160,6 +139,48 @@ export class Workers {
 
   stop(): void {
     this.running = false;
+  }
+
+  /**
+   * Keeps `slots` payments in work at once (Slice 16): a payment is claimed as soon as a slot frees,
+   * so one slow check never holds up the ones claimed with it (they used to wait for their whole
+   * batch). One claimer per worker, so the database is asked once per tick, not once per slot.
+   */
+  private async pipeline(
+    name: string,
+    slots: number,
+    claim: (free: number) => Promise<PaymentRequestRow[]>,
+    work: (row: PaymentRequestRow) => Promise<void>,
+  ): Promise<void> {
+    let busy = 0;
+    let wake: (() => void) | undefined;
+    const rest = () =>
+      new Promise<void>((resolve) => {
+        wake = resolve;
+        setTimeout(resolve, this.o.tickMs);
+      });
+    while (this.running) {
+      const free = slots - busy;
+      let claimed = 0;
+      if (free > 0) {
+        try {
+          const rows = await claim(free);
+          claimed = rows.length;
+          for (const row of rows) {
+            busy++;
+            void work(row).finally(() => {
+              busy--;
+              wake?.();
+            });
+          }
+        } catch (e) {
+          console.error(`${name} worker: ${e instanceof Error ? e.message : String(e)}`);
+        }
+      }
+      // Claim again at once while there is work and room; otherwise wait for a slot or a tick.
+      if (claimed === 0 || claimed === free) await rest();
+      wake = undefined;
+    }
   }
 
   /** Repeats `step`; sleeps a tick only when there was nothing to do. */
