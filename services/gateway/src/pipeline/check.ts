@@ -87,6 +87,9 @@ async function evidenceOf(deps: EvaluateDeps, row: PaymentRequestRow, contract: 
  * With `dryRun` (POST /v1/checks) the checker is told not to sign: a check must never hand anyone
  * a signature that, with the agent's, could pay.
  */
+/** Times the checker is asked when it does not answer in time (Slice 16). */
+const CHECK_ATTEMPTS = 2;
+
 export async function evaluate(
   deps: EvaluateDeps,
   row: PaymentRequestRow,
@@ -131,14 +134,28 @@ export async function evaluate(
       detail: { website: changed.url },
     };
 
-  let result: CheckResult;
-  try {
-    result = await deps.checker.check(
-      { request: row, payment, chainId: deps.chainId, dryRun: options.dryRun === true },
-      () => AbortSignal.timeout(deps.checkerTimeoutMs),
-    );
-  } catch (e) {
-    const message = e instanceof Error ? e.message : String(e);
+  // A checker that did not answer in time (or erred) is asked once more before the payment waits
+  // for a person (Slice 16): at volume the model's latency has a tail, and a passing slow moment
+  // should cost a second, not a false hold. A judgement (a mismatch, an unsure answer) is never
+  // asked again, and a second failure still holds (money rule 1).
+  let result: CheckResult | undefined;
+  let failure: string | undefined;
+  for (let attempt = 1; attempt <= CHECK_ATTEMPTS; attempt++) {
+    try {
+      result = await deps.checker.check(
+        { request: row, payment, chainId: deps.chainId, dryRun: options.dryRun === true },
+        () => AbortSignal.timeout(deps.checkerTimeoutMs),
+      );
+      failure = undefined;
+      if (result.verdict === 'hold' && result.reason === 'checker_unavailable') continue;
+      break;
+    } catch (e) {
+      result = undefined;
+      failure = e instanceof Error ? e.message : String(e);
+    }
+  }
+  if (result === undefined) {
+    const message = failure ?? 'the checker did not answer';
     return {
       status: 'held',
       reason: 'checker_unavailable',
