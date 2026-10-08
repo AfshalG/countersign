@@ -198,6 +198,19 @@ export const countersignAccountAbi = [
   },
   {
     "type": "function",
+    "name": "MAX_OWNERS",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint8",
+        "internalType": "uint8"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "MAX_WAITING_PERIOD",
     "inputs": [],
     "outputs": [
@@ -249,39 +262,51 @@ export const countersignAccountAbi = [
         "internalType": "uint64"
       },
       {
-        "name": "auth",
-        "type": "tuple",
-        "internalType": "struct WebAuthn.WebAuthnAuth",
+        "name": "sigs",
+        "type": "tuple[]",
+        "internalType": "struct OwnerSig[]",
         "components": [
           {
-            "name": "r",
-            "type": "bytes32",
-            "internalType": "bytes32"
+            "name": "owner",
+            "type": "uint8",
+            "internalType": "uint8"
           },
           {
-            "name": "s",
-            "type": "bytes32",
-            "internalType": "bytes32"
-          },
-          {
-            "name": "challengeIndex",
-            "type": "uint256",
-            "internalType": "uint256"
-          },
-          {
-            "name": "typeIndex",
-            "type": "uint256",
-            "internalType": "uint256"
-          },
-          {
-            "name": "authenticatorData",
-            "type": "bytes",
-            "internalType": "bytes"
-          },
-          {
-            "name": "clientDataJSON",
-            "type": "string",
-            "internalType": "string"
+            "name": "auth",
+            "type": "tuple",
+            "internalType": "struct WebAuthn.WebAuthnAuth",
+            "components": [
+              {
+                "name": "r",
+                "type": "bytes32",
+                "internalType": "bytes32"
+              },
+              {
+                "name": "s",
+                "type": "bytes32",
+                "internalType": "bytes32"
+              },
+              {
+                "name": "challengeIndex",
+                "type": "uint256",
+                "internalType": "uint256"
+              },
+              {
+                "name": "typeIndex",
+                "type": "uint256",
+                "internalType": "uint256"
+              },
+              {
+                "name": "authenticatorData",
+                "type": "bytes",
+                "internalType": "bytes"
+              },
+              {
+                "name": "clientDataJSON",
+                "type": "string",
+                "internalType": "string"
+              }
+            ]
           }
         ]
       }
@@ -315,39 +340,51 @@ export const countersignAccountAbi = [
         "internalType": "uint64"
       },
       {
-        "name": "auth",
-        "type": "tuple",
-        "internalType": "struct WebAuthn.WebAuthnAuth",
+        "name": "sigs",
+        "type": "tuple[]",
+        "internalType": "struct OwnerSig[]",
         "components": [
           {
-            "name": "r",
-            "type": "bytes32",
-            "internalType": "bytes32"
+            "name": "owner",
+            "type": "uint8",
+            "internalType": "uint8"
           },
           {
-            "name": "s",
-            "type": "bytes32",
-            "internalType": "bytes32"
-          },
-          {
-            "name": "challengeIndex",
-            "type": "uint256",
-            "internalType": "uint256"
-          },
-          {
-            "name": "typeIndex",
-            "type": "uint256",
-            "internalType": "uint256"
-          },
-          {
-            "name": "authenticatorData",
-            "type": "bytes",
-            "internalType": "bytes"
-          },
-          {
-            "name": "clientDataJSON",
-            "type": "string",
-            "internalType": "string"
+            "name": "auth",
+            "type": "tuple",
+            "internalType": "struct WebAuthn.WebAuthnAuth",
+            "components": [
+              {
+                "name": "r",
+                "type": "bytes32",
+                "internalType": "bytes32"
+              },
+              {
+                "name": "s",
+                "type": "bytes32",
+                "internalType": "bytes32"
+              },
+              {
+                "name": "challengeIndex",
+                "type": "uint256",
+                "internalType": "uint256"
+              },
+              {
+                "name": "typeIndex",
+                "type": "uint256",
+                "internalType": "uint256"
+              },
+              {
+                "name": "authenticatorData",
+                "type": "bytes",
+                "internalType": "bytes"
+              },
+              {
+                "name": "clientDataJSON",
+                "type": "string",
+                "internalType": "string"
+              }
+            ]
           }
         ]
       }
@@ -442,6 +479,19 @@ export const countersignAccountAbi = [
   },
   {
     "type": "function",
+    "name": "manageThreshold",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint8",
+        "internalType": "uint8"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "ownerDigest",
     "inputs": [
       {
@@ -453,24 +503,6 @@ export const countersignAccountAbi = [
     "outputs": [
       {
         "name": "",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "ownerKey",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "qx",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      },
-      {
-        "name": "qy",
         "type": "bytes32",
         "internalType": "bytes32"
       }
@@ -492,6 +524,31 @@ export const countersignAccountAbi = [
   },
   {
     "type": "function",
+    "name": "owners",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "tuple[]",
+        "internalType": "struct OwnerKey[]",
+        "components": [
+          {
+            "name": "qx",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "qy",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          }
+        ]
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "pause",
     "inputs": [
       {
@@ -505,39 +562,51 @@ export const countersignAccountAbi = [
         "internalType": "uint64"
       },
       {
-        "name": "auth",
-        "type": "tuple",
-        "internalType": "struct WebAuthn.WebAuthnAuth",
+        "name": "sigs",
+        "type": "tuple[]",
+        "internalType": "struct OwnerSig[]",
         "components": [
           {
-            "name": "r",
-            "type": "bytes32",
-            "internalType": "bytes32"
+            "name": "owner",
+            "type": "uint8",
+            "internalType": "uint8"
           },
           {
-            "name": "s",
-            "type": "bytes32",
-            "internalType": "bytes32"
-          },
-          {
-            "name": "challengeIndex",
-            "type": "uint256",
-            "internalType": "uint256"
-          },
-          {
-            "name": "typeIndex",
-            "type": "uint256",
-            "internalType": "uint256"
-          },
-          {
-            "name": "authenticatorData",
-            "type": "bytes",
-            "internalType": "bytes"
-          },
-          {
-            "name": "clientDataJSON",
-            "type": "string",
-            "internalType": "string"
+            "name": "auth",
+            "type": "tuple",
+            "internalType": "struct WebAuthn.WebAuthnAuth",
+            "components": [
+              {
+                "name": "r",
+                "type": "bytes32",
+                "internalType": "bytes32"
+              },
+              {
+                "name": "s",
+                "type": "bytes32",
+                "internalType": "bytes32"
+              },
+              {
+                "name": "challengeIndex",
+                "type": "uint256",
+                "internalType": "uint256"
+              },
+              {
+                "name": "typeIndex",
+                "type": "uint256",
+                "internalType": "uint256"
+              },
+              {
+                "name": "authenticatorData",
+                "type": "bytes",
+                "internalType": "bytes"
+              },
+              {
+                "name": "clientDataJSON",
+                "type": "string",
+                "internalType": "string"
+              }
+            ]
           }
         ]
       }
@@ -623,16 +692,6 @@ export const countersignAccountAbi = [
             "name": "paused",
             "type": "bool",
             "internalType": "bool"
-          },
-          {
-            "name": "ownerQx",
-            "type": "bytes32",
-            "internalType": "bytes32"
-          },
-          {
-            "name": "ownerQy",
-            "type": "bytes32",
-            "internalType": "bytes32"
           }
         ]
       }
@@ -748,6 +807,180 @@ export const countersignAccountAbi = [
   },
   {
     "type": "function",
+    "name": "releaseThreshold",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint8",
+        "internalType": "uint8"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "requireOwners",
+    "inputs": [
+      {
+        "name": "digest",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "sigs",
+        "type": "tuple[]",
+        "internalType": "struct OwnerSig[]",
+        "components": [
+          {
+            "name": "owner",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "auth",
+            "type": "tuple",
+            "internalType": "struct WebAuthn.WebAuthnAuth",
+            "components": [
+              {
+                "name": "r",
+                "type": "bytes32",
+                "internalType": "bytes32"
+              },
+              {
+                "name": "s",
+                "type": "bytes32",
+                "internalType": "bytes32"
+              },
+              {
+                "name": "challengeIndex",
+                "type": "uint256",
+                "internalType": "uint256"
+              },
+              {
+                "name": "typeIndex",
+                "type": "uint256",
+                "internalType": "uint256"
+              },
+              {
+                "name": "authenticatorData",
+                "type": "bytes",
+                "internalType": "bytes"
+              },
+              {
+                "name": "clientDataJSON",
+                "type": "string",
+                "internalType": "string"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "purpose",
+        "type": "uint8",
+        "internalType": "enum OwnerPurpose"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "setOwners",
+    "inputs": [
+      {
+        "name": "keys",
+        "type": "tuple[]",
+        "internalType": "struct OwnerKey[]",
+        "components": [
+          {
+            "name": "qx",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "qy",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          }
+        ]
+      },
+      {
+        "name": "manage",
+        "type": "uint8",
+        "internalType": "uint8"
+      },
+      {
+        "name": "release",
+        "type": "uint8",
+        "internalType": "uint8"
+      },
+      {
+        "name": "nonce",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "deadline",
+        "type": "uint64",
+        "internalType": "uint64"
+      },
+      {
+        "name": "sigs",
+        "type": "tuple[]",
+        "internalType": "struct OwnerSig[]",
+        "components": [
+          {
+            "name": "owner",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "auth",
+            "type": "tuple",
+            "internalType": "struct WebAuthn.WebAuthnAuth",
+            "components": [
+              {
+                "name": "r",
+                "type": "bytes32",
+                "internalType": "bytes32"
+              },
+              {
+                "name": "s",
+                "type": "bytes32",
+                "internalType": "bytes32"
+              },
+              {
+                "name": "challengeIndex",
+                "type": "uint256",
+                "internalType": "uint256"
+              },
+              {
+                "name": "typeIndex",
+                "type": "uint256",
+                "internalType": "uint256"
+              },
+              {
+                "name": "authenticatorData",
+                "type": "bytes",
+                "internalType": "bytes"
+              },
+              {
+                "name": "clientDataJSON",
+                "type": "string",
+                "internalType": "string"
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "setPolicy",
     "inputs": [
       {
@@ -803,39 +1036,51 @@ export const countersignAccountAbi = [
         "internalType": "uint64"
       },
       {
-        "name": "auth",
-        "type": "tuple",
-        "internalType": "struct WebAuthn.WebAuthnAuth",
+        "name": "sigs",
+        "type": "tuple[]",
+        "internalType": "struct OwnerSig[]",
         "components": [
           {
-            "name": "r",
-            "type": "bytes32",
-            "internalType": "bytes32"
+            "name": "owner",
+            "type": "uint8",
+            "internalType": "uint8"
           },
           {
-            "name": "s",
-            "type": "bytes32",
-            "internalType": "bytes32"
-          },
-          {
-            "name": "challengeIndex",
-            "type": "uint256",
-            "internalType": "uint256"
-          },
-          {
-            "name": "typeIndex",
-            "type": "uint256",
-            "internalType": "uint256"
-          },
-          {
-            "name": "authenticatorData",
-            "type": "bytes",
-            "internalType": "bytes"
-          },
-          {
-            "name": "clientDataJSON",
-            "type": "string",
-            "internalType": "string"
+            "name": "auth",
+            "type": "tuple",
+            "internalType": "struct WebAuthn.WebAuthnAuth",
+            "components": [
+              {
+                "name": "r",
+                "type": "bytes32",
+                "internalType": "bytes32"
+              },
+              {
+                "name": "s",
+                "type": "bytes32",
+                "internalType": "bytes32"
+              },
+              {
+                "name": "challengeIndex",
+                "type": "uint256",
+                "internalType": "uint256"
+              },
+              {
+                "name": "typeIndex",
+                "type": "uint256",
+                "internalType": "uint256"
+              },
+              {
+                "name": "authenticatorData",
+                "type": "bytes",
+                "internalType": "bytes"
+              },
+              {
+                "name": "clientDataJSON",
+                "type": "string",
+                "internalType": "string"
+              }
+            ]
           }
         ]
       }
@@ -878,39 +1123,51 @@ export const countersignAccountAbi = [
         "internalType": "uint64"
       },
       {
-        "name": "auth",
-        "type": "tuple",
-        "internalType": "struct WebAuthn.WebAuthnAuth",
+        "name": "sigs",
+        "type": "tuple[]",
+        "internalType": "struct OwnerSig[]",
         "components": [
           {
-            "name": "r",
-            "type": "bytes32",
-            "internalType": "bytes32"
+            "name": "owner",
+            "type": "uint8",
+            "internalType": "uint8"
           },
           {
-            "name": "s",
-            "type": "bytes32",
-            "internalType": "bytes32"
-          },
-          {
-            "name": "challengeIndex",
-            "type": "uint256",
-            "internalType": "uint256"
-          },
-          {
-            "name": "typeIndex",
-            "type": "uint256",
-            "internalType": "uint256"
-          },
-          {
-            "name": "authenticatorData",
-            "type": "bytes",
-            "internalType": "bytes"
-          },
-          {
-            "name": "clientDataJSON",
-            "type": "string",
-            "internalType": "string"
+            "name": "auth",
+            "type": "tuple",
+            "internalType": "struct WebAuthn.WebAuthnAuth",
+            "components": [
+              {
+                "name": "r",
+                "type": "bytes32",
+                "internalType": "bytes32"
+              },
+              {
+                "name": "s",
+                "type": "bytes32",
+                "internalType": "bytes32"
+              },
+              {
+                "name": "challengeIndex",
+                "type": "uint256",
+                "internalType": "uint256"
+              },
+              {
+                "name": "typeIndex",
+                "type": "uint256",
+                "internalType": "uint256"
+              },
+              {
+                "name": "authenticatorData",
+                "type": "bytes",
+                "internalType": "bytes"
+              },
+              {
+                "name": "clientDataJSON",
+                "type": "string",
+                "internalType": "string"
+              }
+            ]
           }
         ]
       }
@@ -974,39 +1231,51 @@ export const countersignAccountAbi = [
         "internalType": "uint64"
       },
       {
-        "name": "auth",
-        "type": "tuple",
-        "internalType": "struct WebAuthn.WebAuthnAuth",
+        "name": "sigs",
+        "type": "tuple[]",
+        "internalType": "struct OwnerSig[]",
         "components": [
           {
-            "name": "r",
-            "type": "bytes32",
-            "internalType": "bytes32"
+            "name": "owner",
+            "type": "uint8",
+            "internalType": "uint8"
           },
           {
-            "name": "s",
-            "type": "bytes32",
-            "internalType": "bytes32"
-          },
-          {
-            "name": "challengeIndex",
-            "type": "uint256",
-            "internalType": "uint256"
-          },
-          {
-            "name": "typeIndex",
-            "type": "uint256",
-            "internalType": "uint256"
-          },
-          {
-            "name": "authenticatorData",
-            "type": "bytes",
-            "internalType": "bytes"
-          },
-          {
-            "name": "clientDataJSON",
-            "type": "string",
-            "internalType": "string"
+            "name": "auth",
+            "type": "tuple",
+            "internalType": "struct WebAuthn.WebAuthnAuth",
+            "components": [
+              {
+                "name": "r",
+                "type": "bytes32",
+                "internalType": "bytes32"
+              },
+              {
+                "name": "s",
+                "type": "bytes32",
+                "internalType": "bytes32"
+              },
+              {
+                "name": "challengeIndex",
+                "type": "uint256",
+                "internalType": "uint256"
+              },
+              {
+                "name": "typeIndex",
+                "type": "uint256",
+                "internalType": "uint256"
+              },
+              {
+                "name": "authenticatorData",
+                "type": "bytes",
+                "internalType": "bytes"
+              },
+              {
+                "name": "clientDataJSON",
+                "type": "string",
+                "internalType": "string"
+              }
+            ]
           }
         ]
       }
@@ -1084,39 +1353,51 @@ export const countersignAccountAbi = [
         "internalType": "uint64"
       },
       {
-        "name": "auth",
-        "type": "tuple",
-        "internalType": "struct WebAuthn.WebAuthnAuth",
+        "name": "sigs",
+        "type": "tuple[]",
+        "internalType": "struct OwnerSig[]",
         "components": [
           {
-            "name": "r",
-            "type": "bytes32",
-            "internalType": "bytes32"
+            "name": "owner",
+            "type": "uint8",
+            "internalType": "uint8"
           },
           {
-            "name": "s",
-            "type": "bytes32",
-            "internalType": "bytes32"
-          },
-          {
-            "name": "challengeIndex",
-            "type": "uint256",
-            "internalType": "uint256"
-          },
-          {
-            "name": "typeIndex",
-            "type": "uint256",
-            "internalType": "uint256"
-          },
-          {
-            "name": "authenticatorData",
-            "type": "bytes",
-            "internalType": "bytes"
-          },
-          {
-            "name": "clientDataJSON",
-            "type": "string",
-            "internalType": "string"
+            "name": "auth",
+            "type": "tuple",
+            "internalType": "struct WebAuthn.WebAuthnAuth",
+            "components": [
+              {
+                "name": "r",
+                "type": "bytes32",
+                "internalType": "bytes32"
+              },
+              {
+                "name": "s",
+                "type": "bytes32",
+                "internalType": "bytes32"
+              },
+              {
+                "name": "challengeIndex",
+                "type": "uint256",
+                "internalType": "uint256"
+              },
+              {
+                "name": "typeIndex",
+                "type": "uint256",
+                "internalType": "uint256"
+              },
+              {
+                "name": "authenticatorData",
+                "type": "bytes",
+                "internalType": "bytes"
+              },
+              {
+                "name": "clientDataJSON",
+                "type": "string",
+                "internalType": "string"
+              }
+            ]
           }
         ]
       }
@@ -1207,6 +1488,31 @@ export const countersignAccountAbi = [
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "OwnersSet",
+    "inputs": [
+      {
+        "name": "count",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "manageThreshold",
+        "type": "uint8",
+        "indexed": false,
+        "internalType": "uint8"
+      },
+      {
+        "name": "releaseThreshold",
+        "type": "uint8",
+        "indexed": false,
+        "internalType": "uint8"
       }
     ],
     "anonymous": false
@@ -1420,6 +1726,11 @@ export const countersignAccountAbi = [
   },
   {
     "type": "error",
+    "name": "InvalidOwners",
+    "inputs": []
+  },
+  {
+    "type": "error",
     "name": "InvalidPayTo",
     "inputs": []
   },
@@ -1435,6 +1746,11 @@ export const countersignAccountAbi = [
   },
   {
     "type": "error",
+    "name": "NotEnoughSigners",
+    "inputs": []
+  },
+  {
+    "type": "error",
     "name": "NotInitializing",
     "inputs": []
   },
@@ -1446,6 +1762,11 @@ export const countersignAccountAbi = [
   {
     "type": "error",
     "name": "OrderExists",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "OwnersOutOfOrder",
     "inputs": []
   },
   {
@@ -1499,6 +1820,11 @@ export const countersignAccountAbi = [
   {
     "type": "error",
     "name": "UnknownOrder",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "UnknownOwner",
     "inputs": []
   },
   {
@@ -1783,39 +2109,51 @@ export const orderVaultAbi = [
         ]
       },
       {
-        "name": "auth",
-        "type": "tuple",
-        "internalType": "struct WebAuthn.WebAuthnAuth",
+        "name": "sigs",
+        "type": "tuple[]",
+        "internalType": "struct OwnerSig[]",
         "components": [
           {
-            "name": "r",
-            "type": "bytes32",
-            "internalType": "bytes32"
+            "name": "owner",
+            "type": "uint8",
+            "internalType": "uint8"
           },
           {
-            "name": "s",
-            "type": "bytes32",
-            "internalType": "bytes32"
-          },
-          {
-            "name": "challengeIndex",
-            "type": "uint256",
-            "internalType": "uint256"
-          },
-          {
-            "name": "typeIndex",
-            "type": "uint256",
-            "internalType": "uint256"
-          },
-          {
-            "name": "authenticatorData",
-            "type": "bytes",
-            "internalType": "bytes"
-          },
-          {
-            "name": "clientDataJSON",
-            "type": "string",
-            "internalType": "string"
+            "name": "auth",
+            "type": "tuple",
+            "internalType": "struct WebAuthn.WebAuthnAuth",
+            "components": [
+              {
+                "name": "r",
+                "type": "bytes32",
+                "internalType": "bytes32"
+              },
+              {
+                "name": "s",
+                "type": "bytes32",
+                "internalType": "bytes32"
+              },
+              {
+                "name": "challengeIndex",
+                "type": "uint256",
+                "internalType": "uint256"
+              },
+              {
+                "name": "typeIndex",
+                "type": "uint256",
+                "internalType": "uint256"
+              },
+              {
+                "name": "authenticatorData",
+                "type": "bytes",
+                "internalType": "bytes"
+              },
+              {
+                "name": "clientDataJSON",
+                "type": "string",
+                "internalType": "string"
+              }
+            ]
           }
         ]
       }
@@ -1936,39 +2274,51 @@ export const orderVaultAbi = [
         ]
       },
       {
-        "name": "auth",
-        "type": "tuple",
-        "internalType": "struct WebAuthn.WebAuthnAuth",
+        "name": "sigs",
+        "type": "tuple[]",
+        "internalType": "struct OwnerSig[]",
         "components": [
           {
-            "name": "r",
-            "type": "bytes32",
-            "internalType": "bytes32"
+            "name": "owner",
+            "type": "uint8",
+            "internalType": "uint8"
           },
           {
-            "name": "s",
-            "type": "bytes32",
-            "internalType": "bytes32"
-          },
-          {
-            "name": "challengeIndex",
-            "type": "uint256",
-            "internalType": "uint256"
-          },
-          {
-            "name": "typeIndex",
-            "type": "uint256",
-            "internalType": "uint256"
-          },
-          {
-            "name": "authenticatorData",
-            "type": "bytes",
-            "internalType": "bytes"
-          },
-          {
-            "name": "clientDataJSON",
-            "type": "string",
-            "internalType": "string"
+            "name": "auth",
+            "type": "tuple",
+            "internalType": "struct WebAuthn.WebAuthnAuth",
+            "components": [
+              {
+                "name": "r",
+                "type": "bytes32",
+                "internalType": "bytes32"
+              },
+              {
+                "name": "s",
+                "type": "bytes32",
+                "internalType": "bytes32"
+              },
+              {
+                "name": "challengeIndex",
+                "type": "uint256",
+                "internalType": "uint256"
+              },
+              {
+                "name": "typeIndex",
+                "type": "uint256",
+                "internalType": "uint256"
+              },
+              {
+                "name": "authenticatorData",
+                "type": "bytes",
+                "internalType": "bytes"
+              },
+              {
+                "name": "clientDataJSON",
+                "type": "string",
+                "internalType": "string"
+              }
+            ]
           }
         ]
       }
@@ -2167,11 +2517,6 @@ export const orderVaultAbi = [
   {
     "type": "error",
     "name": "InvalidOutcome",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "InvalidOwnerSignature",
     "inputs": []
   },
   {

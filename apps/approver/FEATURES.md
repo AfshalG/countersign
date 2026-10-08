@@ -6,16 +6,17 @@ This file is kept in step with the code: when a feature lands or an API changes,
 
 ## What changed
 
-| Date  | Change                                                                                                                                                                             |
-| ----- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 7 Oct | First version. Approvals API live; sample approvals below; sign-in for agent apps built (WorkOS, waiting on the account)                                                           |
-| 7 Oct | A hold for an address that is not on file offers only **refuse** (`summary.payOnce: "address_not_on_file"`): the contract never pays a new address, not even for the owner         |
-| 7 Oct | Sign-in for agent apps is live: claude.ai, Grok and ChatGPT can connect to the MCP server by signing in (feature 6)                                                                |
-| 7 Oct | **Judge mode is live (feature 7):** any phone's new passkey gets its own testnet account, so your own Face ID works end to end. The "Coming next" list is renumbered               |
-| 7 Oct | **Demo invoices are live (feature 7, step 6):** the demo agent pays a clean, a changed-address or an amount-hold invoice into your own account; your Face ID decides the held ones |
-| 7 Oct | **Approving proposals is live (feature 2):** add the supplier and open the order with two Face ID signatures, or refuse with one. Removed from "Coming next"                       |
-| 7 Oct | **The stop button is live (feature 9):** pause and unpause the account with Face ID. Removed from "Coming next"                                                                    |
-| 7 Oct | Every payment names the agent that sent it (ERC-8004 id); agents on A2A can connect too (feature 6)                                                                                |
+| Date  | Change                                                                                                                                                                                                                                                                             |
+| ----- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 7 Oct | First version. Approvals API live; sample approvals below; sign-in for agent apps built (WorkOS, waiting on the account)                                                                                                                                                           |
+| 7 Oct | A hold for an address that is not on file offers only **refuse** (`summary.payOnce: "address_not_on_file"`): the contract never pays a new address, not even for the owner                                                                                                         |
+| 7 Oct | Sign-in for agent apps is live: claude.ai, Grok and ChatGPT can connect to the MCP server by signing in (feature 6)                                                                                                                                                                |
+| 7 Oct | **Judge mode is live (feature 7):** any phone's new passkey gets its own testnet account, so your own Face ID works end to end. The "Coming next" list is renumbered                                                                                                               |
+| 7 Oct | **Demo invoices are live (feature 7, step 6):** the demo agent pays a clean, a changed-address or an amount-hold invoice into your own account; your Face ID decides the held ones                                                                                                 |
+| 7 Oct | **Approving proposals is live (feature 2):** add the supplier and open the order with two Face ID signatures, or refuse with one. Removed from "Coming next"                                                                                                                       |
+| 7 Oct | **The stop button is live (feature 9):** pause and unpause the account with Face ID. Removed from "Coming next"                                                                                                                                                                    |
+| 7 Oct | Every payment names the agent that sent it (ERC-8004 id); agents on A2A can connect too (feature 6)                                                                                                                                                                                |
+| 7 Oct | **Several approvers are live (new feature 8):** an account can have up to five owners, and adding a supplier can need two of them. Every action now says `signatures: { need, signed }`; a signature that is not yet enough answers `202`. The demo account moved to `0xC127…03A9` |
 
 ## What the product is, in one paragraph
 
@@ -40,6 +41,7 @@ What the owner sees when a payment is held: what it is, why it was held, the dif
 - `GET /v1/approvals/{id}` (no token) returns `title`, `status`, `summary` (`amountUsdc`, `payTo`, `addressOnFile`, `reason`, `reasonText`, `deadline`, `txHash`), `differences[]` (`field`, `onFile`, `onInvoice`), `actions` (each with the `challenge` the passkey signs: `refuse` always, `pay_once` only when `summary.payOnce` is `"offered"`; it is `"address_not_on_file"` when the address changed), and `statusUrl`.
 - To decide: sign `actions[action].challenge` with the passkey (`WebAuthn.sign` from `ox`, see `spikes/01-passkey/public/index.html`), then `POST /v1/approvals/{id}` with `{ action, assertion }`. The assertion can be what `ox` returns (`authenticatorData`, `clientDataJSON`, `signature: { r, s }`) or the raw browser response; the gateway works out the rest.
 - Answers: `200` with the new status (`released`, then `settled` about a second later with `txHash`; or `refused`). `422 challenge_mismatch` (signed the other action), `422 invalid_passkey` (not the owner's passkey), `422 not_offered` (pay once on a changed address), `409 not_held` (already decided), `404`.
+- **Several owners (feature 8):** each action has `signatures: { need, signed }`. `pay_once` needs the account's release threshold (`need: 2` means two people); `refuse` always needs one. When this signature is not yet enough, the answer is `202` with the same view and `signed` now listing this owner: show "1 of 2 signed, waiting for another owner", and let them share the approval link. The second owner opens the same link and signs the same challenge.
 - After paying: poll `GET /v1/approvals/{id}` until `settled`, then link the transaction: `https://testnet.monadexplorer.com/tx/{txHash}`.
 - Sample (held, the invoice's address is not the one on file: `differences[]` filled, only `refuse` offered): `https://gateway-production-e17a.up.railway.app/v1/approvals/0xcfe2b4280875a01f90ea59c7d5d963b63594b8c0b9629ad4e453e9f20516625c`
 - Sample (held for its amount, address on file: `pay_once` and `refuse` offered): `…/v1/approvals/0xa5a1f6754338df015835ae6697e72a14217ac1b643cdbe8091b63c987baf7a0a`
@@ -56,6 +58,7 @@ When an agent reads a supplier's quote, it can only _propose_ the supplier and t
   - `refuse` ("nothing is added and no money moves").
 - Approve: sign each offered approve action, then `POST /v1/approvals/{id}` with `{ "action": "approve", "assertions": { "set_supplier": a1, "approve_order": a2 } }`. About 3 s; the answer has `status: "approved"`, and the order appears in the agent's open orders.
 - Refuse: `{ "action": "refuse", "assertion": a }`.
+- **Several owners (feature 8):** `set_supplier` and `approve_order` need the manage threshold (`signatures.need`); refusing needs one. The first owner's approve answers `202` with the proposal still `pending` and `signed: [0]`; when the next owner approves, both actions go out (about 3 s) and the answer is `200`, `approved`.
 - **A changed address** (`changesAddress: true`, `differences[]` filled): approving changes the supplier's address for every order, and new payments to it wait out the waiting period. Make that unmistakable.
 - **Not enough USDC** (`enoughFunds: false`): only refuse is offered; say how much is missing (`amountUsdc` against `accountUsdc`).
 - Errors: `422 challenge_mismatch` or `invalid_passkey`, `409 not_pending`, `insufficient_funds`, `expired` or `stale` (the account changed since you opened it: open it again).
@@ -72,7 +75,7 @@ One payment as evidence: what was asked, what was checked, who decided, and the 
 
 Each supplier's address on file and its open orders, with how much is left.
 
-- `GET /v1/accounts/{account}/orders` (_token_): supplier, address on file, amount left, expiry. Demo account: `0xE890B35be32F04032B502Dc4Dc2db8062aD6d603`.
+- `GET /v1/accounts/{account}/orders` (_token_): supplier, address on file, amount left, expiry. Demo account: `0xC127e7Dbc29d0d38Be3b2e557ce7d796bd2403A9`.
 
 ### 5. Live updates and the payment run
 
@@ -118,6 +121,22 @@ One tap stops every payment from the account, until the owner starts it again. A
 - `POST /v1/owner/{account}` with `{ "action": "pause", "deadline": <as shown>, "assertion": a }`. About 1.3 s; the answer is the new state.
 - Errors: `409 already_paused`, `not_paused` or `stale` (open it again), `400 bad_deadline` (sign within ten minutes of opening), `422 challenge_mismatch` or `invalid_passkey`.
 - Make it easy to find and hard to hit by accident; show clearly when the account is paused.
+- **Several owners (feature 8):** any one owner can pause. Unpausing needs the manage threshold: with two needed, the first owner's unpause answers `202` (still paused, `actions.unpause.signatures.signed: [0]`), and the view keeps offering the same challenge and deadline (a day to sign) until the next owner signs it.
+
+### 8. Several approvers (owners and thresholds)
+
+A business does not let one person add a supplier or change bank details alone. An account can have up to five owners, each with their own passkey, and two thresholds: **manage** (add or change a supplier, open an order, change the rules or the owners, unpause) and **release** (pay a held payment once). Any one owner can always **pause** or **refuse**, because stopping money must never wait for a second person. New accounts start with one owner, so nothing changes until a second is added.
+
+- `GET /v1/owner/{account}` (no token) now also has `owners` (`[{ owner: 0, qx, qy }, …]`; signatures name owners by this index), `manage`, `release`, and `ownerChanges`: changes some owners have signed, waiting for the others (each with its `challenge`, `deadline`, `summary`, `owners`, `manage`, `release` and `signatures`).
+- Owners have no names on chain. Remember on the phone which owner is "you" (the public key of the passkey this phone made) and let the owner name the others locally.
+- **Add an approver:**
+  1. The new person creates a passkey on their own phone (as in feature 7, step 1) and passes its public key to the owner (a QR code or a link; the key is public, not a secret).
+  2. `POST /v1/owner/{account}/owners/preview` (no token) with every owner after the change, current ones first, and the thresholds: `{ "owners": [{ "x": "0x…", "y": "0x…" }, { "spki": "…" }], "manage": 2, "release": 1 }`. The answer has `challenge`, `deadline`, `summary` in plain words ("2 owners. Adding or changing a supplier, … need 2 of their passkeys; …") and `signatures`.
+  3. Each current owner signs that `challenge`, then `POST /v1/owner/{account}/owners` with the same `owners`, `manage`, `release`, plus `deadline` and `assertion`. `200` when it went out (the answer is the account with its new owners), `202` while more current owners must sign (they find it in `ownerChanges`).
+- Remove an owner by leaving them out; change the thresholds the same way.
+- Errors: `400 bad_owners` (none, more than five, the same passkey twice, or a threshold of 0 or more than the owners), `400 invalid_public_key`, `400 bad_deadline`, `422 challenge_mismatch` or `invalid_passkey`, `409 stale` (the account changed: preview again).
+- **The waiting state is the new screen:** "1 of 2 signed": who signed, who still needs to, and a way to send the link to them. It appears on held payments, proposals, unpausing and owner changes.
+- **Try it with one phone:** make a second passkey on the same phone for your judge account (another account name in the passkey prompt), add it with manage 2, then ask the agent to propose a supplier: the first Face ID answers 202, the second approves it. Pausing still takes one.
 
 ## Coming next: design now, the API lands here
 

@@ -71,36 +71,8 @@ const SETUP_GAS: Record<SetupIndex, bigint> = {
 };
 const INDEXES: readonly SetupIndex[] = [0, 1, 2];
 
-/**
- * The new passkey's public key: `{ x, y }` as hex (what `ox` gives), or the SubjectPublicKeyInfo
- * the browser's `response.getPublicKey()` returns (base64url; for P-256 its last 65 bytes are
- * 0x04 ‖ x ‖ y). Whether the point is on the curve is the contract's check (InvalidOwnerKey).
- */
-export function publicKeyOf(input: {
-  x?: string | undefined;
-  y?: string | undefined;
-  spki?: string | undefined;
-}): {
-  qx: Hex;
-  qy: Hex;
-} {
-  const word = (v: string | undefined, name: string): Hex => {
-    if (v === undefined || !/^0x[0-9a-fA-F]{1,64}$/.test(v))
-      throw new DemoError(400, 'invalid_public_key', `${name} must be 32-byte hex`);
-    return `0x${v.slice(2).padStart(64, '0')}`;
-  };
-  if (input.spki !== undefined) {
-    const bytes = Buffer.from(input.spki, 'base64url');
-    if (bytes.length < 65 || bytes[bytes.length - 65] !== 0x04)
-      throw new DemoError(400, 'invalid_public_key', 'not an uncompressed P-256 public key');
-    const point = bytes.subarray(bytes.length - 64);
-    return {
-      qx: `0x${point.subarray(0, 32).toString('hex')}`,
-      qy: `0x${point.subarray(32).toString('hex')}`,
-    };
-  }
-  return { qx: word(input.x, 'x'), qy: word(input.y, 'y') };
-}
+/** Moved to src/owner/keys.ts for D36 (adding an owner takes the same key format). */
+export { publicKeyOf } from '../owner/keys.js';
 
 /** What the app shows for a demo account. */
 export function demoView(row: DemoAccountRow, chainId: number) {
@@ -241,7 +213,10 @@ export function setUpDemoAccount(deps: DemoDeps, account: Address, assertions: u
     try {
       for (let i = Number(await deps.chain.ownerNonce(account)); i < 3; i++) {
         const index = i as SetupIndex;
-        const data = setupCall(plan, index, auths[index] as (typeof auths)[number]);
+        // A new demo account has one owner (D36: thresholds of one until it adds more).
+        const data = setupCall(plan, index, [
+          { owner: 0, auth: auths[index] as (typeof auths)[number] },
+        ]);
         const refusal = await deps.chain.dryRun(account, data);
         if (refusal === 'InvalidOwnerSignature')
           throw new DemoError(422, 'invalid_passkey', 'not this account’s passkey', {

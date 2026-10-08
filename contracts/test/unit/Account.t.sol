@@ -8,14 +8,14 @@ import {PasskeySigner} from "../helpers/PasskeySigner.sol";
 import {CountersignAccount} from "../../src/CountersignAccount.sol";
 import {OrderVault} from "../../src/OrderVault.sol";
 import {OwnerAuth} from "../../src/libraries/OwnerAuth.sol";
-import {Policy, Supplier} from "../../src/CountersignTypes.sol";
+import {Policy, Supplier, OwnerSig} from "../../src/CountersignTypes.sol";
 import "../../src/CountersignErrors.sol";
 
 contract FactoryTest is Base {
     function test_CreatesAnAccountBoundToThePasskey() public view {
-        (bytes32 x, bytes32 y) = account.ownerKey();
-        assertEq(x, qx);
-        assertEq(y, qy);
+        assertEq(account.owners().length, 1);
+        assertEq(account.owners()[0].qx, qx);
+        assertEq(account.owners()[0].qy, qy);
         assertEq(address(account), factory.predictAccount(qx, qy, WAIT, bytes32("salt")));
         assertEq(account.effectiveWaitingPeriod(), WAIT);
         assertEq(address(account.usdc()), address(usdc));
@@ -62,7 +62,7 @@ contract FactoryTest is Base {
 
 contract OwnerAuthTest is Base {
     function _policyCall(uint256 nonce, uint64 dl, WebAuthn.WebAuthnAuth memory auth) internal {
-        account.setPolicy(defaultPolicy(), nonce, dl, auth);
+        account.setPolicy(defaultPolicy(), nonce, dl, PasskeySigner.only(auth));
     }
 
     function _policyAuth(uint256 pk, uint256 nonce, uint64 dl) internal view returns (WebAuthn.WebAuthnAuth memory) {
@@ -126,7 +126,7 @@ contract OwnerAuthTest is Base {
 
     function test_ASignatureForAnotherActionIsRefused() public {
         uint64 dl = _deadline();
-        WebAuthn.WebAuthnAuth memory pauseAuth = _ownerSign(OwnerAuth.pauseHash(0, dl));
+        WebAuthn.WebAuthnAuth memory pauseAuth = _ownerSign(OwnerAuth.pauseHash(0, dl))[0].auth;
         vm.expectRevert(InvalidOwnerSignature.selector);
         _policyCall(0, dl, pauseAuth);
     }
@@ -136,7 +136,7 @@ contract OwnerAuthTest is Base {
         uint64 dl = _deadline();
         WebAuthn.WebAuthnAuth memory auth = _policyAuth(OWNER_PK, 0, dl); // signed for `account`
         vm.expectRevert(InvalidOwnerSignature.selector);
-        other.setPolicy(defaultPolicy(), 0, dl, auth);
+        other.setPolicy(defaultPolicy(), 0, dl, PasskeySigner.only(auth));
     }
 
     function test_ASignatureForAnotherChainIsRefused() public {

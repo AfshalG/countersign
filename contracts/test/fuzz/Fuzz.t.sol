@@ -6,7 +6,7 @@ import {Base} from "../helpers/Base.sol";
 import {PasskeySigner} from "../helpers/PasskeySigner.sol";
 import {OrderVault} from "../../src/OrderVault.sol";
 import {OwnerAuth} from "../../src/libraries/OwnerAuth.sol";
-import {Policy, Payment, Decision} from "../../src/CountersignTypes.sol";
+import {Policy, Payment, Decision, OwnerSig} from "../../src/CountersignTypes.sol";
 import "../../src/CountersignErrors.sol";
 
 /// Every external function with random inputs: money moves only along the allowed paths.
@@ -93,7 +93,7 @@ contract FuzzTest is Base {
         pk = bound(pk, 1, PasskeySigner.N - 1);
         vm.assume(pk != OWNER_PK);
         Payment memory p = _payment(10_000, invoice);
-        WebAuthn.WebAuthnAuth memory auth = PasskeySigner.sign(pk, vault.paymentDigest(p));
+        OwnerSig[] memory auth = PasskeySigner.one(pk, vault.paymentDigest(p));
         vm.expectRevert(InvalidOwnerSignature.selector);
         vault.payWithOwner(p, auth);
         assertEq(usdc.balanceOf(supplierAddr), 0);
@@ -101,10 +101,10 @@ contract FuzzTest is Base {
 
     function testFuzz_RandomAssertionsNeverPay(bytes32 r, bytes32 s, bytes32 invoice) public {
         Payment memory p = _payment(10_000, invoice);
-        WebAuthn.WebAuthnAuth memory auth = PasskeySigner.sign(OWNER_PK, vault.paymentDigest(p));
-        vm.assume(r != auth.r || s != auth.s);
-        auth.r = r;
-        auth.s = s;
+        OwnerSig[] memory auth = PasskeySigner.one(OWNER_PK, vault.paymentDigest(p));
+        vm.assume(r != auth[0].auth.r || s != auth[0].auth.s);
+        auth[0].auth.r = r;
+        auth[0].auth.s = s;
         vm.expectRevert(InvalidOwnerSignature.selector);
         vault.payWithOwner(p, auth);
     }
@@ -153,8 +153,7 @@ contract FuzzTest is Base {
         vm.assume(pk != OWNER_PK);
         uint64 dl = _deadline();
         uint256 n = account.ownerNonce();
-        WebAuthn.WebAuthnAuth memory auth =
-            PasskeySigner.sign(pk, account.ownerDigest(OwnerAuth.withdrawHash(to, amount, n, dl)));
+        OwnerSig[] memory auth = PasskeySigner.one(pk, account.ownerDigest(OwnerAuth.withdrawHash(to, amount, n, dl)));
         vm.expectRevert(InvalidOwnerSignature.selector);
         account.withdraw(to, amount, n, dl, auth);
         assertEq(account.ownerNonce(), n);
@@ -163,10 +162,10 @@ contract FuzzTest is Base {
     function testFuzz_RandomOwnerSignaturesAreRefused(bytes32 r, bytes32 s) public {
         uint64 dl = _deadline();
         uint256 n = account.ownerNonce();
-        WebAuthn.WebAuthnAuth memory auth = _ownerSign(OwnerAuth.pauseHash(n, dl));
-        vm.assume(r != auth.r || s != auth.s);
-        auth.r = r;
-        auth.s = s;
+        OwnerSig[] memory auth = _ownerSign(OwnerAuth.pauseHash(n, dl));
+        vm.assume(r != auth[0].auth.r || s != auth[0].auth.s);
+        auth[0].auth.r = r;
+        auth[0].auth.s = s;
         vm.expectRevert(InvalidOwnerSignature.selector);
         account.pause(n, dl, auth);
         assertFalse(account.paused());

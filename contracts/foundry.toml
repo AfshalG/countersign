@@ -24,7 +24,9 @@ fs_permissions = [
 # Every external call made before an event is a read (the P256 precompile, the account's
 # paymentContext, a token balance) or a call into our own vault or account clone, and USDC
 # transfers come after their events; none can re-enter. Checked one by one, 7 Oct.
-exclude_lints = ["block-timestamp", "reentrancy-events"]
+# The reverts inside loops (owner signatures, owner sets; D36) are all-or-nothing on purpose:
+# one bad signature, unknown owner or repeated key rejects the whole action. Checked 7 Oct.
+exclude_lints = ["block-timestamp", "reentrancy-events", "require-revert-in-loop"]
 
 [fuzz]
 runs = 256

@@ -4,7 +4,7 @@ pragma solidity ^0.8.24;
 import {Base} from "./helpers/Base.sol";
 import {OrderVault} from "../src/OrderVault.sol";
 import {OwnerAuth} from "../src/libraries/OwnerAuth.sol";
-import {Policy, Payment, Decision} from "../src/CountersignTypes.sol";
+import {Policy, Payment, Decision, OwnerKey} from "../src/CountersignTypes.sol";
 
 /// @notice Digests the contracts compute for fixed sample values, shared with the TypeScript
 /// types in packages/shared (test/eip712.test.ts uses the same samples). By default this test
@@ -20,7 +20,7 @@ contract Eip712FixtureTest is Base {
     address constant A3 = 0x3000000000000000000000000000000000000003;
     address constant A4 = 0x4000000000000000000000000000000000000004;
 
-    function _digests(OrderVault vault) internal view returns (bytes32[9] memory d) {
+    function _digests(OrderVault vault) internal view returns (bytes32[10] memory d) {
         Policy memory p = Policy({
             agentKey: A1,
             checkerKey: A2,
@@ -46,6 +46,11 @@ contract Eip712FixtureTest is Base {
         d[7] = vault.paymentDigest(
             Payment({amount: 10_000, invoiceHash: keccak256("invoice INV-0042, PDF"), payTo: A3, deadline: DEADLINE})
         );
+        // D36: two owners (any 32-byte values: the digest does not check the curve), manage 2, release 1.
+        OwnerKey[] memory keys = new OwnerKey[](2);
+        keys[0] = OwnerKey({qx: keccak256("owner-1-x"), qy: keccak256("owner-1-y")});
+        keys[1] = OwnerKey({qx: keccak256("owner-2-x"), qy: keccak256("owner-2-y")});
+        d[9] = account.ownerDigest(OwnerAuth.setOwnersHash(keys, 2, 1, NONCE, DEADLINE));
         d[8] = vault.decisionDigest(
             Decision({
                 invoiceHash: keccak256("invoice INV-0042, PDF"),
@@ -58,8 +63,8 @@ contract Eip712FixtureTest is Base {
 
     function test_DigestsMatchTheSharedFixture() public {
         OrderVault vault = _readyVault();
-        bytes32[9] memory d = _digests(vault);
-        string[9] memory names = [
+        bytes32[10] memory d = _digests(vault);
+        string[10] memory names = [
             "SetPolicy",
             "SetSupplier",
             "ApproveOrder",
@@ -68,7 +73,8 @@ contract Eip712FixtureTest is Base {
             "Pause",
             "Unpause",
             "Payment",
-            "Decision"
+            "Decision",
+            "SetOwners"
         ];
 
         if (vm.envOr("WRITE_EIP712_FIXTURES", false)) {
@@ -77,7 +83,7 @@ contract Eip712FixtureTest is Base {
             vm.serializeAddress(obj, "account", address(account));
             vm.serializeAddress(obj, "vault", address(vault));
             string memory json;
-            for (uint256 i; i < 9; i++) {
+            for (uint256 i; i < 10; i++) {
                 json = vm.serializeBytes32(obj, names[i], d[i]);
             }
             vm.writeJson(json, PATH);
@@ -88,7 +94,7 @@ contract Eip712FixtureTest is Base {
         assertEq(vm.parseJsonUint(fixture, ".chainId"), block.chainid);
         assertEq(vm.parseJsonAddress(fixture, ".account"), address(account));
         assertEq(vm.parseJsonAddress(fixture, ".vault"), address(vault));
-        for (uint256 i; i < 9; i++) {
+        for (uint256 i; i < 10; i++) {
             assertEq(vm.parseJsonBytes32(fixture, string.concat(".", names[i])), d[i], names[i]);
         }
     }

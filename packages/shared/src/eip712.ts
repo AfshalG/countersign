@@ -79,6 +79,18 @@ export const ownerActionTypes = {
     { name: 'nonce', type: 'uint256' },
     { name: 'deadline', type: 'uint64' },
   ],
+  // D36: the account's owners (passkey public keys) and its manage and release thresholds.
+  SetOwners: [
+    { name: 'owners', type: 'OwnerKey[]' },
+    { name: 'manage', type: 'uint8' },
+    { name: 'release', type: 'uint8' },
+    { name: 'nonce', type: 'uint256' },
+    { name: 'deadline', type: 'uint64' },
+  ],
+  OwnerKey: [
+    { name: 'qx', type: 'bytes32' },
+    { name: 'qy', type: 'bytes32' },
+  ],
 } as const;
 
 export type OwnerAction = keyof typeof ownerActionTypes;

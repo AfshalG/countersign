@@ -9,7 +9,7 @@ import {TestUSDC} from "../helpers/TestUSDC.sol";
 import {CountersignAccount} from "../../src/CountersignAccount.sol";
 import {OrderVault} from "../../src/OrderVault.sol";
 import {OwnerAuth} from "../../src/libraries/OwnerAuth.sol";
-import {Payment, Policy} from "../../src/CountersignTypes.sol";
+import {Payment, Policy, OwnerSig} from "../../src/CountersignTypes.sol";
 
 /// @notice Drives random sequences of everything an account and its vaults can do, and keeps
 /// ghost totals of what should have happened. Reverts are expected (most random actions are
@@ -80,8 +80,8 @@ contract Handler is Test {
         return uint64(vm.getBlockTimestamp() + 1 hours);
     }
 
-    function _owner(bytes32 structHash) internal view returns (WebAuthn.WebAuthnAuth memory) {
-        return PasskeySigner.sign(ownerPk, account.ownerDigest(structHash));
+    function _owner(bytes32 structHash) internal view returns (OwnerSig[] memory) {
+        return PasskeySigner.one(ownerPk, account.ownerDigest(structHash));
     }
 
     /// Half the amounts fit under the new-address cap, so payments to a fresh address succeed too.
@@ -104,7 +104,7 @@ contract Handler is Test {
         bytes32 orderId = keccak256(abi.encode("order", ++counter));
         uint256 n = account.ownerNonce();
         uint64 dl = _deadline();
-        WebAuthn.WebAuthnAuth memory auth =
+        OwnerSig[] memory auth =
             _owner(OwnerAuth.approveOrderHash(orderId, supplierId, bytes32(0), amount, expiry, n, dl));
         try account.approveOrder(orderId, supplierId, bytes32(0), amount, expiry, n, dl, auth) returns (address v) {
             vaults.push(OrderVault(v));
@@ -145,7 +145,7 @@ contract Handler is Test {
             : keccak256(abi.encode("held invoice", ++counter));
         Payment memory p =
             Payment({amount: _amount(amountSeed), invoiceHash: invoice, payTo: currentPayTo, deadline: _deadline()});
-        WebAuthn.WebAuthnAuth memory auth = PasskeySigner.sign(ownerPk, vault.paymentDigest(p));
+        OwnerSig[] memory auth = PasskeySigner.one(ownerPk, vault.paymentDigest(p));
         bool wasPaused = account.paused();
         if (wasPaused) pausedAttempts++;
         try vault.payWithOwner(p, auth) {
@@ -166,7 +166,7 @@ contract Handler is Test {
         address next = wallets[seed % 3];
         uint256 n = account.ownerNonce();
         uint64 dl = _deadline();
-        WebAuthn.WebAuthnAuth memory auth = _owner(OwnerAuth.setSupplierHash(supplierId, next, true, 0, n, dl));
+        OwnerSig[] memory auth = _owner(OwnerAuth.setSupplierHash(supplierId, next, true, 0, n, dl));
         try account.setSupplier(supplierId, next, true, 0, n, dl, auth) {
             currentPayTo = next;
         } catch {}
@@ -177,7 +177,7 @@ contract Handler is Test {
         (, bytes32 orderId) = _pick(vaultSeed);
         uint256 n = account.ownerNonce();
         uint64 dl = _deadline();
-        WebAuthn.WebAuthnAuth memory auth = _owner(OwnerAuth.closeOrderHash(orderId, n, dl));
+        OwnerSig[] memory auth = _owner(OwnerAuth.closeOrderHash(orderId, n, dl));
         try account.closeOrder(orderId, n, dl, auth) {
             closesOk++;
         } catch {}
@@ -197,7 +197,7 @@ contract Handler is Test {
         uint256 amount = bound(amountSeed, 1, available);
         uint256 n = account.ownerNonce();
         uint64 dl = _deadline();
-        WebAuthn.WebAuthnAuth memory auth = _owner(OwnerAuth.withdrawHash(treasury, amount, n, dl));
+        OwnerSig[] memory auth = _owner(OwnerAuth.withdrawHash(treasury, amount, n, dl));
         try account.withdraw(treasury, amount, n, dl, auth) {
             totalWithdrawn += amount;
         } catch {}
@@ -207,10 +207,10 @@ contract Handler is Test {
         uint256 n = account.ownerNonce();
         uint64 dl = _deadline();
         if (account.paused()) {
-            WebAuthn.WebAuthnAuth memory auth = _owner(OwnerAuth.unpauseHash(n, dl));
+            OwnerSig[] memory auth = _owner(OwnerAuth.unpauseHash(n, dl));
             try account.unpause(n, dl, auth) {} catch {}
         } else {
-            WebAuthn.WebAuthnAuth memory auth = _owner(OwnerAuth.pauseHash(n, dl));
+            OwnerSig[] memory auth = _owner(OwnerAuth.pauseHash(n, dl));
             try account.pause(n, dl, auth) {} catch {}
         }
     }

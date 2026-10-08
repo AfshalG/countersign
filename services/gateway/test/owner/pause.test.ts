@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { decodeFunctionData, hashTypedData, type Address, type Hex } from 'viem';
-import { countersignAccountAbi } from '@countersign/chain';
+import { countersignAccountAbi, ownerGas } from '@countersign/chain';
 import { accountDomain, ownerActionTypes } from '@countersign/shared';
 import { Store } from '../../src/db/store.js';
 import type { Database } from '../../src/db/client.js';
@@ -31,6 +31,7 @@ beforeEach(async () => {
   ({ chain, sent } = fake);
   deps = { ...fake.deps, store, chain };
   chain.nonces.set(ACCOUNT.toLowerCase(), 7n);
+  chain.ownerKeys.set(ACCOUNT.toLowerCase(), { qx: owner.qx, qy: owner.qy });
 });
 
 const browser = (digest: Hex) => {
@@ -125,5 +126,69 @@ describe('the stop button: pause and unpause with the owner’s passkey', () => 
       await refusal(setPaused(deps, ACCOUNT, 'pause', view.actions.pause?.deadline ?? 0, ok)),
     ).toMatchObject({ status: 422, code: 'invalid_passkey' });
     expect(sent).toHaveLength(0);
+  });
+});
+
+describe('several approvers (D36): one owner pauses; unpausing needs the manage threshold', () => {
+  const second = SoftPasskey.fromScalar(`0x${'88'.repeat(32)}`);
+  const by = (p: SoftPasskey, digest: Hex) => {
+    const a = p.sign(digest);
+    return {
+      authenticatorData: a.authenticatorData,
+      clientDataJSON: a.clientDataJSON,
+      signature: { r: a.r, s: a.s },
+    };
+  };
+  const signersOf = (data: Hex) => {
+    const { args } = decodeFunctionData({ abi: countersignAccountAbi, data });
+    return (args.at(-1) as readonly { owner: number }[]).map((s) => s.owner);
+  };
+
+  beforeEach(() => {
+    chain.extraOwners.set(ACCOUNT.toLowerCase(), [{ qx: second.qx, qy: second.qy }]);
+    chain.thresholds.set(ACCOUNT.toLowerCase(), { manage: 2, release: 2 });
+  });
+
+  it('shows the owners and the thresholds', async () => {
+    const v = await ownerView(deps, ACCOUNT);
+    expect(v.owners).toEqual([
+      { owner: 0, qx: owner.qx, qy: owner.qy },
+      { owner: 1, qx: second.qx, qy: second.qy },
+    ]);
+    expect(v).toMatchObject({ manage: 2, release: 2 });
+  });
+
+  it('pauses with any one owner’s passkey', async () => {
+    const a = (await ownerView(deps, ACCOUNT)).actions.pause;
+    expect(a?.signatures).toEqual({ need: 1, signed: [] });
+    await setPaused(deps, ACCOUNT, 'pause', a?.deadline ?? 0, by(second, a?.challenge ?? '0x'));
+    expect(chain.pausedAccounts.has(ACCOUNT.toLowerCase())).toBe(true);
+    expect(sent.map((t) => signersOf(t.data))).toEqual([[1]]);
+  });
+
+  it('unpauses once two owners sign the same challenge, with a day to do it', async () => {
+    chain.pausedAccounts.add(ACCOUNT.toLowerCase());
+    const now = Date.now();
+    const a = (await ownerView(deps, ACCOUNT, now)).actions.unpause;
+    if (!a) throw new Error('no unpause offered');
+    expect(a.deadline).toBeGreaterThan(Math.floor(now / 1000) + 23 * 3_600);
+    expect(a.signatures).toEqual({ need: 2, signed: [] });
+
+    const waiting = await setPaused(deps, ACCOUNT, 'unpause', a.deadline, by(owner, a.challenge));
+    expect(sent).toHaveLength(0);
+    expect(waiting.paused).toBe(true);
+    expect(waiting.actions.unpause).toMatchObject({
+      challenge: a.challenge,
+      deadline: a.deadline,
+      signatures: { need: 2, signed: [0] },
+    });
+
+    // An hour later the second owner opens it: the same challenge, still one signature short.
+    const later = (await ownerView(deps, ACCOUNT, now + 3_600_000)).actions.unpause;
+    expect(later?.challenge).toBe(a.challenge);
+    const done = await setPaused(deps, ACCOUNT, 'unpause', a.deadline, by(second, a.challenge));
+    expect(done.paused).toBe(false);
+    expect(sent.map((t) => signersOf(t.data))).toEqual([[0, 1]]);
+    expect(sent[0]?.gas).toBe(ownerGas('unpause', 2));
   });
 });

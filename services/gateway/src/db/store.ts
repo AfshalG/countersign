@@ -12,6 +12,7 @@ import {
   agents,
   demoAccounts,
   orders,
+  ownerSignatures,
   paymentEvents,
   relayerTxs,
   paymentRequests,
@@ -22,6 +23,7 @@ import {
   type DemoAccountRow,
   type DemoStatus,
   type OrderRow,
+  type OwnerSignatureRow,
   type RelayerTxRow,
   type PaymentRequestRow,
   type ProposalRow,
@@ -590,5 +592,54 @@ export class Store {
       .where(and(eq(proposals.id, id), eq(proposals.status, 'pending')))
       .returning();
     return row;
+  }
+
+  // ---------- owners' signatures (D36) ----------
+
+  /** Keeps one owner's assertion for an action; the same owner signing again changes nothing. */
+  async addOwnerSignature(row: {
+    digest: Hex;
+    qx: Hex;
+    qy: Hex;
+    account: Address;
+    purpose: string;
+    auth: unknown;
+    detail?: unknown;
+  }): Promise<void> {
+    await this.db
+      .insert(ownerSignatures)
+      .values({
+        digest: row.digest.toLowerCase(),
+        qx: row.qx.toLowerCase(),
+        qy: row.qy.toLowerCase(),
+        account: row.account.toLowerCase(),
+        purpose: row.purpose,
+        auth: row.auth,
+        detail: row.detail ?? null,
+      })
+      .onConflictDoNothing();
+  }
+
+  /** Every assertion gathered for this action, oldest first. */
+  async ownerSignatures(digest: Hex): Promise<OwnerSignatureRow[]> {
+    return this.db
+      .select()
+      .from(ownerSignatures)
+      .where(eq(ownerSignatures.digest, digest.toLowerCase()))
+      .orderBy(asc(ownerSignatures.createdAt));
+  }
+
+  /** Assertions gathered for an account's actions of one kind (pending unpause, owner changes). */
+  async ownerSignaturesFor(account: Address, purpose: string): Promise<OwnerSignatureRow[]> {
+    return this.db
+      .select()
+      .from(ownerSignatures)
+      .where(
+        and(
+          eq(ownerSignatures.account, account.toLowerCase()),
+          eq(ownerSignatures.purpose, purpose),
+        ),
+      )
+      .orderBy(asc(ownerSignatures.createdAt));
   }
 }

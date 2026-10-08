@@ -66,6 +66,16 @@ const ownerCases = {
   Withdraw: { to: A4, amount: 400_000n, nonce: NONCE, deadline: DEADLINE },
   Pause: { nonce: NONCE, deadline: DEADLINE },
   Unpause: { nonce: NONCE, deadline: DEADLINE },
+  SetOwners: {
+    owners: [
+      { qx: k('owner-1-x'), qy: k('owner-1-y') },
+      { qx: k('owner-2-x'), qy: k('owner-2-y') },
+    ],
+    manage: 2,
+    release: 1,
+    nonce: NONCE,
+    deadline: DEADLINE,
+  },
 } as const;
 
 describe('EIP-712 types hash exactly as the contracts do', () => {

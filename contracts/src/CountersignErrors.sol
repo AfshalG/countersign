@@ -7,6 +7,15 @@ pragma solidity ^0.8.24;
 // --- owner actions ---
 error InvalidOwnerKey();
 error InvalidOwnerSignature();
+/// Fewer owners signed than the action needs (D36).
+error NotEnoughSigners();
+/// Owner signatures must come in strictly increasing owner order: none counts twice.
+error OwnersOutOfOrder();
+/// A signature names an owner the account does not have.
+error UnknownOwner();
+/// An owner set that cannot work: none, more than five, a key twice, or a threshold of zero
+/// or above the number of owners.
+error InvalidOwners();
 error BadNonce();
 error DeadlinePassed();
 error InvalidPolicy();

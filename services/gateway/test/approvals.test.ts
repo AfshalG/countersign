@@ -271,3 +271,65 @@ describe('POST /v1/approvals/{id} (the owner decides with the passkey)', () => {
     expect(res.headers.get('access-control-allow-methods')).toContain('POST');
   });
 });
+
+describe('several approvers (D36): a held payment needs the release threshold', () => {
+  const alice = owner;
+  const bob = SoftPasskey.fromScalar(`0x${'44'.repeat(32)}`);
+  const stranger = SoftPasskey.fromScalar(`0x${'55'.repeat(32)}`);
+  const signedBy = (p: SoftPasskey, digest: Hex) => {
+    const a = p.sign(digest);
+    return {
+      authenticatorData: a.authenticatorData,
+      clientDataJSON: a.clientDataJSON,
+      signature: { r: a.r, s: a.s },
+    };
+  };
+  type Signatures = { need: number; signed: number[] };
+  const signaturesOf = (v: unknown, action: string) =>
+    (v as { actions: Record<string, { signatures?: Signatures }> }).actions[action]?.signatures;
+
+  beforeEach(() => {
+    chain.ownerKeys = [
+      { qx: alice.qx, qy: alice.qy },
+      { qx: bob.qx, qy: bob.qy },
+    ];
+    chain.manage = 2;
+    chain.release = 2;
+  });
+
+  it('pays once only when two owners have signed, in owner order, whoever signs first', async () => {
+    const id = await heldForAmount('INV-D36-1');
+    const before = await view(id);
+    expect(signaturesOf(before, 'pay_once')).toEqual({ need: 2, signed: [] });
+    const challenge = before.actions.pay_once?.challenge as Hex;
+
+    const first = await submit(id, { action: 'pay_once', assertion: signedBy(bob, challenge) });
+    expect(first.status).toBe(202);
+    expect(signaturesOf(await first.json(), 'pay_once')).toEqual({ need: 2, signed: [1] });
+    expect((await store.get(id))?.status).toBe('held');
+
+    const second = await submit(id, { action: 'pay_once', assertion: signedBy(alice, challenge) });
+    expect(second.status).toBe(200);
+    const row = await store.get(id);
+    expect(row?.status).toBe('released');
+    expect(row?.ownerAuth).toMatchObject([{ owner: 0 }, { owner: 1 }]);
+  });
+
+  it('lets any one owner refuse, whatever the thresholds', async () => {
+    const id = await heldForAmount('INV-D36-2');
+    expect(signaturesOf(await view(id), 'refuse')).toEqual({ need: 1, signed: [] });
+    const challenge = (await view(id)).actions.refuse?.challenge as Hex;
+    const res = await submit(id, { action: 'refuse', assertion: signedBy(bob, challenge) });
+    expect(res.status).toBe(200);
+    expect((await store.get(id))?.status).toBe('refused');
+  });
+
+  it('refuses a passkey that is not one of the owners’, and counts nothing', async () => {
+    const id = await heldForAmount('INV-D36-3');
+    const challenge = (await view(id)).actions.pay_once?.challenge as Hex;
+    const res = await submit(id, { action: 'pay_once', assertion: signedBy(stranger, challenge) });
+    expect(res.status).toBe(422);
+    expect(await res.json()).toMatchObject({ error: 'invalid_passkey' });
+    expect(signaturesOf(await view(id), 'pay_once')).toEqual({ need: 2, signed: [] });
+  });
+});

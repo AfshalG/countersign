@@ -14,6 +14,8 @@ import type { Store } from '../db/store.js';
 import { paymentOf } from '../payment.js';
 import { HEADLINE } from './status-page.js';
 import { AssertionError, fromBrowser } from './webauthn.js';
+import { ownerSigOf, storedSigs } from '../owner/signers.js';
+import { collect, progress } from '../owner/collect.js';
 import {
   approveProposal,
   proposalApprovalView,
@@ -31,7 +33,8 @@ import { OwnerActionError } from '../owner/send.js';
 
 export type DecisionDeps = {
   store: Store;
-  chain: Pick<Chain, 'simulate' | 'verifyOwnerDecision'>;
+  chain: Pick<Chain, 'simulate' | 'verifyOwnerDecision' | 'ownership'>;
+  chainId: number;
 };
 
 type Refused = {
@@ -39,14 +42,18 @@ type Refused = {
   status: 404 | 409 | 422;
   body: { error: string; status?: string; reason?: string; contract?: string };
 };
-export type DecisionResult = { ok: true; row: PaymentRequestRow } | Refused;
+/** Decided, or (D36) the passkey counted and the action waits for more owners: `waiting`. */
+export type DecisionResult =
+  { ok: true; row: PaymentRequestRow; waiting?: { need: number; signed: number[] } } | Refused;
 
-/** Stored as JSON: bigints as strings. */
-export const storedAuth = (a: WebAuthnAuth) => ({
-  ...a,
-  challengeIndex: a.challengeIndex.toString(),
-  typeIndex: a.typeIndex.toString(),
-});
+/** The digest an owner signs to pay a held payment once: the vault's EIP-712 Payment. */
+const paymentDigest = (row: PaymentRequestRow, chainId: number) =>
+  hashTypedData({
+    domain: vaultDomain(chainId, row.vault as Hex),
+    types: paymentTypes,
+    primaryType: 'Payment',
+    message: paymentOf(row),
+  });
 
 async function heldRow(store: Store, id: string): Promise<PaymentRequestRow | Refused> {
   const row = await store.get(id);
@@ -61,7 +68,10 @@ async function after(store: Store, id: string): Promise<DecisionResult> {
   return row ? { ok: true, row } : { ok: false, status: 404, body: { error: 'unknown_request' } };
 }
 
-/** Pays a held payment once, through `payWithOwner`, if the vault accepts the owner's passkey. */
+/**
+ * Pays a held payment once, through `payWithOwner`, once as many owners as the account's release
+ * threshold have signed (D36; one for most accounts) and the vault accepts their passkeys.
+ */
 export async function payOnce(
   deps: DecisionDeps,
   id: string,
@@ -69,9 +79,25 @@ export async function payOnce(
 ): Promise<DecisionResult> {
   const row = await heldRow(deps.store, id);
   if ('ok' in row) return row;
+  let collected;
+  try {
+    collected = await collect(deps, {
+      account: row.account as Address,
+      digest: paymentDigest(row, deps.chainId),
+      auth,
+      threshold: 'release',
+      purpose: `pay_once:${row.id}`,
+    });
+  } catch (e) {
+    if (!(e instanceof OwnerActionError)) throw e;
+    return { ok: false, status: 422, body: { error: e.code } };
+  }
+  if (!collected.ready)
+    return { ok: true, row, waiting: { need: collected.need, signed: collected.signed } };
+  const sigs = collected.sigs;
   const refusal = await deps.chain.simulate(row.vault as Address, paymentOf(row), {
     kind: 'payWithOwner',
-    ownerAuth: auth,
+    ownerSigs: sigs,
   });
   if (refusal?.error === 'InvalidOwnerSignature')
     return { ok: false, status: 422, body: { error: 'invalid_passkey' } };
@@ -82,7 +108,7 @@ export async function payOnce(
       body: { error: 'contract_refuses', reason: refusal.reason, contract: refusal.error },
     };
   const moved = await deps.store.transition(row.id, 'held', 'released', {
-    ownerAuth: storedAuth(auth),
+    ownerAuth: storedSigs(sigs),
     decidedBy: 'user_once',
     decidedAt: new Date(),
   });
@@ -104,13 +130,14 @@ export async function refuseHeld(
     outcome: OUTCOME.refused,
     ...decision,
   };
-  if (!(await deps.chain.verifyOwnerDecision(row.vault as Address, signed, auth)))
+  const sig = await ownerSigOf(deps.chain, row.account as Address, auth);
+  if (!sig || !(await deps.chain.verifyOwnerDecision(row.vault as Address, signed, [sig])))
     return { ok: false, status: 422, body: { error: 'invalid_passkey' } };
   const moved = await deps.store.transition(row.id, 'held', 'refused', {
     reason: 'user_refused',
     decidedBy: 'user_refused',
     decidedAt: new Date(),
-    ownerAuth: storedAuth(auth),
+    ownerAuth: storedSigs([sig]),
     detail: { decision },
   });
   if (!moved) return { ok: false, status: 409, body: { error: 'not_held' } };
@@ -137,6 +164,15 @@ const typedAction = z.object({
     .string()
     .optional()
     .openapi({ description: 'What signing this does, in plain words (proposals)' }),
+  signatures: z
+    .object({
+      need: z.number().int().openapi({ description: 'Owners whose passkeys this action needs' }),
+      signed: z
+        .array(z.number().int())
+        .openapi({ description: 'Owners (their index on the account) who have signed it' }),
+    })
+    .optional()
+    .openapi({ description: 'D36: "1 of 2 signed". Absent when the chain could not be read' }),
 });
 
 export const approvalView = z
@@ -236,6 +272,32 @@ export function paymentApproval(
   };
 }
 
+/**
+ * The payment's view with what each action still needs (D36): pay once needs the release
+ * threshold, refusing any one owner. If the chain cannot be read, the view goes without it.
+ */
+export async function paymentApprovalView(
+  deps: DecisionDeps,
+  row: PaymentRequestRow,
+  publicUrl: string,
+): Promise<z.infer<typeof approvalView>> {
+  const v = paymentApproval(row, deps.chainId, publicUrl);
+  try {
+    const account = row.account as Address;
+    for (const [key, action] of Object.entries(v.actions)) {
+      action.signatures = await progress(
+        deps,
+        account,
+        action.challenge as Hex,
+        key === 'pay_once' ? 'release' : 'one',
+      );
+    }
+  } catch (e) {
+    console.error(`approval signatures: ${e instanceof Error ? e.message : String(e)}`);
+  }
+  return v;
+}
+
 /** A proposal's view; approving it on chain (setSupplier, approveOrder) is Slice 9 part 2. */
 export function proposalApproval(p: ProposalRow, publicUrl: string): z.infer<typeof approvalView> {
   return {
@@ -324,6 +386,10 @@ const decide = createRoute({
   },
   responses: {
     200: json(approvalView, 'Decided; a paid-once payment settles like any other'),
+    202: json(
+      approvalView,
+      'Counted: the action waits for more owners’ passkeys (D36); `signatures` says how many',
+    ),
     400: json(apiError, 'malformed or malformed_assertion'),
     404: json(apiError, 'unknown_request'),
     409: json(apiError, 'not_held, or contract_refuses'),
@@ -344,7 +410,7 @@ export function registerApprovalRoutes(
   app.openapi(getApproval, async (c) => {
     const id = c.req.valid('param').id;
     const row = await store.get(id);
-    if (row) return c.json(paymentApproval(row, chainId, publicUrl), 200);
+    if (row) return c.json(await paymentApprovalView(deps, row, publicUrl), 200);
     const proposal = await store.getProposal(id);
     if (!proposal) return c.json({ error: 'unknown_approval' }, 404);
     if (owner) {
@@ -371,7 +437,9 @@ export function registerApprovalRoutes(
         if (body.action === 'approve') {
           if (!body.assertions || Object.keys(body.assertions).length === 0)
             return c.json({ error: 'malformed', message: 'approve takes `assertions`' }, 400);
-          return c.json(await approveProposal(owner, id, body.assertions), 200);
+          const v = await approveProposal(owner, id, body.assertions);
+          // Still pending after approving: counted, waiting for more owners (D36).
+          return c.json(v, v.status === 'pending' ? 202 : 200);
         }
         if (!body.assertion)
           return c.json({ error: 'malformed', message: 'refuse takes `assertion`' }, 400);
@@ -411,7 +479,11 @@ export function registerApprovalRoutes(
       body.action === 'pay_once'
         ? await payOnce(deps, id, auth)
         : await refuseHeld(deps, id, auth, refusalOf(row));
-    if (result.ok) return c.json(paymentApproval(result.row, chainId, publicUrl), 200);
+    if (result.ok)
+      return c.json(
+        await paymentApprovalView(deps, result.row, publicUrl),
+        result.waiting ? 202 : 200,
+      );
     switch (result.status) {
       case 404:
         return c.json(result.body, 404);

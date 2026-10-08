@@ -7,7 +7,7 @@ import {AccountFactory} from "../../src/AccountFactory.sol";
 import {CountersignAccount} from "../../src/CountersignAccount.sol";
 import {OrderVault} from "../../src/OrderVault.sol";
 import {OwnerAuth} from "../../src/libraries/OwnerAuth.sol";
-import {Policy, Payment, Decision} from "../../src/CountersignTypes.sol";
+import {Policy, Payment, Decision, OwnerSig} from "../../src/CountersignTypes.sol";
 import {PasskeySigner} from "./PasskeySigner.sol";
 import {TestUSDC} from "./TestUSDC.sol";
 
@@ -70,8 +70,8 @@ abstract contract Base is Test {
         return uint64(vm.getBlockTimestamp() + 1 hours);
     }
 
-    function _ownerSign(bytes32 structHash) internal view returns (WebAuthn.WebAuthnAuth memory) {
-        return PasskeySigner.sign(OWNER_PK, account.ownerDigest(structHash));
+    function _ownerSign(bytes32 structHash) internal view returns (OwnerSig[] memory) {
+        return PasskeySigner.one(OWNER_PK, account.ownerDigest(structHash));
     }
 
     function defaultPolicy() internal view returns (Policy memory) {
@@ -89,7 +89,7 @@ abstract contract Base is Test {
     function _setPolicy(Policy memory p) internal {
         uint256 n = account.ownerNonce();
         uint64 dl = _deadline();
-        WebAuthn.WebAuthnAuth memory auth = _ownerSign(OwnerAuth.setPolicyHash(p, n, dl));
+        OwnerSig[] memory auth = _ownerSign(OwnerAuth.setPolicyHash(p, n, dl));
         _arm();
         account.setPolicy(p, n, dl, auth);
     }
@@ -98,7 +98,7 @@ abstract contract Base is Test {
         uint256 n = account.ownerNonce();
         uint64 dl = _deadline();
         bytes32 proof = bytes32(0);
-        WebAuthn.WebAuthnAuth memory auth = _ownerSign(OwnerAuth.setSupplierHash(id, payTo, active, proof, n, dl));
+        OwnerSig[] memory auth = _ownerSign(OwnerAuth.setSupplierHash(id, payTo, active, proof, n, dl));
         _arm();
         account.setSupplier(id, payTo, active, proof, n, dl, auth);
     }
@@ -109,7 +109,7 @@ abstract contract Base is Test {
     {
         uint256 n = account.ownerNonce();
         uint64 dl = _deadline();
-        WebAuthn.WebAuthnAuth memory auth =
+        OwnerSig[] memory auth =
             _ownerSign(OwnerAuth.approveOrderHash(orderId, supplierId, ORDER_HASH, amount, expiry, n, dl));
         _arm();
         return OrderVault(account.approveOrder(orderId, supplierId, ORDER_HASH, amount, expiry, n, dl, auth));
@@ -118,7 +118,7 @@ abstract contract Base is Test {
     function _closeOrder(bytes32 orderId) internal returns (uint256) {
         uint256 n = account.ownerNonce();
         uint64 dl = _deadline();
-        WebAuthn.WebAuthnAuth memory auth = _ownerSign(OwnerAuth.closeOrderHash(orderId, n, dl));
+        OwnerSig[] memory auth = _ownerSign(OwnerAuth.closeOrderHash(orderId, n, dl));
         _arm();
         return account.closeOrder(orderId, n, dl, auth);
     }
@@ -126,7 +126,7 @@ abstract contract Base is Test {
     function _withdraw(address to, uint256 amount) internal {
         uint256 n = account.ownerNonce();
         uint64 dl = _deadline();
-        WebAuthn.WebAuthnAuth memory auth = _ownerSign(OwnerAuth.withdrawHash(to, amount, n, dl));
+        OwnerSig[] memory auth = _ownerSign(OwnerAuth.withdrawHash(to, amount, n, dl));
         _arm();
         account.withdraw(to, amount, n, dl, auth);
     }
@@ -134,7 +134,7 @@ abstract contract Base is Test {
     function _pause() internal {
         uint256 n = account.ownerNonce();
         uint64 dl = _deadline();
-        WebAuthn.WebAuthnAuth memory auth = _ownerSign(OwnerAuth.pauseHash(n, dl));
+        OwnerSig[] memory auth = _ownerSign(OwnerAuth.pauseHash(n, dl));
         _arm();
         account.pause(n, dl, auth);
     }
@@ -142,7 +142,7 @@ abstract contract Base is Test {
     function _unpause() internal {
         uint256 n = account.ownerNonce();
         uint64 dl = _deadline();
-        WebAuthn.WebAuthnAuth memory auth = _ownerSign(OwnerAuth.unpauseHash(n, dl));
+        OwnerSig[] memory auth = _ownerSign(OwnerAuth.unpauseHash(n, dl));
         _arm();
         account.unpause(n, dl, auth);
     }

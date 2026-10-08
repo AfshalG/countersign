@@ -9,7 +9,7 @@ import {
 } from 'viem';
 import { countersignAccountAbi } from '@countersign/chain';
 import { accountDomain, formatUsdc, ownerActionTypes } from '@countersign/shared';
-import type { WebAuthnAuth } from '../chain/types.js';
+import type { OwnerSig } from '../chain/types.js';
 
 /**
  * Judge mode (Slice 9 part 4, D35): an account for a new passkey, set up so that person can try
@@ -192,13 +192,13 @@ export function setupAction(chainId: number, account: Address, p: DemoPlan, inde
 }
 
 /** The account call for one setup action, signed with the passkey. */
-export function setupCall(p: DemoPlan, index: SetupIndex, auth: WebAuthnAuth): Hex {
+export function setupCall(p: DemoPlan, index: SetupIndex, sigs: OwnerSig[]): Hex {
   const nonce = BigInt(index);
   if (index === 0)
     return encodeFunctionData({
       abi: countersignAccountAbi,
       functionName: 'setPolicy',
-      args: [p.policy, nonce, p.deadline, auth],
+      args: [p.policy, nonce, p.deadline, sigs],
     });
   if (index === 1)
     return encodeFunctionData({
@@ -211,7 +211,7 @@ export function setupCall(p: DemoPlan, index: SetupIndex, auth: WebAuthnAuth): H
         p.supplier.proofHash,
         nonce,
         p.deadline,
-        auth,
+        sigs,
       ],
     });
   return encodeFunctionData({
@@ -225,7 +225,7 @@ export function setupCall(p: DemoPlan, index: SetupIndex, auth: WebAuthnAuth): H
       p.order.expiry,
       nonce,
       p.deadline,
-      auth,
+      sigs,
     ],
   });
 }

@@ -21,7 +21,7 @@ const env = loadEnv(
   }),
 );
 const gateway = process.argv[2] ?? 'https://gateway-production-e17a.up.railway.app';
-const ACCOUNT = '0xE890B35be32F04032B502Dc4Dc2db8062aD6d603';
+const ACCOUNT = '0xC127e7Dbc29d0d38Be3b2e557ce7d796bd2403A9';
 
 const cs = new Countersign({
   gateway,

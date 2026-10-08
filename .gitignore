@@ -17,6 +17,8 @@ contracts/out/
 contracts/cache/
 contracts/dependencies/
 contracts/broadcast/*/31337/
+# forge script simulations (rehearsals): only real broadcasts are kept as evidence
+contracts/broadcast/**/dry-run/
 
 # Tests
 playwright-report/

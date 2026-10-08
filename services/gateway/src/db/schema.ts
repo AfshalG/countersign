@@ -7,6 +7,7 @@ import {
   jsonb,
   numeric,
   pgTable,
+  primaryKey,
   text,
   timestamp,
 } from 'drizzle-orm/pg-core';
@@ -207,5 +208,31 @@ export type AccountRow = typeof accounts.$inferSelect;
 export type OrderRow = typeof orders.$inferSelect;
 export type ProposalRow = typeof proposals.$inferSelect;
 export type DemoAccountRow = typeof demoAccounts.$inferSelect;
+/**
+ * Owners' passkey assertions gathered for one owner action until the account's threshold is met
+ * (D36). Keyed by the digest signed (the action itself: its nonce and deadline, or the payment)
+ * and the owner's key, not their index, since `setOwners` can renumber owners. `detail` is what
+ * another owner needs to rebuild the same challenge (an unpause's deadline, an owner change's
+ * keys). An action exists here only once a real owner has signed it.
+ */
+export const ownerSignatures = pgTable(
+  'owner_signatures',
+  {
+    digest: text('digest').notNull(),
+    qx: text('qx').notNull(),
+    qy: text('qy').notNull(),
+    account: text('account').notNull(),
+    purpose: text('purpose').notNull(),
+    auth: jsonb('auth').notNull(),
+    detail: jsonb('detail'),
+    createdAt: at('created_at').notNull().defaultNow(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.digest, t.qx, t.qy] }),
+    index('owner_signatures_account_idx').on(t.account, t.purpose),
+  ],
+);
+
+export type OwnerSignatureRow = typeof ownerSignatures.$inferSelect;
 export type RelayerTxRow = typeof relayerTxs.$inferSelect;
 export type AgentRow = typeof agents.$inferSelect;

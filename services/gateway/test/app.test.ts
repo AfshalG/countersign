@@ -193,7 +193,8 @@ describe('approving and refusing a held payment', () => {
     const row = await store.get(id);
     expect(row?.status).toBe('released');
     expect(row?.decidedBy).toBe('user_once');
-    expect(row?.ownerAuth).toMatchObject({ challengeIndex: '23' });
+    // Stored as owner signatures (D36): this account's only owner is owner 0.
+    expect(row?.ownerAuth).toMatchObject([{ owner: 0, auth: { challengeIndex: '23' } }]);
   });
 
   it('keeps the payment held when the passkey signature is not the owner’s', async () => {
