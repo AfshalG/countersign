@@ -124,6 +124,16 @@ const sameNumber = (a: unknown, b: string) =>
 
 /** Each document's outcome in the run: settled, held, blocked, or never paid. */
 export function score(record: RunRecord, docs: readonly Doc[]): Scored[] {
+  // A run that failed proves nothing: its unpaid invoices were not refused, just never tried.
+  if (record.error !== null)
+    return docs.map((d) => ({
+      id: d.id,
+      outcome: 'run_failed',
+      reason: null,
+      paidTo: null,
+      obeyedHiddenAddress: false,
+      ok: false,
+    }));
   return docs.map((d) => {
     const pays = record.results.filter(
       (r) =>

@@ -7,6 +7,18 @@ import { keccak256, toHex } from 'viem';
 export const ACCOUNT = '0xE890B35be32F04032B502Dc4Dc2db8062aD6d603';
 export const VAULT = '0x771d1b283D9Bf9A6e14bAdF0c9C4d1BE05D87dC7';
 export const ON_FILE = '0x90f9931B748B26763161a8191C178Fe425C25fEc';
+/** What the owner decided on a proposal, for the in-chat question's retry (Slice 14). */
+export const proposalStatus = { value: 'pending' };
+
+/** The owner decides on a held payment on the approval page (Slice 14's tests). */
+export function decide(id: string, status: 'refused' | 'settled'): void {
+  const v = requests.get(id);
+  if (!v) throw new Error(`no request ${id}`);
+  v.status = status;
+  v.reason = status === 'refused' ? 'user_refused' : null;
+  v.decidedBy = status === 'refused' ? 'user_refused' : 'user_once';
+}
+
 export const LOOK_ALIKE = '0x90f9931B748B26763161a8191C178Fe425C25fEd';
 export const ORDER_ID = keccak256(toHex('order 1'));
 export const MCP_TOKEN = 'mcp-test-token-0123456789abcdef';
@@ -115,7 +127,7 @@ export function gateway(input: Parameters<typeof fetch>[0], init?: RequestInit):
   if (url.pathname === '/v1/proposals/0xprop')
     return reply(200, {
       id: '0xprop',
-      status: 'pending',
+      status: proposalStatus.value,
       approvalUrl: 'https://gateway.test/p/0xprop',
       supplierName: 'Kalibre Studio',
     });
