@@ -10,6 +10,7 @@ import {
   primaryKey,
   text,
   timestamp,
+  uniqueIndex,
 } from 'drizzle-orm/pg-core';
 import type { DecidedBy, PaymentStatus, Reason } from '@countersign/shared';
 
@@ -299,3 +300,20 @@ export const whatsappMessages = pgTable(
 
 export type WhatsappContactRow = typeof whatsappContacts.$inferSelect;
 export type WhatsappMessageRow = typeof whatsappMessages.$inferSelect;
+
+/**
+ * Account tokens (Slice 12 part 2): a developer's test account calls the API with its own token,
+ * which is allowed only that account's routes. Only the SHA-256 is kept. `generation` counts the
+ * account's tokens and is in the challenge its owner signs, so one signature makes one token.
+ */
+export const apiTokens = pgTable(
+  'api_tokens',
+  {
+    tokenHash: text('token_hash').primaryKey(),
+    account: text('account').notNull(),
+    generation: integer('generation').notNull(),
+    createdAt: at('created_at').notNull().defaultNow(),
+    revokedAt: at('revoked_at'),
+  },
+  (t) => [uniqueIndex('api_tokens_generation_idx').on(t.account, t.generation)],
+);

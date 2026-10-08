@@ -10,7 +10,7 @@ import {
   setUpDemoAccount,
   type DemoDeps,
 } from '../../src/demo/accounts.js';
-import { DEMO_FUNDING, demoPlan, setupAction } from '../../src/demo/plan.js';
+import { DEMO_FUNDING, DEMO_SALT, demoPlan, setupAction } from '../../src/demo/plan.js';
 import { SoftPasskey } from '../../scripts/passkey.js';
 import { freshDatabase, truncate } from '../db/helpers.js';
 import { AGENT, CHAIN_ID, CHECKER, demoDeps, FACTORY, type FakeDemoChain } from './fakes.js';
@@ -90,7 +90,7 @@ describe('judge mode: an account for a new passkey', () => {
   });
 
   it('finishes after a crash without repeating a step (created, not yet funded)', async () => {
-    const account = await chain.predictAccount(key.qx, key.qy);
+    const account = await chain.predictAccount(key.qx, key.qy, 0n, DEMO_SALT);
     await store.createDemoAccount({
       account,
       ...key,
@@ -117,7 +117,9 @@ describe('judge mode: an account for a new passkey', () => {
       code: 'invalid_public_key',
     });
     expect(sent).toHaveLength(0);
-    expect(await store.getDemoAccount(await chain.predictAccount(key.qx, key.qy))).toBeUndefined();
+    expect(
+      await store.getDemoAccount(await chain.predictAccount(key.qx, key.qy, 0n, DEMO_SALT)),
+    ).toBeUndefined();
   });
 
   it('never reports a transaction that landed as lost: a timed-out wait asks the chain', async () => {
@@ -203,7 +205,7 @@ describe('judge mode: setting the account up with its passkey', () => {
 
   it('says so for an unknown account, and for one still being created', async () => {
     expect(await refusal(setUpDemoAccount(deps, FACTORY, []))).toMatchObject({ status: 404 });
-    const account = await chain.predictAccount(key.qx, key.qy);
+    const account = await chain.predictAccount(key.qx, key.qy, 0n, DEMO_SALT);
     await store.createDemoAccount({
       account,
       ...key,

@@ -10,6 +10,7 @@ import type { Db } from './client.js';
 import {
   accounts,
   agents,
+  apiTokens,
   demoAccounts,
   orders,
   ownerSignatures,
@@ -81,6 +82,8 @@ export class TransitionNotAllowed extends Error {
 export type StatusChange = {
   requestId: string;
   runId: string | null;
+  /** Whose request: the feed shows an account token only its own account (Slice 12 part 2). */
+  account: string;
   from: PaymentStatus | null;
   to: PaymentStatus;
   reason: Reason | null;
@@ -160,6 +163,7 @@ export class Store {
       this.emit({
         requestId: result.request.id,
         runId: result.request.runId,
+        account: result.request.account,
         from: null,
         to: 'requested',
         reason: null,
@@ -212,7 +216,11 @@ export class Store {
           updatedAt: new Date(),
         })
         .where(and(eq(paymentRequests.id, id), eq(paymentRequests.status, from)))
-        .returning({ id: paymentRequests.id, runId: paymentRequests.runId });
+        .returning({
+          id: paymentRequests.id,
+          runId: paymentRequests.runId,
+          account: paymentRequests.account,
+        });
       const row = updated[0];
       if (!row) return undefined;
       await tx.insert(paymentEvents).values({
@@ -222,10 +230,17 @@ export class Store {
         reason: reason ?? null,
         detail: detail ?? null,
       });
-      return { runId: row.runId };
+      return { runId: row.runId, account: row.account };
     });
     if (moved === undefined) return false;
-    this.emit({ requestId: id, runId: moved.runId, from, to, reason: reason ?? null });
+    this.emit({
+      requestId: id,
+      runId: moved.runId,
+      account: moved.account,
+      from,
+      to,
+      reason: reason ?? null,
+    });
     return true;
   }
 
@@ -879,5 +894,52 @@ export class Store {
       .from(whatsappMessages)
       .where(eq(whatsappMessages.subject, subject))
       .orderBy(asc(whatsappMessages.createdAt));
+  }
+
+  // ---------- account tokens (Slice 12 part 2) ----------
+
+  /** The generation the account's next token gets: how many it has had. */
+  async nextTokenGeneration(account: Address): Promise<number> {
+    const [row] = await this.db
+      .select({ n: count() })
+      .from(apiTokens)
+      .where(eq(apiTokens.account, account.toLowerCase()));
+    return row?.n ?? 0;
+  }
+
+  /**
+   * Stores a new token (its hash) and revokes the account's earlier ones, in one transaction.
+   * False if this generation already has a token: the signature that asked for it was used.
+   */
+  async issueApiToken(account: Address, tokenHash: string, generation: number): Promise<boolean> {
+    const owner = account.toLowerCase();
+    return this.db.transaction(async (tx) => {
+      const inserted = await tx
+        .insert(apiTokens)
+        .values({ tokenHash, account: owner, generation })
+        .onConflictDoNothing()
+        .returning({ tokenHash: apiTokens.tokenHash });
+      if (inserted.length === 0) return false;
+      await tx
+        .update(apiTokens)
+        .set({ revokedAt: new Date() })
+        .where(
+          and(
+            eq(apiTokens.account, owner),
+            isNull(apiTokens.revokedAt),
+            lt(apiTokens.generation, generation),
+          ),
+        );
+      return true;
+    });
+  }
+
+  /** The account a live token belongs to (lower case), or null. */
+  async apiTokenAccount(tokenHash: string): Promise<string | null> {
+    const [row] = await this.db
+      .select({ account: apiTokens.account })
+      .from(apiTokens)
+      .where(and(eq(apiTokens.tokenHash, tokenHash), isNull(apiTokens.revokedAt)));
+    return row?.account ?? null;
   }
 }
