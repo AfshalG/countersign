@@ -30,7 +30,9 @@ const invoiceInput = {
     .string()
     .max(20_000)
     .optional()
-    .describe('The invoice as read (text), for the checker'),
+    .describe(
+      'The invoice exactly as you read it: all of its text. The checker reads it itself and compares it with the order; without it, or if it differs from the fields above, the payment waits for the owner',
+    ),
 };
 
 const orderOut = z.object({

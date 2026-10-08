@@ -534,6 +534,28 @@ export class Store {
     return row;
   }
 
+  /**
+   * The approved proposal an order was opened from: its quote (the document whose hash is the
+   * order's `orderHash`) and its supplier's name, for the checker (Slice 10).
+   */
+  async approvedQuote(
+    account: string,
+    documentHash: string,
+  ): Promise<{ document: unknown; supplierName: string } | undefined> {
+    const [row] = await this.db
+      .select({ document: proposals.document, supplierName: proposals.supplierName })
+      .from(proposals)
+      .where(
+        and(
+          eq(proposals.account, account),
+          eq(proposals.documentHash, documentHash),
+          eq(proposals.status, 'approved'),
+        ),
+      )
+      .limit(1);
+    return row;
+  }
+
   /** The suppliers an account's owner approved through proposals, by name. */
   async approvedSupplierNames(account: string): Promise<string[]> {
     const rows = await this.db

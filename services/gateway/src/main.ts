@@ -1,10 +1,11 @@
 import { serve } from '@hono/node-server';
 import { formatEther, type Address } from 'viem';
-import { privateKeyToAccount, privateKeyToAddress } from 'viem/accounts';
+import { privateKeyToAccount } from 'viem/accounts';
 import { deployments, ENDPOINTS } from '@countersign/chain';
 import { IDENTITY_REGISTRY_TESTNET, REASONS, type Reason } from '@countersign/shared';
 import { createApp } from './app.js';
-import { TestChecker } from './checker.js';
+import { TestChecker, type Checker } from './checker.js';
+import { RemoteChecker, orderFacts } from './checker-remote.js';
 import { FinalityTracker } from './chain/finality.js';
 import { OrderIndexer } from './chain/indexer.js';
 import { MonadClient } from './chain/monad.js';
@@ -13,17 +14,17 @@ import { Store } from './db/store.js';
 import { RelayerPool } from './relay/pool.js';
 import { WalletFunder } from './demo/funder.js';
 import { AgentDirectory } from './agents/identity.js';
-import { judgeMode, loadSettings } from './settings.js';
+import { checkerMode, judgeMode, loadSettings } from './settings.js';
 import { Workers } from './workers.js';
 
 const settings = loadSettings();
 const chainId = settings.MONAD_CHAIN_ID;
 const judge = judgeMode(settings); // throws at start if only one of its keys is set
+const checking = checkerMode(settings); // likewise for the checker service's three settings
 
 /**
- * Until the checker service exists (Slice 10) the stand-in checker releases every payment, except
- * that a request whose document says `{ "testHold": "<reason>" }` is held with that reason, so a
- * hold can be exercised on testnet.
+ * Without the checker service (Slice 10) the stand-in checker releases every payment, except that
+ * a request whose document says `{ "testHold": "<reason>" }` is held with that reason.
  */
 function testHold(document: unknown): Reason | undefined {
   if (typeof document !== 'object' || document === null || !('testHold' in document))
@@ -64,9 +65,14 @@ const catchUp = () => {
     console.error(`indexer catch-up: ${e instanceof Error ? e.message : String(e)}`);
   });
 };
-const checker = new TestChecker(settings.TEST_CHECKER_PRIVATE_KEY, chainId, (input) =>
-  testHold(input.request.document),
-);
+const checker: Checker =
+  checking.kind === 'remote'
+    ? new RemoteChecker({
+        url: checking.url,
+        token: checking.token,
+        facts: (row) => orderFacts({ store, chain: monad }, row),
+      })
+    : new TestChecker(checking.key, chainId, (input) => testHold(input.request.document));
 const CHECKER_TIMEOUT_MS = 2_000;
 const workers = new Workers({
   store,
@@ -105,7 +111,7 @@ const demo = judge && {
   chainId,
   factory: deployments.accountFactory,
   agentKey: judge.agent,
-  checkerKey: privateKeyToAddress(settings.TEST_CHECKER_PRIVATE_KEY),
+  checkerKey: checking.address,
   perDay: judge.perDay,
   agentPrivateKey: judge.agentKey,
 };
@@ -157,6 +163,8 @@ const app = createApp({
     moves: pool.moves().length,
     // Wallets a node refused for low balance; their payments wait until they are topped up.
     starved: pool.starved(),
+    // Which checker decides: the service (Slice 10) or the stand-in.
+    checker: { kind: checking.kind, signer: checking.address },
   }),
 });
 const server = serve({ fetch: app.fetch, port: settings.PORT }, (info) => {

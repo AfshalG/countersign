@@ -117,7 +117,10 @@ export type Invoice = {
   amount: string | bigint;
   /** The payment address printed on the invoice. */
   payTo: Address;
-  /** What the checker reads: the invoice's text or fields. */
+  /**
+   * The invoice as the agent was given it, for the checker to read itself: `{ text }` (all of its
+   * text) or `{ html }` (the page). Without a document it can read, the payment waits for the owner.
+   */
   document?: unknown;
 };
 
