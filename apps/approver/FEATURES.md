@@ -43,8 +43,8 @@ What the owner sees when a payment is held: what it is, why it was held, the dif
 - Answers: `200` with the new status (`released`, then `settled` about a second later with `txHash`; or `refused`). `422 challenge_mismatch` (signed the other action), `422 invalid_passkey` (not the owner's passkey), `422 not_offered` (pay once on a changed address), `409 not_held` (already decided), `404`.
 - **Several owners (feature 8):** each action has `signatures: { need, signed }`. `pay_once` needs the account's release threshold (`need: 2` means two people); `refuse` always needs one. When this signature is not yet enough, the answer is `202` with the same view and `signed` now listing this owner: show "1 of 2 signed, waiting for another owner", and let them share the approval link. The second owner opens the same link and signs the same challenge.
 - After paying: poll `GET /v1/approvals/{id}` until `settled`, then link the transaction: `https://testnet.monadexplorer.com/tx/{txHash}`.
-- Sample (held, the invoice's address is not the one on file: `differences[]` filled, only `refuse` offered): `https://gateway-production-e17a.up.railway.app/v1/approvals/0xcfe2b4280875a01f90ea59c7d5d963b63594b8c0b9629ad4e453e9f20516625c`
-- Sample (held for its amount, address on file: `pay_once` and `refuse` offered): `…/v1/approvals/0xa5a1f6754338df015835ae6697e72a14217ac1b643cdbe8091b63c987baf7a0a`
+- Sample (held, the invoice's address is not the one on file: `differences[]` filled, only `refuse` offered): `https://gateway-production-e17a.up.railway.app/v1/approvals/0xc25803b4f8c7da43dcea7a4c702a372fad0f61afe1bb8c78ba9c24e2b26cf367`
+- Sample (held for its amount, address on file: `pay_once` and `refuse` offered): `…/v1/approvals/0xc4c8e89bf4019f8161394a7ee8f8342ea64f796e0e90b6d13155331f9152c6ab`
 - **Testing with your own phone:** the samples belong to the demo account, whose owner passkey is a test key, so your Face ID gets `422 invalid_passkey`. That is correct, and it proves the passkey check works. For your own phone end to end, create your own account (feature 7).
 
 ### 2. A proposed supplier and order (approve or refuse)
@@ -111,7 +111,7 @@ Anyone, a judge or you, gets their own testnet account from their phone's passke
    - `clean`: settles in about 1.7 s. Show the transaction.
    - `changed_address`: held, the invoice's address is a look-alike (same first six and last four characters as Kalibre's). Only **refuse** is offered: show both addresses in full so the difference is visible.
    - `amount_mismatch`: held; **pay once** or **refuse** with your own Face ID (feature 1's screen, on `approvalUrl`). Paid once, it settles about 1.4 s later. (Held by the stand-in checker until the real checker reads invoices, Slice 10.)
-   - `409 order_used_up` once the order has nothing left; `409 not_ready` before setup.
+   - `409 order_used_up` once the order has nothing left; `409 not_ready` before setup. Right after setup the order can take a few seconds to be indexed: the gateway waits up to 15 s, then answers `409 order_not_indexed` (try again shortly).
 
 ### 9. The stop button (pause and unpause)
 

@@ -220,4 +220,32 @@ describe('the SDK against the gateway', () => {
       txHash: null,
     });
   }, 30_000);
+
+  it('waits for an order set up a moment ago to be indexed, and says so if it is not', async () => {
+    const agent = (indexWaitMs: number) =>
+      sdkAgent({
+        request: (input, init) => app.request(input, init),
+        token: TOKEN,
+        agentKey: generatePrivateKey(),
+        chainId: CHAIN_ID,
+        indexWaitMs,
+      });
+    const later = keccak256(toHex('order set up just now'));
+    expect(await agent(0).pay(ACCOUNT, demoInvoice('clean', SUPPLIER), later)).toBe('not_indexed');
+    // The index catches up while the agent waits: then it pays from that order.
+    setTimeout(() => {
+      void store.upsertOrder({
+        vault: '0x7777777777777777777777777777777777777777',
+        account: ACCOUNT,
+        orderId: later,
+        supplierId: keccak256(toHex('kalibre-studio')),
+        orderHash: keccak256(toHex('demo order')),
+        amount: '5000',
+        expiry: Math.floor(Date.now() / 1000) + 86_400,
+        approvedBlock: 1_200,
+      });
+    }, 300);
+    const paid = await agent(5_000).pay(ACCOUNT, demoInvoice('clean', SUPPLIER), later);
+    expect(typeof paid).toBe('object');
+  }, 30_000);
 });

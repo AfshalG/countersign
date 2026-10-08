@@ -54,10 +54,24 @@ export type DemoPayment = {
   txHash: Hex | null;
 };
 
-/** Pays a demo invoice from an account's open order; 'no_open_order' when nothing is left. */
+/**
+ * Pays a demo invoice from an account's open order: 'no_open_order' when nothing is left, and
+ * 'not_indexed' when `orderId` (the account's demo order) is not in the gateway's index yet.
+ */
 export interface DemoAgent {
-  pay(account: Address, invoice: Invoice): Promise<DemoPayment | 'no_open_order'>;
+  pay(
+    account: Address,
+    invoice: Invoice,
+    orderId?: Hex,
+  ): Promise<DemoPayment | 'no_open_order' | 'not_indexed'>;
 }
+
+/**
+ * How long the agent waits for an order set up a moment ago: the index follows Monad's finalized
+ * blocks, so a judge who asks for an invoice right after setup would otherwise be told the order
+ * is used up (seen live, 7 Oct). Judge mode's indexing took up to 8.9 s after a fresh start.
+ */
+const INDEX_WAIT_MS = 15_000;
 
 /**
  * The hosted demo agent: our own SDK with the demo agent's key, calling this gateway's API
@@ -68,9 +82,10 @@ export function sdkAgent(options: {
   token: string;
   agentKey: Hex;
   chainId: number;
+  indexWaitMs?: number;
 }): DemoAgent {
   return {
-    async pay(account, invoice) {
+    async pay(account, invoice, orderId) {
       const cs = new Countersign({
         gateway: 'http://gateway.internal',
         token: options.token,
@@ -80,8 +95,16 @@ export function sdkAgent(options: {
         fetch: (input, init) =>
           Promise.resolve(options.request(input instanceof Request ? input : String(input), init)),
       });
-      const order = (await cs.orders()).find((o) => BigInt(o.remaining) >= 1_000n);
-      if (!order) return 'no_open_order';
+      const until = Date.now() + (options.indexWaitMs ?? INDEX_WAIT_MS);
+      let orders = await cs.orders();
+      const ours = () => orders.find((o) => o.orderId.toLowerCase() === orderId?.toLowerCase());
+      while (orderId !== undefined && !ours()) {
+        if (Date.now() >= until) return 'not_indexed';
+        await new Promise((r) => setTimeout(r, 500));
+        orders = await cs.orders();
+      }
+      const order = ours() ?? orders.find((o) => BigInt(o.remaining) >= 1_000n);
+      if (!order || BigInt(order.remaining) < 1_000n) return 'no_open_order';
       const r = await cs.pay({ order, invoice, wait: { timeoutMs: 15_000, pollMs: 300 } });
       return {
         id: r.id,
