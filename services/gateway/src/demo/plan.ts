@@ -75,6 +75,8 @@ function plan(input: {
   checkerKey: Address;
   now: number;
   ownAgent?: boolean;
+  /** The website proof Kalibre Studio's record names (Slice 15); zero without one. */
+  supplierProof?: Hex;
 }): DemoPlan {
   const month = BigInt(input.now + 30 * DAY);
   return {
@@ -87,7 +89,7 @@ function plan(input: {
       waitingPeriod: DEMO_WAITING_PERIOD,
       expiry: month,
     },
-    supplier: { ...KALIBRE, active: true, proofHash: zeroHash },
+    supplier: { ...KALIBRE, active: true, proofHash: input.supplierProof ?? zeroHash },
     order: {
       orderId: keccak256(stringToHex('demo order 001')),
       supplierId: KALIBRE.supplierId,
@@ -169,7 +171,7 @@ function messageOf(p: DemoPlan, index: SetupIndex) {
 
 const SUMMARY = (p: DemoPlan): Record<SetupIndex, string> => ({
   0: `Let ${p.ownAgent ? `your agent ${p.policy.agentKey}` : 'the demo agent'} pay up to ${formatUsdc(p.policy.perPaymentCap)} USDC per invoice, checked by Countersign`,
-  1: `Add Kalibre Studio as a supplier, paid only at ${p.supplier.payTo}`,
+  1: `Add Kalibre Studio as a supplier, paid only at ${p.supplier.payTo}${p.supplier.proofHash === zeroHash ? '' : ' (its own website lists it, proven on Monad)'}`,
   2: `Open an order with Kalibre Studio for ${formatUsdc(p.order.amount)} USDC`,
 });
 

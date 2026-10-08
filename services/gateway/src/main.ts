@@ -19,7 +19,8 @@ import { supplierNameOf } from './suppliers.js';
 import { WhatsAppApi } from './notify/whatsapp-api.js';
 import { WhatsAppNotifier } from './notify/whatsapp.js';
 import { Workers } from './workers.js';
-import { WebsiteProofs } from './proofs/website.js';
+import { KALIBRE_FILE, WebsiteProofs } from './proofs/website.js';
+import { KALIBRE } from './demo/plan.js';
 import { PrimusProver, registryRecorder } from './proofs/primus.js';
 
 const settings = loadSettings();
@@ -169,6 +170,7 @@ const demo = judge && {
   checkerKey: checking.address,
   perDay: judge.perDay,
   agentPrivateKey: judge.agentKey,
+  kalibreProof: () => websites.freshListing(KALIBRE_FILE, KALIBRE.payTo),
 };
 
 // The owner's passkey actions: approving proposals (Slice 9 part 2) and the stop button (part 3).

@@ -1,6 +1,7 @@
 import {
   encodeAbiParameters,
   getAddress,
+  zeroHash,
   isAddress,
   keccak256,
   stringToHex,
@@ -222,6 +223,24 @@ export class WebsiteProofs {
     if (latest.listed.toLowerCase() === row.payTo.toLowerCase()) return null;
     if (!(await this.deps.store.websiteListedBefore(url, row.payTo, latest.createdAt))) return null;
     return { url, listed: latest.listed, onFile: row.payTo, proofHash: latest.proofHash };
+  }
+
+  /**
+   * The latest proof that `url` lists `address`, if recorded within a day; zero otherwise (and a
+   * check starts, so the next caller has one). New accounts' demo supplier names it (Slice 15).
+   */
+  async freshListing(url: string, address: Address): Promise<Hex> {
+    const latest = await this.deps.store.latestProvenWebsiteProof(url);
+    const fresh =
+      latest?.proofHash &&
+      latest.signedAt &&
+      this.now() - latest.signedAt.getTime() < RECHECK_MS &&
+      latest.listed?.toLowerCase() === address.toLowerCase();
+    if (fresh) return latest.proofHash as Hex;
+    this.check(url).catch((e: unknown) => {
+      console.error(`website check ${url}: ${e instanceof Error ? e.message : String(e)}`);
+    });
+    return zeroHash;
   }
 
   /** The daily check (S15-8): every known supplier site whose last check is over a day old. */
