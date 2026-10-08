@@ -22,7 +22,8 @@
     "agent-run": "tsx scripts/agent-run.ts",
     "main-account-order": "tsx scripts/main-account-order.ts",
     "whatsapp-connect": "tsx scripts/whatsapp-connect.ts",
-    "whatsapp-template": "tsx scripts/whatsapp-template.ts"
+    "whatsapp-template": "tsx scripts/whatsapp-template.ts",
+    "proof-smoke": "tsx scripts/proof-smoke.ts"
   },
   "dependencies": {
     "@countersign/chain": "workspace:*",
