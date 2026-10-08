@@ -11,8 +11,8 @@ import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/cli
 import { pageText } from '@countersign/scripted-agent';
 
 process.loadEnvFile(new URL('../../../.env', import.meta.url));
-const token = process.env.MCP_SERVER_TOKEN;
-if (!token) throw new Error('set MCP_SERVER_TOKEN in the repo .env');
+const token = process.env.MCP_SERVER_TOKEN ?? '';
+if (token === '') throw new Error('set MCP_SERVER_TOKEN in the repo .env');
 const mcp = process.argv[2] ?? 'https://countersign-mcp.vercel.app/api/mcp';
 const site = 'https://countersign-supplier-demo.vercel.app';
 const ACCOUNT = '0xC127e7Dbc29d0d38Be3b2e557ce7d796bd2403A9';
