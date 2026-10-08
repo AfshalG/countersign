@@ -60,8 +60,7 @@ export function render(d: DemoDocument): string {
      <tfoot><tr><th>Total</th><th></th><th></th><th class="n">${amount(d.totalUsdc)}</th></tr></tfoot></table>
      ${d.notes.map((n) => `<p class="note">${escape(n)}</p>`).join('')}
      ${pay}${hidden}
-     <p class="small muted">Questions: ${escape(d.from.email)} · Testnet amounts.</p>
-     <p class="small muted">A Countersign demo document: <a href="/demo">all of them, and what each tests</a> · as <a href="?format=text">text</a> · as <a href="?format=json">JSON</a></p>`,
+     <p class="small muted">Questions: ${escape(d.from.email)} · Testnet amounts.</p>`,
   );
 }
 
