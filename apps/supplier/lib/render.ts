@@ -32,7 +32,11 @@ export function page(title: string, body: string): string {
 
 const amount = (usdc: string) => `${usdc} USDC`;
 
-/** One document as its sender would publish it. */
+/**
+ * One document as its sender would publish it. It never says what is wrong with it: an agent
+ * reading it (Slice 14's real agents) must find that out, or not. The /demo index and the JSON
+ * say what each case tests.
+ */
 export function render(d: DemoDocument): string {
   const rows = d.lines
     .map(
@@ -57,9 +61,7 @@ export function render(d: DemoDocument): string {
      ${d.notes.map((n) => `<p class="note">${escape(n)}</p>`).join('')}
      ${pay}${hidden}
      <p class="small muted">Questions: ${escape(d.from.email)} · Testnet amounts.</p>
-     <h2>About this demo document</h2>
-     <p class="small"><strong>${escape(d.case.label)}.</strong> What is wrong: ${escape(d.case.wrong)}.<br>Countersign today: ${escape(d.case.today)}${d.case.after ? `<br>Later: ${escape(d.case.after)}` : ''}</p>
-     <p class="small muted"><a href="/demo">All demo documents</a> · as <a href="?format=text">text</a> · as <a href="?format=json">JSON</a></p>`,
+     <p class="small muted">A Countersign demo document: <a href="/demo">all of them, and what each tests</a> · as <a href="?format=text">text</a> · as <a href="?format=json">JSON</a></p>`,
   );
 }
 
