@@ -123,7 +123,10 @@ for (let i = 0; i < ORDERS; i++) {
 }
 let orders: Order[] = [];
 for (let i = 0; i < 60 && orders.length < ORDERS; i++) {
-  orders = (await cs.orders()).filter((o) => BigInt(o.remaining) >= 1_000n);
+  // Only the run's own orders: the account's starter order holds 0.005 USDC, too little for a share.
+  orders = (await cs.orders()).filter(
+    (o) => BigInt(o.remaining) >= BigInt(Math.round(perOrder * 1e6)) - 1_000n,
+  );
   if (orders.length < ORDERS) await new Promise((r) => setTimeout(r, 1_000));
 }
 log(`${String(orders.length)} orders open, ${perOrder.toFixed(4)} USDC each`);

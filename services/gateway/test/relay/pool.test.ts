@@ -90,6 +90,19 @@ describe('relayer pool', () => {
   });
 
   it('sends each wallet’s transactions in nonce order, through one endpoint', async () => {
+    // Never stalls here: on a loaded CI machine a 150 ms stall can fire and re-send (correctly,
+    // tested below), which is not what this test is about.
+    pool.stop();
+    pool = new RelayerPool({
+      keys,
+      store,
+      sender,
+      chainId: 10143,
+      endpoints: 3,
+      stallMs: 60_000,
+      tickMs: 20,
+    });
+    await pool.start();
     const signed: Signed[] = [];
     for (let i = 0; i < 6; i++) {
       const s = await pool.sign({ to: VAULT, data: '0x12345678', gas: 266_000n });
@@ -106,6 +119,29 @@ describe('relayer pool', () => {
       expect(mine.map((x) => nonceOf(x.raw))).toEqual([0, 1, 2]);
       expect(new Set(mine.map((x) => x.endpoint)).size).toBe(1);
     }
+  });
+
+  it('moves a wallet whose oldest transaction keeps failing to send with a transient error (Slice 16)', async () => {
+    pool.stop();
+    pool = new RelayerPool({
+      keys: [key0],
+      store,
+      sender,
+      chainId: 10143,
+      endpoints: 3,
+      stallMs: 150,
+      tickMs: 20,
+    });
+    await pool.start();
+    // The wallet's endpoint answers every send with a transient error (rate limited, unreachable).
+    const stuckOn = pool.lanesView()[0]?.endpoint;
+    sender.reply = (endpoint) =>
+      endpoint === stuckOn ? { error: 'HTTP 429 rate limited', retry: true } : 'accepted';
+    const s = await pool.sign({ to: VAULT, data: '0x12345678', gas: 266_000n });
+    pool.enqueue(s);
+    await waitFor(() => sender.sent.some((x) => x.endpoint !== stuckOn && x.raw === s.raw), 3_000);
+    expect(pool.moves().length).toBeGreaterThan(0);
+    expect(pool.lanesView()[0]?.endpoint).not.toBe(stuckOn);
   });
 
   it('moves a stalled wallet to the next endpoint and re-sends its pending transactions in order', async () => {

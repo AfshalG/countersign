@@ -252,6 +252,8 @@ const app = createApp({
       })),
     ),
     moves: pool.moves().length,
+    // Slice 16: each wallet's lane (a stuck one shows its head nonce and why).
+    lanes: pool.lanesView(),
     // Wallets a node refused for low balance; their payments wait until they are topped up.
     starved: pool.starved(),
     // Which checker decides: the service (Slice 10) or the stand-in.
