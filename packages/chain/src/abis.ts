@@ -2612,3 +2612,318 @@ export const orderVaultAbi = [
     "inputs": []
   }
 ] as const;
+
+export const supplierProofsAbi = [
+  {
+    "type": "constructor",
+    "inputs": [
+      {
+        "name": "verifier_",
+        "type": "address",
+        "internalType": "contract IPrimusZKTLS"
+      }
+    ],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "MAX_AGE",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "MAX_CLOCK_SKEW",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "latest",
+    "inputs": [
+      {
+        "name": "urlHash",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "proofHash",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "lists",
+    "inputs": [
+      {
+        "name": "proofHash",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "payTo",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "proofs",
+    "inputs": [
+      {
+        "name": "proofHash",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "listed",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "signedAt",
+        "type": "uint64",
+        "internalType": "uint64"
+      },
+      {
+        "name": "urlHash",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "record",
+    "inputs": [
+      {
+        "name": "att",
+        "type": "tuple",
+        "internalType": "struct Attestation",
+        "components": [
+          {
+            "name": "recipient",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "request",
+            "type": "tuple",
+            "internalType": "struct AttNetworkRequest",
+            "components": [
+              {
+                "name": "url",
+                "type": "string",
+                "internalType": "string"
+              },
+              {
+                "name": "header",
+                "type": "string",
+                "internalType": "string"
+              },
+              {
+                "name": "method",
+                "type": "string",
+                "internalType": "string"
+              },
+              {
+                "name": "body",
+                "type": "string",
+                "internalType": "string"
+              }
+            ]
+          },
+          {
+            "name": "reponseResolve",
+            "type": "tuple[]",
+            "internalType": "struct AttNetworkResponseResolve[]",
+            "components": [
+              {
+                "name": "keyName",
+                "type": "string",
+                "internalType": "string"
+              },
+              {
+                "name": "parseType",
+                "type": "string",
+                "internalType": "string"
+              },
+              {
+                "name": "parsePath",
+                "type": "string",
+                "internalType": "string"
+              }
+            ]
+          },
+          {
+            "name": "data",
+            "type": "string",
+            "internalType": "string"
+          },
+          {
+            "name": "attConditions",
+            "type": "string",
+            "internalType": "string"
+          },
+          {
+            "name": "timestamp",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
+            "name": "additionParams",
+            "type": "string",
+            "internalType": "string"
+          },
+          {
+            "name": "attestors",
+            "type": "tuple[]",
+            "internalType": "struct Attestor[]",
+            "components": [
+              {
+                "name": "attestorAddr",
+                "type": "address",
+                "internalType": "address"
+              },
+              {
+                "name": "url",
+                "type": "string",
+                "internalType": "string"
+              }
+            ]
+          },
+          {
+            "name": "signatures",
+            "type": "bytes[]",
+            "internalType": "bytes[]"
+          }
+        ]
+      }
+    ],
+    "outputs": [
+      {
+        "name": "proofHash",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "verifier",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "contract IPrimusZKTLS"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "event",
+    "name": "SupplierProofRecorded",
+    "inputs": [
+      {
+        "name": "proofHash",
+        "type": "bytes32",
+        "indexed": true,
+        "internalType": "bytes32"
+      },
+      {
+        "name": "urlHash",
+        "type": "bytes32",
+        "indexed": true,
+        "internalType": "bytes32"
+      },
+      {
+        "name": "listed",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "signedAt",
+        "type": "uint64",
+        "indexed": false,
+        "internalType": "uint64"
+      },
+      {
+        "name": "url",
+        "type": "string",
+        "indexed": false,
+        "internalType": "string"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "error",
+    "name": "NotAnAddress",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "NotAnAddressFile",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "ProofFromFuture",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "ProofTooOld",
+    "inputs": [
+      {
+        "name": "ageSeconds",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "WrongFields",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "WrongRequest",
+    "inputs": []
+  }
+] as const;
