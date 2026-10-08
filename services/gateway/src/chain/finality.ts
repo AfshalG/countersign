@@ -31,6 +31,9 @@ export type FinalityDeps = {
   onFinalizedBlock?: (blockNumber: number, logs: RawLog[]) => Promise<void>;
 };
 
+/** Blocks whose receipts are read ahead of the one being applied (Slice 16). */
+const READ_AHEAD = 4;
+
 const sleep = (ms: number) =>
   new Promise<void>((resolve) => {
     setTimeout(resolve, ms);
@@ -105,13 +108,27 @@ export class FinalityTracker {
     this.poller = undefined;
   }
 
-  /** Processes every block up to `n` in order, one at a time (heads and polls share the queue). */
+  /**
+   * Processes every block up to `n` in order (heads and polls share the queue). Receipts for the
+   * next few blocks are read while one is applied (Slice 16: under a run, Monad finalizes blocks
+   * faster than one read at a time keeps up with, and payments were marked final seconds late).
+   */
   private finalizedUpTo(n: number): Promise<void> {
     this.queue = this.queue
       .then(async () => {
         const from = this.lastProcessed === undefined ? n : this.lastProcessed + 1;
+        const ahead = new Map<number, Promise<BlockReceipt[]>>();
+        const read = (k: number) => {
+          if (k > n || ahead.has(k)) return;
+          const reading = this.receiptsOf(k);
+          reading.catch(() => undefined); // awaited in order below; never an unhandled rejection
+          ahead.set(k, reading);
+        };
         for (let k = from; k <= n; k++) {
-          await this.processBlock(k);
+          for (let j = k; j < k + READ_AHEAD; j++) read(j);
+          const receipts = await (ahead.get(k) as Promise<BlockReceipt[]>);
+          ahead.delete(k);
+          await this.applyBlock(k, receipts);
           this.lastProcessed = k;
         }
       })
@@ -122,15 +139,16 @@ export class FinalityTracker {
     return this.queue;
   }
 
-  private async processBlock(blockNumber: number): Promise<void> {
-    let receipts: BlockReceipt[] | null = null;
+  private async receiptsOf(blockNumber: number): Promise<BlockReceipt[]> {
     for (let attempt = 1; attempt <= 10; attempt++) {
-      receipts = await this.deps.receipts.blockReceipts(blockNumber);
-      if (receipts !== null) break;
+      const receipts = await this.deps.receipts.blockReceipts(blockNumber);
+      if (receipts !== null) return receipts;
       await sleep(100 * attempt); // the node serving the call may be a moment behind the socket
     }
-    if (receipts === null)
-      throw new Error(`no receipts for finalized block ${String(blockNumber)}`);
+    throw new Error(`no receipts for finalized block ${String(blockNumber)}`);
+  }
+
+  private async applyBlock(blockNumber: number, receipts: BlockReceipt[]): Promise<void> {
     if (this.deps.onFinalizedBlock) {
       // Indexing never holds up settling payments: on an error the account falls behind and the
       // indexer's catch-up reads that block again.
@@ -161,26 +179,34 @@ export class FinalityTracker {
     }
     const ours = await this.deps.store.settlingByTx([...byHash.keys()]);
     const stages = this.stages.stagesOf(blockNumber);
+    // Each payment is its own row and transaction, so a busy block's are written together.
+    await Promise.all(ours.map((row) => this.settle(row, byHash, blockNumber, stages)));
+  }
+
+  private async settle(
+    row: Awaited<ReturnType<Store['settlingByTx']>>[number],
+    byHash: Map<string, BlockReceipt>,
+    blockNumber: number,
+    stages: ReturnType<StageTracker['stagesOf']>,
+  ): Promise<void> {
     const time = (ms: number | undefined) => (ms === undefined ? undefined : new Date(ms));
-    for (const row of ours) {
-      const receipt = byHash.get((row.txHash ?? '').toLowerCase());
-      if (!receipt) continue;
-      const when = {
-        blockNumber,
-        proposedAt: time(stages?.Proposed) ?? null,
-        votedAt: time(stages?.Voted) ?? null,
-        finalizedAt: time(stages?.Finalized) ?? new Date(),
-      };
-      const moved =
-        receipt.status === 'success'
-          ? await this.deps.store.transition(row.id, 'settling', 'settled', when)
-          : await this.deps.store.transition(row.id, 'settling', 'failed', {
-              ...when,
-              reason: 'reverted',
-              detail: { tx: receipt.transactionHash },
-            });
-      this.deps.pool.included(receipt.transactionHash);
-      if (moved) this.deps.onChange?.(row.id);
-    }
+    const receipt = byHash.get((row.txHash ?? '').toLowerCase());
+    if (!receipt) return;
+    const when = {
+      blockNumber,
+      proposedAt: time(stages?.Proposed) ?? null,
+      votedAt: time(stages?.Voted) ?? null,
+      finalizedAt: time(stages?.Finalized) ?? new Date(),
+    };
+    const moved =
+      receipt.status === 'success'
+        ? await this.deps.store.transition(row.id, 'settling', 'settled', when)
+        : await this.deps.store.transition(row.id, 'settling', 'failed', {
+            ...when,
+            reason: 'reverted',
+            detail: { tx: receipt.transactionHash },
+          });
+    this.deps.pool.included(receipt.transactionHash);
+    if (moved) this.deps.onChange?.(row.id);
   }
 }
