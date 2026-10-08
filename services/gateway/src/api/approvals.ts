@@ -1,11 +1,19 @@
 import { createRoute, z, type OpenAPIHono } from '@hono/zod-openapi';
-import { hashTypedData, keccak256, stringToHex, type Address, type Hex } from 'viem';
+import {
+  encodeAbiParameters,
+  hashTypedData,
+  keccak256,
+  stringToHex,
+  type Address,
+  type Hex,
+} from 'viem';
 import {
   decisionTypes,
   formatUsdc,
   OUTCOME,
   paymentTypes,
   REASON_TEXT,
+  REASONS,
   vaultDomain,
 } from '@countersign/shared';
 import type { Chain, Decision, WebAuthnAuth } from '../chain/types.js';
@@ -445,12 +453,195 @@ const decide = createRoute({
   },
 });
 
+/**
+ * What one passkey signs to refuse a run's holds of one reason (D18, S16-2): the chain, the
+ * account, the run, the reason and exactly the held payments' ids, sorted.
+ */
+export function groupRefusalChallenge(
+  chainId: number,
+  account: Address,
+  runId: string,
+  reason: string,
+  ids: string[],
+): Hex {
+  return keccak256(
+    encodeAbiParameters(
+      [
+        { type: 'string' },
+        { type: 'uint256' },
+        { type: 'address' },
+        { type: 'string' },
+        { type: 'string' },
+        { type: 'bytes32[]' },
+      ],
+      [
+        'Countersign: refuse held payments',
+        BigInt(chainId),
+        account,
+        runId,
+        reason,
+        [...ids].map((i) => i.toLowerCase() as Hex).sort(),
+      ],
+    ),
+  );
+}
+
+const groupParams = z.object({
+  runId: z.string().openapi({ param: { name: 'runId', in: 'path' } }),
+});
+const groupQuery = z.object({
+  reason: z.enum(REASONS).openapi({ param: { name: 'reason', in: 'query' } }),
+});
+
+const getGroup = createRoute({
+  method: 'get',
+  path: '/v1/approvals/runs/{runId}',
+  tags: ['Owner'],
+  summary: 'A run’s holds of one reason, and the one challenge that refuses them all',
+  description:
+    'No token, like every approvals route: the passkey is the authorisation. The challenge covers exactly the listed payments (D18).',
+  request: { params: groupParams, query: groupQuery },
+  responses: {
+    200: json(
+      z
+        .object({
+          runId: z.string(),
+          account: z.string(),
+          reason: z.enum(REASONS),
+          reasonText: z.string(),
+          ids: z.array(z.string()),
+          count: z.number(),
+          challenge: z.string().nullable(),
+          summary: z.string(),
+        })
+        .openapi('HeldGroup'),
+      'The group',
+    ),
+    404: json(apiError, 'unknown_run'),
+  },
+});
+
+const refuseGroup = createRoute({
+  method: 'post',
+  path: '/v1/approvals/runs/{runId}',
+  tags: ['Owner'],
+  summary: 'Refuse a run’s holds of one reason with one passkey signature',
+  description:
+    'Any one owner signs the challenge from the GET. The list is read again: if it changed, the answer is challenge_mismatch and nothing is refused. Each refused payment keeps the signature and the list.',
+  request: {
+    params: groupParams,
+    query: groupQuery,
+    body: { content: { 'application/json': { schema: z.object({ assertion: assertion }) } } },
+  },
+  responses: {
+    200: json(
+      z.object({
+        runId: z.string(),
+        reason: z.string(),
+        refused: z.number(),
+        ids: z.array(z.string()),
+      }),
+      'Refused',
+    ),
+    400: json(apiError, 'malformed_assertion'),
+    404: json(apiError, 'unknown_run'),
+    409: json(apiError, 'nothing_held'),
+    422: json(apiError, 'challenge_mismatch or invalid_passkey'),
+  },
+});
+
 export function registerApprovalRoutes(
   app: OpenAPIHono,
   deps: DecisionDeps & { chainId: number; publicUrl: string; proposals?: ProposalDeps },
 ): void {
   const { store, chainId, publicUrl } = deps;
   const owner = deps.proposals;
+
+  /** A run's holds of one reason, sorted, and the account they belong to (D18). */
+  const heldGroup = async (runId: string, reason: string) => {
+    const run = await store.getRun(runId);
+    if (!run) return null;
+    const ids = (await store.listRun(runId))
+      .filter((r) => r.status === 'held' && r.reason === reason)
+      .map((r) => r.id.toLowerCase())
+      .sort();
+    return { account: run.account as Address, ids };
+  };
+
+  app.openapi(getGroup, async (c) => {
+    const { runId } = c.req.valid('param');
+    const { reason } = c.req.valid('query');
+    const group = await heldGroup(runId, reason);
+    if (!group) return c.json({ error: 'unknown_run' }, 404);
+    const text = REASON_TEXT[reason];
+    return c.json(
+      {
+        runId,
+        account: group.account,
+        reason,
+        reasonText: text,
+        ids: group.ids,
+        count: group.ids.length,
+        challenge:
+          group.ids.length === 0
+            ? null
+            : groupRefusalChallenge(chainId, group.account, runId, reason, group.ids),
+        summary: `Refuse ${String(group.ids.length)} held payments: ${text} Nothing is paid.`,
+      },
+      200,
+    );
+  });
+
+  app.openapi(refuseGroup, async (c) => {
+    const { runId } = c.req.valid('param');
+    const { reason } = c.req.valid('query');
+    const group = await heldGroup(runId, reason);
+    if (!group) return c.json({ error: 'unknown_run' }, 404);
+    if (group.ids.length === 0)
+      return c.json(
+        { error: 'nothing_held', message: `no payment in this run is held for ${reason}` },
+        409,
+      );
+    // The list is read again here, so the signature must cover exactly what is held now.
+    const challenge = groupRefusalChallenge(chainId, group.account, runId, reason, group.ids);
+    let auth;
+    try {
+      auth = fromBrowser(c.req.valid('json').assertion, challenge);
+    } catch (e) {
+      if (!(e instanceof AssertionError)) throw e;
+      return c.json(
+        {
+          error: e.code,
+          message:
+            e.code === 'challenge_mismatch'
+              ? 'the held payments changed since they were shown; open them again and sign the new list'
+              : e.message,
+        },
+        e.code === 'challenge_mismatch' ? 422 : 400,
+      );
+    }
+    // Off chain, like refusing a proposal: a refusal moves no money. Any one owner (D36).
+    const sig = await ownerSigOf(deps.chain, group.account, auth, true);
+    if (!sig)
+      return c.json({ error: 'invalid_passkey', message: 'not this account’s passkey' }, 422);
+    const evidence = {
+      group: { runId, reason, ids: group.ids, challenge },
+      sigs: storedSigs([sig]),
+    };
+    let refused = 0;
+    for (const id of group.ids)
+      if (
+        await store.transition(id, 'held', 'refused', {
+          reason: 'user_refused',
+          decidedBy: 'user_refused',
+          decidedAt: new Date(),
+          ownerAuth: evidence,
+          detail: { group: { runId, reason } },
+        })
+      )
+        refused++;
+    return c.json({ runId, reason, refused, ids: group.ids }, 200);
+  });
 
   app.openapi(getApproval, async (c) => {
     const id = c.req.valid('param').id;

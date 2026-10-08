@@ -45,6 +45,7 @@ import {
   type OrderRow,
   type OwnerSignatureRow,
   type RelayerTxRow,
+  type RunRow,
   type PaymentRequestRow,
   type ProofError,
   type ProposalRow,
@@ -364,6 +365,21 @@ export class Store {
       .from(paymentRequests)
       .where(eq(paymentRequests.runId, runId))
       .orderBy(asc(paymentRequests.requestedAt));
+  }
+
+  async getRun(id: string): Promise<RunRow | undefined> {
+    const [row] = await this.db.select().from(runs).where(eq(runs.id, id));
+    return row;
+  }
+
+  /** An account's runs, newest first (Slice 16's run board). */
+  async runsOf(account: string, limit = 20): Promise<RunRow[]> {
+    return this.db
+      .select()
+      .from(runs)
+      .where(sql`lower(${runs.account}) = ${account.toLowerCase()}`)
+      .orderBy(desc(runs.createdAt))
+      .limit(limit);
   }
 
   async createRun(id: Hex, account: Address, size: number): Promise<boolean> {
