@@ -477,7 +477,7 @@ CORE PIPELINE (a scripted agent pays a clean invoice, no prompt):
 THE HOLD:
   Slice 9:   Passkey owner: factory, suppliers, orders, pay once      DONE (FIVE PARTS ON TESTNET,
              several approvers (D36) included                         INCL. SEVERAL APPROVERS)
-  Slice 10:  Invoice check: own read, exact compare, guard model,     TODO
+  Slice 10:  Invoice check: own read, exact compare, guard model,     DONE (CHECKER SERVICE LIVE)
              scored on the set (catch rate, false holds); the
              checker spec, so anyone can run one (D33)
   Slice 11:  Approver app: proposals, holds, feed, the diff           SHELL PUSHED (SOPHIE)
