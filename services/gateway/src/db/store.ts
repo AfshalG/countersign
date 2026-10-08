@@ -605,6 +605,23 @@ export class Store {
     await this.db.insert(orders).values(order).onConflictDoNothing();
   }
 
+  /**
+   * What a vault has sent or paid, by the gateway's own count (Slice 16): every payment from a vault
+   * goes through this gateway, so its order's room is its amount less this.
+   */
+  async vaultCommitted(vault: string): Promise<bigint> {
+    const [row] = await this.db
+      .select({ total: sql<string | null>`sum(${paymentRequests.amount})` })
+      .from(paymentRequests)
+      .where(
+        and(
+          eq(paymentRequests.vault, vault),
+          inArray(paymentRequests.status, ['settling', 'settled']),
+        ),
+      );
+    return BigInt(row?.total ?? '0');
+  }
+
   async orderByVault(vault: string): Promise<OrderRow | undefined> {
     const [row] = await this.db.select().from(orders).where(eq(orders.vault, vault));
     return row;

@@ -26,8 +26,29 @@ function callOf(row: PaymentRequestRow): PaymentCall {
  * contract's reason and no nonce is used), signed with a relayer's next nonce and stored on the
  * request in one database transaction, moved to `settling`, and handed to the relayer's lane.
  */
+/** A check this recent is trusted at the send step when the order has room (Slice 16). */
+const FRESH_CHECK_MS = 30_000;
+
+async function hasRoom(store: SendDeps['store'], row: PaymentRequestRow): Promise<boolean> {
+  const order = await store.orderByVault(row.vault);
+  if (!order) return false;
+  return (await store.vaultCommitted(row.vault)) + BigInt(row.amount) <= BigInt(order.amount);
+}
+
+const running = new Map<string, Promise<unknown>>();
+function oneAtATime<T>(key: string, work: () => Promise<T>): Promise<T> {
+  const previous = running.get(key) ?? Promise.resolve();
+  const next = previous.catch(() => undefined).then(work);
+  running.set(key, next);
+  const cleanup = () => {
+    if (running.get(key) === next) running.delete(key);
+  };
+  next.then(cleanup, cleanup);
+  return next;
+}
+
 export async function sendOne(deps: SendDeps, row: PaymentRequestRow): Promise<void> {
-  const { store, chain, pool } = deps;
+  const { store, pool } = deps;
   if (row.status !== 'released') return;
 
   if (
@@ -47,11 +68,28 @@ export async function sendOne(deps: SendDeps, row: PaymentRequestRow): Promise<v
   }
 
   const vault = row.vault as Address;
+  // One order at a time (Slice 16): its room is counted from what is already sent, so two sends to
+  // the same order must not count it at once.
+  await oneAtATime(vault.toLowerCase(), () => sendChecked(deps, row, vault));
+}
+
+async function sendChecked(deps: SendDeps, row: PaymentRequestRow, vault: Address): Promise<void> {
+  const { store, chain, pool } = deps;
   const payment = paymentOf(row);
   const call = callOf(row);
+  // The contract's rules were simulated when the payment was checked. Moments later, with room left
+  // in its order by the gateway's own count, it is sent without reading the chain again: one read
+  // fewer per payment is what a run of hundreds waits on (Slice 16). An older check, an owner's
+  // pay-once, or an order without room by that count is simulated again; and if the chain changed
+  // anyway (a pause, a closed order), the transaction reverts and pays nothing.
+  const fresh =
+    call.kind === 'pay' &&
+    row.checkedAt !== null &&
+    Date.now() - row.checkedAt.getTime() < FRESH_CHECK_MS &&
+    (await hasRoom(store, row));
   let refusal;
   try {
-    refusal = await chain.simulate(vault, payment, call);
+    refusal = fresh ? undefined : await chain.simulate(vault, payment, call);
   } catch (e) {
     throw new SimulationUnavailable(e); // stays released; its lease expires and it is tried again
   }
