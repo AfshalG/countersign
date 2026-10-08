@@ -255,14 +255,18 @@ const line = (
 });
 
 /** The account the documents are for: its last five characters number the documents. */
-function suffixOf(account: string | undefined): string {
-  return account && /^0x[0-9a-fA-F]{40}$/.test(account) ? account.slice(-5).toUpperCase() : 'DEMO';
+function suffixOf(account: string | undefined, run?: string): string {
+  const base =
+    account && /^0x[0-9a-fA-F]{40}$/.test(account) ? account.slice(-5).toUpperCase() : 'DEMO';
+  // A run label (a short letter-and-digit code) numbers a run's documents apart, so the same
+  // account can be run again (real agents, Slice 14) without every invoice being a duplicate.
+  return run && /^[0-9a-zA-Z]{1,8}$/.test(run) ? `${base}-R${run.toUpperCase()}` : base;
 }
 
-export function documentFor(id: CaseId, account?: string): DemoDocument {
+export function documentFor(id: CaseId, account?: string, run?: string): DemoDocument {
   const c = CASES.find((x) => x.id === id);
   if (!c) throw new Error(`unknown case ${id}`);
-  const sfx = suffixOf(account);
+  const sfx = suffixOf(account, run);
   const party = { kalibre: KALIBRE, northwind: NORTHWIND, fieldstone: FIELDSTONE }[c.party];
   const base = {
     id: c.id,

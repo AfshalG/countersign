@@ -40,6 +40,16 @@ describe('the demo documents', () => {
     for (const c of CASES) expect(c.today.length).toBeGreaterThan(10);
   });
 
+  it('numbers a run’s documents apart, so an account can be run again without duplicates', () => {
+    expect(documentFor('ks-1001', JUDGE, '7').number).toBe(
+      `${documentFor('ks-1001', JUDGE).number}-R7`,
+    );
+    expect(documentFor('q-2210', JUDGE, 'a1').number).toMatch(/-RA1$/);
+    expect(documentFor('ks-1001', JUDGE, 'no spaces!').number).toBe(
+      documentFor('ks-1001', JUDGE).number,
+    );
+  });
+
   it('pays the address on file in a clean invoice, at 0.001 USDC (under a new address’s 0.002 cap)', () => {
     const d = documentFor('ks-1001', JUDGE);
     expect(d).toMatchObject({ kind: 'invoice', payTo: KALIBRE.payTo, totalUsdc: '0.001' });

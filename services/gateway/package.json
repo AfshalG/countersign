@@ -19,7 +19,8 @@
     "owners-smoke": "tsx scripts/owners-smoke.ts",
     "gas-calibrate": "tsx scripts/gas-calibrate.ts",
     "register-agent": "tsx scripts/register-agent.ts",
-    "agent-run": "tsx scripts/agent-run.ts"
+    "agent-run": "tsx scripts/agent-run.ts",
+    "main-account-order": "tsx scripts/main-account-order.ts"
   },
   "dependencies": {
     "@countersign/chain": "workspace:*",
