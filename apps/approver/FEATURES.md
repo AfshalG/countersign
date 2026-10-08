@@ -17,6 +17,7 @@ This file is kept in step with the code: when a feature lands or an API changes,
 | 7 Oct | **The stop button is live (feature 9):** pause and unpause the account with Face ID. Removed from "Coming next"                                                                                                                                                                    |
 | 7 Oct | Every payment names the agent that sent it (ERC-8004 id); agents on A2A can connect too (feature 6)                                                                                                                                                                                |
 | 7 Oct | **Several approvers are live (new feature 8):** an account can have up to five owners, and adding a supplier can need two of them. Every action now says `signatures: { need, signed }`; a signature that is not yet enough answers `202`. The demo account moved to `0xC127…03A9` |
+| 7 Oct | **The supplier demo site is live (feature 10):** Kalibre Studio's quotes and invoices and a demo shop's checkout, clean and doctored, for any account. Removed from "Coming next"                                                                                                  |
 
 ## What the product is, in one paragraph
 
@@ -138,12 +139,20 @@ A business does not let one person add a supplier or change bank details alone. 
 - **The waiting state is the new screen:** "1 of 2 signed": who signed, who still needs to, and a way to send the link to them. It appears on held payments, proposals, unpausing and owner changes.
 - **Try it with one phone:** make a second passkey on the same phone for your judge account (another account name in the passkey prompt), add it with manage 2, then ask the agent to propose a supplier: the first Face ID answers 202, the second approves it. Pausing still takes one.
 
+### 10. The supplier demo site (Kalibre Studio and a demo shop)
+
+Not a screen in this app: a separate site, as a real supplier would publish it, with the documents an agent reads and tries to pay. It is plain on purpose; restyle it if you like (`apps/supplier/lib/render.ts`).
+
+- `https://countersign-supplier-demo.vercel.app/demo?account=0x…` lists every case for an account: a quote, a poisoned quote, a clean invoice, a changed address (a look-alike), a padded line, a padded total, a hidden instruction to pay elsewhere, the wrong supplier, more than the order, a bank transfer, and a shop's checkout clean and swapped. Each says what Countersign does with it today.
+- Every document also comes as `?format=text` (what an agent's page reader sees, hidden text included) and `?format=json`.
+- Kalibre's payment address file, the one the Primus proof covers: `/.well-known/countersign.json`.
+- Not built: the site showing "paid" arriving. It would read Kalibre's USDC transfers on Monad (public data, no token needed); ask Afshal if you want it for the demo.
+
 ## Coming next: design now, the API lands here
 
-| #   | Feature            | What the screen does                                                                                                       | API (when it lands) |
-| --- | ------------------ | -------------------------------------------------------------------------------------------------------------------------- | ------------------- |
-| 10  | Supplier demo site | A separate supplier's site (Kalibre Studio) that issues quotes and invoices, clean and doctored, and shows "paid" arriving | Slice 7             |
-| 11  | Audit record       | Download a payment's record for an auditor                                                                                 | Slice 18            |
+| #   | Feature      | What the screen does                       | API (when it lands) |
+| --- | ------------ | ------------------------------------------ | ------------------- |
+| 11  | Audit record | Download a payment's record for an auditor | Slice 18            |
 
 ## Where to look in the repo
 
