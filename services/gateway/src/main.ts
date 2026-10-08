@@ -129,7 +129,7 @@ const workers = new Workers({
   checkerTimeoutMs: CHECKER_TIMEOUT_MS,
   websites,
   leaseMs: 30_000,
-  checkConcurrency: 8,
+  checkConcurrency: settings.CHECK_CONCURRENCY ?? 8,
   sendConcurrency: 8,
   tickMs: 50,
 });

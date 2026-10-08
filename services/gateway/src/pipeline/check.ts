@@ -134,7 +134,7 @@ export async function evaluate(
   try {
     result = await deps.checker.check(
       { request: row, payment, chainId: deps.chainId, dryRun: options.dryRun === true },
-      AbortSignal.timeout(deps.checkerTimeoutMs),
+      () => AbortSignal.timeout(deps.checkerTimeoutMs),
     );
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);

@@ -18,11 +18,16 @@ export type CheckResult =
 
 /**
  * The checker, seen from the gateway. The real one is a separate service with its own key
- * (Slice 10); the gateway never holds the checker key. It must answer within the signal's
+ * (Slice 10); the gateway never holds the checker key. It must answer within the timer's
  * time limit; an error or a timeout is a hold.
  */
 export interface Checker {
-  check(input: CheckInput, signal: AbortSignal): Promise<CheckResult>;
+  /**
+   * `startTimer` starts the checker's time limit and returns its signal. A checker calls it when it
+   * starts waiting on the checking itself, after anything the gateway reads for it (Slice 16: at
+   * volume the gateway's own paced chain reads queue, and must not eat the checker's time).
+   */
+  check(input: CheckInput, startTimer: () => AbortSignal): Promise<CheckResult>;
 }
 
 /**
@@ -40,9 +45,9 @@ export class TestChecker implements Checker {
     private readonly holdIf?: (input: CheckInput) => Reason | undefined,
   ) {}
 
-  async check(input: CheckInput, signal: AbortSignal): Promise<CheckResult> {
+  async check(input: CheckInput, startTimer: () => AbortSignal): Promise<CheckResult> {
     this.calls++;
-    signal.throwIfAborted();
+    startTimer().throwIfAborted();
     const reason = this.holdIf?.(input);
     if (reason !== undefined)
       return { verdict: 'hold', reason, evidence: { checker: 'test', reason } };

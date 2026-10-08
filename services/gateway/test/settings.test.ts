@@ -138,3 +138,12 @@ describe('Primus settings (Slice 15)', () => {
     );
   });
 });
+
+describe('check concurrency (Slice 16, D16)', () => {
+  it('is unset by default, and refuses nonsense', () => {
+    expect(loadSettings(base).CHECK_CONCURRENCY).toBeUndefined();
+    expect(loadSettings({ ...base, CHECK_CONCURRENCY: '16' }).CHECK_CONCURRENCY).toBe(16);
+    expect(() => loadSettings({ ...base, CHECK_CONCURRENCY: '0' })).toThrow();
+    expect(() => loadSettings({ ...base, CHECK_CONCURRENCY: 'many' })).toThrow();
+  });
+});

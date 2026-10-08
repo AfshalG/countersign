@@ -100,9 +100,9 @@ describe('POST /v1/checks (a check with no payment)', () => {
       decidedBy: 'checker',
     });
     const slow: Checker = {
-      check: (_input, signal) =>
+      check: (_input, startTimer) =>
         new Promise((_resolve, reject) => {
-          signal.addEventListener('abort', () => {
+          startTimer().addEventListener('abort', () => {
             reject(new Error('timed out'));
           });
         }),
