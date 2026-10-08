@@ -56,3 +56,43 @@ describe('the checker reads an invoice itself', () => {
     });
   });
 });
+
+describe('reading the text an agent sends, in the agent’s own format', () => {
+  it('reads the scripted agent’s page text (cells run together)', async () => {
+    const { pageText } = await import('../../../apps/scripted-agent/src/read');
+    for (const id of ['ks-1003', 'q-2210', 'ks-1005'] as const) {
+      const d = documentFor(id, ACCOUNT);
+      const r = readInvoice({ text: pageText(render(d)) });
+      expect(r, id).toMatchObject({
+        number: d.number,
+        sender: d.from.name,
+        total: units(d.totalUsdc),
+        payTo: d.payTo,
+      });
+      expect(
+        r.lines.map((l) => [l.description, l.quantity, l.unit]),
+        id,
+      ).toEqual(d.lines.map((l) => [l.description, l.quantity, units(l.unitUsdc)]));
+    }
+  });
+
+  it('reads a markdown table, as a chat agent writes one', () => {
+    const r = readInvoice({
+      text: [
+        'Kalibre Studio · Product photography',
+        'Invoice KS-1003-0855A',
+        '| Item | Qty | Unit price | Amount |',
+        '|---|---|---|---|',
+        '| Product photos, white background | 10 | 0.0001 USDC | 0.001 USDC |',
+        '| Rush delivery | 1 | 0.0005 USDC | 0.0005 USDC |',
+        '| Total | | | 0.0015 USDC |',
+        'Pay in USDC on Monad to 0x90f9931B748B26763161a8191C178Fe425C25fEc',
+      ].join('\n'),
+    });
+    expect(r.lines.map((l) => l.description)).toEqual([
+      'Product photos, white background',
+      'Rush delivery',
+    ]);
+    expect(r.total).toBe(1_500n);
+  });
+});

@@ -62,8 +62,20 @@ function textOf(html: string): string {
 const HIDDEN =
   /<(\w+)\b[^>]*\bstyle\s*=\s*"[^"]*(?:display\s*:\s*none|visibility\s*:\s*hidden|font-size\s*:\s*0(?![.\d]*[1-9])|opacity\s*:\s*0(?![.\d]*[1-9]))[^"]*"[^>]*>([\s\S]*?)<\/\1>/gi;
 
-const TEXT_LINE = /^(.+) x(\d+) at ([0-9.]+) USDC: ([0-9.]+) USDC$/;
-const TABLE_LINE = /^(.+?) \| (\d+) \| ([0-9.]+) USDC \| ([0-9.]+) USDC \|?$/;
+/**
+ * One invoice line however it is written: our pages' cells ("desc | 10 | 0.0001 USDC | 0.001
+ * USDC"), our text ("desc x10 at 0.0001 USDC: 0.001 USDC"), a markdown table, or cells run
+ * together as an agent's page reader leaves them ("desc 10 0.0001 USDC 0.001 USDC"). Table pipes
+ * are dropped first; then a description, a whole quantity, a unit price and an amount.
+ */
+const LINE =
+  /^(.+?)\s+x?(\d+)\s+(?:at\s+)?([0-9]+(?:\.[0-9]+)?)\s*USDC:?\s+([0-9]+(?:\.[0-9]+)?)\s*USDC$/;
+const unpiped = (l: string) =>
+  l
+    .replace(/^\|\s*|\s*\|$/g, '')
+    .replace(/\s*\|\s*/g, '  ')
+    .replace(/\s+/g, ' ')
+    .trim();
 
 function amountOf(s: string): bigint | null {
   try {
@@ -79,7 +91,7 @@ function fields(text: string) {
   const header = lines.find((l) => / [·—] /.test(l));
   const items: InvoiceLine[] = [];
   for (const l of lines) {
-    const m = TEXT_LINE.exec(l) ?? TABLE_LINE.exec(l);
+    const m = LINE.exec(unpiped(l));
     if (!m) continue;
     const [, description, quantity, unit, amount] = m;
     const u = amountOf(unit ?? '');
@@ -92,7 +104,10 @@ function fields(text: string) {
         amount: a,
       });
   }
-  const total = /^Total\b[^0-9]*([0-9.]+) USDC\s*\|?$/m.exec(text)?.[1];
+  const total = text
+    .split('\n')
+    .map((l) => /^Total\b[^0-9]*([0-9]+(?:\.[0-9]+)?)\s*USDC$/.exec(unpiped(l))?.[1])
+    .find((t) => t !== undefined);
   const payTo = /pay in USDC on Monad to\s+(0x[0-9a-fA-F]{40})/i.exec(text)?.[1];
   return {
     kind: title ? (title[1]?.toLowerCase() as 'invoice' | 'quote' | 'checkout') : null,
