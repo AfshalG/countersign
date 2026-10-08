@@ -87,8 +87,17 @@ export function asText(d: DemoDocument): string {
 }
 
 /** The index of every case: what it is, where it is, what Countersign does. */
-export function demoIndex(account: string | undefined): string {
-  const q = account ? `?account=${encodeURIComponent(account)}` : '';
+/** The query string that keeps an account (and a run, Slice 14) on every link. */
+function queryOf(account: string | undefined, run?: string): string {
+  const p = new URLSearchParams();
+  if (account) p.set('account', account);
+  if (run) p.set('run', run);
+  const q = p.toString();
+  return q ? `?${q}` : '';
+}
+
+export function demoIndex(account: string | undefined, run?: string): string {
+  const q = queryOf(account, run);
   const path = (id: string) =>
     id.startsWith('q-')
       ? `/quotes/${id}`
@@ -118,8 +127,8 @@ export function kalibreHome(): string {
   );
 }
 
-export function shopHome(account: string | undefined): string {
-  const q = account ? `?account=${encodeURIComponent(account)}` : '';
+export function shopHome(account: string | undefined, run?: string): string {
+  const q = queryOf(account, run);
   return page(
     FIELDSTONE.name,
     `<p class="muted small">${escape(FIELDSTONE.tagline)}</p><h1>${escape(FIELDSTONE.name)}</h1>
