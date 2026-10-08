@@ -23,6 +23,8 @@ import {
   type ProposalDeps,
 } from '../owner/proposals.js';
 import { OwnerActionError } from '../owner/send.js';
+import type { WebsiteProofs } from '../proofs/website.js';
+import { holdWebsiteView } from '../proofs/view.js';
 
 /**
  * The owner's decisions on held payments (Slice 9, D35). The same checks back the service-token
@@ -35,6 +37,8 @@ export type DecisionDeps = {
   store: Store;
   chain: Pick<Chain, 'simulate' | 'verifyOwnerDecision' | 'ownership'>;
   chainId: number;
+  /** Slice 15: suppliers' websites, shown on a changed-address hold. */
+  websites?: Pick<WebsiteProofs, 'siteOnFile' | 'check'>;
 };
 
 type Refused = {
@@ -273,6 +277,32 @@ export function paymentApproval(
 }
 
 /**
+ * What the supplier's website on file lists, for a changed-address hold (Slice 15 part 2). The
+ * latest proof is shown; when there is none from the last few minutes, a check starts (one per site
+ * at a time), and the page shows it once done.
+ */
+async function holdWebsite(
+  store: Store,
+  websites: Pick<WebsiteProofs, 'siteOnFile' | 'check'>,
+  row: PaymentRequestRow,
+  onFile: string,
+) {
+  const order = await store.orderByVault(row.vault);
+  const url = order
+    ? await websites.siteOnFile(row.account as Address, order.supplierId as Hex)
+    : null;
+  const proof = url === null ? undefined : await store.latestWebsiteProof(url);
+  const now = Date.now();
+  if (url !== null && (!proof || now - proof.createdAt.getTime() > HOLD_RECHECK_MS))
+    websites.check(url).catch((e: unknown) => {
+      console.error(`website check ${url}: ${e instanceof Error ? e.message : String(e)}`);
+    });
+  return holdWebsiteView({ url, proof, onFile, invoice: row.payTo, now });
+}
+/** A hold's website proof is checked again when it is older than this. */
+const HOLD_RECHECK_MS = 10 * 60_000;
+
+/**
  * The payment's view with what each action still needs (D36): pay once needs the release
  * threshold, refusing any one owner. If the chain cannot be read, the view goes without it.
  */
@@ -282,6 +312,13 @@ export async function paymentApprovalView(
   publicUrl: string,
 ): Promise<z.infer<typeof approvalView>> {
   const v = paymentApproval(row, deps.chainId, publicUrl);
+  const onFile = v.summary.addressOnFile;
+  if (deps.websites && row.status === 'held' && typeof onFile === 'string' && onFile !== row.payTo)
+    try {
+      v.summary.websiteProof = await holdWebsite(deps.store, deps.websites, row, onFile);
+    } catch (e) {
+      console.error(`hold website: ${e instanceof Error ? e.message : String(e)}`);
+    }
   try {
     const account = row.account as Address;
     for (const [key, action] of Object.entries(v.actions)) {

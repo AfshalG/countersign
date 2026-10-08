@@ -83,7 +83,9 @@ export type WebsiteProofDeps = {
 
 /** The demo supplier's site, for accounts whose Kalibre Studio was set up without a proposal. */
 export const KALIBRE_FILE = `https://countersign-supplier-demo.vercel.app${FILE_PATH}`;
-const KNOWN_SITES: Record<string, string> = { [supplierId('kalibre-studio')]: KALIBRE_FILE };
+const KNOWN_SITES: Record<string, string> = {
+  [supplierId('kalibre-studio').toLowerCase()]: KALIBRE_FILE,
+};
 
 export class WebsiteProofs {
   private readonly inFlight = new Map<string, Promise<WebsiteProofRow>>();
@@ -180,11 +182,20 @@ export class WebsiteProofs {
     const account = p.account as Address;
     const id = supplierId(supplierSlug(p.supplierName));
     if (await this.deps.onFile(account, id)) {
-      const onFile = (await this.deps.store.supplierWebsite(account, id)) ?? KNOWN_SITES[id];
+      const onFile = await this.siteOnFile(account, id);
       if (onFile) return { url: onFile, source: 'on_file' };
     }
     const given = p.website === null ? null : fileUrlOf(p.website);
     return given ? { url: given, source: 'proposal' } : null;
+  }
+
+  /** The address file of the website a supplier was approved with, if it is known. */
+  async siteOnFile(account: Address, supplier: Hex): Promise<string | null> {
+    return (
+      (await this.deps.store.supplierWebsite(account, supplier)) ??
+      KNOWN_SITES[supplier.toLowerCase()] ??
+      null
+    );
   }
 
   /** Checks a new proposal's website; the approval waits for it, at most a minute. */

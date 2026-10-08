@@ -151,6 +151,24 @@ store.onProposal((proposal) => {
     console.error(`website check ${proposal.id}: ${e instanceof Error ? e.message : String(e)}`);
   });
 });
+// A changed-address hold shows what the supplier's website on file lists: start that check at once,
+// so the owner's page has it when they open it (part 2).
+store.onChange((change) => {
+  if (change.to !== 'held' || change.reason !== 'address_mismatch') return;
+  void (async () => {
+    const row = await store.get(change.requestId);
+    const order = row ? await store.orderByVault(row.vault) : undefined;
+    const url =
+      row && order
+        ? await websites.siteOnFile(row.account as Address, order.supplierId as `0x${string}`)
+        : null;
+    if (url) await websites.check(url);
+  })().catch((e: unknown) => {
+    console.error(
+      `hold website ${change.requestId}: ${e instanceof Error ? e.message : String(e)}`,
+    );
+  });
+});
 console.log(`website proofs ${primus ? 'on' : 'off (no Primus keys)'}`);
 
 // ERC-8004 agents named on payments (Slice 19), each re-read from the registry at start.
@@ -197,6 +215,7 @@ console.log(
 
 const app = createApp({
   agents,
+  websites,
   ...(demo ? { demo } : {}),
   proposals: owner,
   pause: owner,

@@ -26,6 +26,7 @@ import { recoverAgent, type AgentDirectory } from './agents/identity.js';
 import { supplierNameOf } from './suppliers.js';
 import { registerAgentRoutes } from './api/agents.js';
 import type { PaymentRequestRow } from './db/schema.js';
+import type { WebsiteProofs } from './proofs/website.js';
 import type { StatusChange, Store } from './db/store.js';
 import { requestId, runId } from './ids.js';
 import {
@@ -70,6 +71,8 @@ export type AppDeps = {
   agents?: AgentDirectory;
   /** WhatsApp (Slice 14); without it its routes do not exist and nothing is sent. */
   whatsapp?: WhatsAppRouteDeps;
+  /** Slice 15: suppliers' websites, shown on changed-address holds. */
+  websites?: Pick<WebsiteProofs, 'siteOnFile' | 'check'>;
 };
 
 // ---------- views ----------
@@ -614,6 +617,7 @@ export function createApp(deps: AppDeps) {
     chainId: deps.chainId,
     publicUrl,
     ...(deps.proposals ? { proposals: deps.proposals } : {}),
+    ...(deps.websites ? { websites: deps.websites } : {}),
   });
   if (deps.demo) registerDemoRoutes(app, deps.demo, { token: deps.token, publicUrl });
   if (deps.pause) registerOwnerRoutes(app, deps.pause);
