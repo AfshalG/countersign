@@ -9,16 +9,16 @@ import {EIP712} from "@openzeppelin-contracts/utils/cryptography/EIP712.sol";
 import {P256} from "@openzeppelin-contracts/utils/cryptography/P256.sol";
 import {SafeCast} from "@openzeppelin-contracts/utils/math/SafeCast.sol";
 import {WebAuthn} from "@openzeppelin-contracts/utils/cryptography/WebAuthn.sol";
-import {Policy, Supplier, PaymentContext} from "./CountersignTypes.sol";
+import {Policy, Supplier, PaymentContext, OwnerKey, OwnerSig, OwnerPurpose} from "./CountersignTypes.sol";
 import {OwnerAuth} from "./libraries/OwnerAuth.sol";
 import {ICountersignAccount} from "./interfaces/ICountersignAccount.sol";
 import {IOrderVault} from "./interfaces/IOrderVault.sol";
 import "./CountersignErrors.sol";
 
 /// @title CountersignAccount
-/// @notice A company's account: owned by a passkey, holds its USDC, keeps its suppliers and
+/// @notice A company's account: owned by one to five passkeys (D36), holds its USDC, keeps its suppliers and
 /// their one payable address each, and opens a vault per approved order. Every change is an
-/// owner action signed with the passkey; the agent and the checker can only pay approved
+/// owner action signed with enough owners' passkeys; the agent and the checker can only pay approved
 /// orders, through their vaults, under the rules in PaymentRules.
 /// @dev Deployed as a clone by AccountFactory and initialised in the same transaction.
 /// `usdc` and `vaultTemplate` are immutables of the template, which clones share.
@@ -48,16 +48,22 @@ contract CountersignAccount is Initializable, EIP712, ICountersignAccount {
     event Withdrawn(address to, uint256 amount);
     event Paused();
     event Unpaused();
+    event OwnersSet(uint256 count, uint8 manageThreshold, uint8 releaseThreshold);
 
     /// The longest waiting period allowed. A decrease waits out the current period, so an
     /// unbounded one could lock supplier changes for good.
     uint64 public constant MAX_WAITING_PERIOD = 30 days;
+    /// The most owners an account can have (D36).
+    uint8 public constant MAX_OWNERS = 5;
 
     IERC20 public immutable usdc;
     address public immutable vaultTemplate;
 
-    bytes32 private _qx;
-    bytes32 private _qy;
+    OwnerKey[] private _owners;
+    /// Owners needed to manage the account (policy, suppliers, orders, withdrawals, owners, unpause).
+    uint8 public manageThreshold;
+    /// Owners needed to pay a held payment once.
+    uint8 public releaseThreshold;
     uint256 public ownerNonce;
     bool public paused;
     Policy private _policy;
@@ -74,22 +80,22 @@ contract CountersignAccount is Initializable, EIP712, ICountersignAccount {
         _disableInitializers();
     }
 
-    /// @notice Binds the account to its passkey. No agent or checker key is set, so nothing
-    /// can be paid until the owner sets a policy.
+    /// @notice Binds the account to its first passkey, with thresholds of one; more owners are
+    /// added with `setOwners`. No agent or checker key is set, so nothing can be paid until the
+    /// owner sets a policy.
     function initialize(bytes32 qx, bytes32 qy, uint64 waitingPeriod) external initializer {
         if (!P256.isValidPublicKey(qx, qy)) revert InvalidOwnerKey();
         if (waitingPeriod > MAX_WAITING_PERIOD) revert InvalidPolicy();
-        _qx = qx;
-        _qy = qy;
+        _owners.push(OwnerKey({qx: qx, qy: qy}));
+        manageThreshold = 1;
+        releaseThreshold = 1;
         _policy.waitingPeriod = waitingPeriod;
     }
 
     // ---------- owner actions ----------
 
-    function setPolicy(Policy calldata p, uint256 nonce, uint64 deadline, WebAuthn.WebAuthnAuth calldata auth)
-        external
-    {
-        _authorize(OwnerAuth.setPolicyHash(p, nonce, deadline), nonce, deadline, auth);
+    function setPolicy(Policy calldata p, uint256 nonce, uint64 deadline, OwnerSig[] calldata sigs) external {
+        _authorize(OwnerAuth.setPolicyHash(p, nonce, deadline), nonce, deadline, sigs, OwnerPurpose.Manage);
         if (p.agentKey == address(0) || p.checkerKey == address(0)) revert InvalidPolicy();
         // One key signing both halves would turn two signatures into one.
         if (p.agentKey == p.checkerKey) revert SameAgentAndChecker();
@@ -131,10 +137,14 @@ contract CountersignAccount is Initializable, EIP712, ICountersignAccount {
         bytes32 proofHash,
         uint256 nonce,
         uint64 deadline,
-        WebAuthn.WebAuthnAuth calldata auth
+        OwnerSig[] calldata sigs
     ) external {
         _authorize(
-            OwnerAuth.setSupplierHash(supplierId, payTo, active, proofHash, nonce, deadline), nonce, deadline, auth
+            OwnerAuth.setSupplierHash(supplierId, payTo, active, proofHash, nonce, deadline),
+            nonce,
+            deadline,
+            sigs,
+            OwnerPurpose.Manage
         );
         if (payTo == address(0)) revert InvalidPayTo();
         Supplier storage s = _suppliers[supplierId];
@@ -156,13 +166,14 @@ contract CountersignAccount is Initializable, EIP712, ICountersignAccount {
         uint64 expiry,
         uint256 nonce,
         uint64 deadline,
-        WebAuthn.WebAuthnAuth calldata auth
+        OwnerSig[] calldata sigs
     ) external returns (address vault) {
         _authorize(
             OwnerAuth.approveOrderHash(orderId, supplierId, orderHash, amount, expiry, nonce, deadline),
             nonce,
             deadline,
-            auth
+            sigs,
+            OwnerPurpose.Manage
         );
         Supplier storage s = _suppliers[supplierId];
         if (s.payTo == address(0)) revert UnknownSupplier();
@@ -179,11 +190,11 @@ contract CountersignAccount is Initializable, EIP712, ICountersignAccount {
         usdc.safeTransfer(vault, amount);
     }
 
-    function closeOrder(bytes32 orderId, uint256 nonce, uint64 deadline, WebAuthn.WebAuthnAuth calldata auth)
+    function closeOrder(bytes32 orderId, uint256 nonce, uint64 deadline, OwnerSig[] calldata sigs)
         external
         returns (uint256 returned)
     {
-        _authorize(OwnerAuth.closeOrderHash(orderId, nonce, deadline), nonce, deadline, auth);
+        _authorize(OwnerAuth.closeOrderHash(orderId, nonce, deadline), nonce, deadline, sigs, OwnerPurpose.Manage);
         address vault = vaultOf[orderId];
         if (vault == address(0)) revert UnknownOrder();
         returned = IOrderVault(vault).close();
@@ -192,10 +203,8 @@ contract CountersignAccount is Initializable, EIP712, ICountersignAccount {
 
     /// @notice Sends money not set aside for an order to an address the owner signed for.
     /// Works while paused (D23).
-    function withdraw(address to, uint256 amount, uint256 nonce, uint64 deadline, WebAuthn.WebAuthnAuth calldata auth)
-        external
-    {
-        _authorize(OwnerAuth.withdrawHash(to, amount, nonce, deadline), nonce, deadline, auth);
+    function withdraw(address to, uint256 amount, uint256 nonce, uint64 deadline, OwnerSig[] calldata sigs) external {
+        _authorize(OwnerAuth.withdrawHash(to, amount, nonce, deadline), nonce, deadline, sigs, OwnerPurpose.Manage);
         if (to == address(0)) revert InvalidPayTo();
         if (amount == 0) revert ZeroAmount();
         if (usdc.balanceOf(address(this)) < amount) revert InsufficientBalance();
@@ -203,30 +212,84 @@ contract CountersignAccount is Initializable, EIP712, ICountersignAccount {
         usdc.safeTransfer(to, amount);
     }
 
-    /// @notice The stop button: every vault refuses to pay until unpaused (D23).
-    function pause(uint256 nonce, uint64 deadline, WebAuthn.WebAuthnAuth calldata auth) external {
-        _authorize(OwnerAuth.pauseHash(nonce, deadline), nonce, deadline, auth);
+    /// @notice The stop button: every vault refuses to pay until unpaused (D23). Any one owner
+    /// can press it; starting again (unpause) needs the manage threshold.
+    function pause(uint256 nonce, uint64 deadline, OwnerSig[] calldata sigs) external {
+        _authorize(OwnerAuth.pauseHash(nonce, deadline), nonce, deadline, sigs, OwnerPurpose.AnyOne);
         if (paused) revert AlreadyPaused();
         paused = true;
         emit Paused();
     }
 
-    function unpause(uint256 nonce, uint64 deadline, WebAuthn.WebAuthnAuth calldata auth) external {
-        _authorize(OwnerAuth.unpauseHash(nonce, deadline), nonce, deadline, auth);
+    function unpause(uint256 nonce, uint64 deadline, OwnerSig[] calldata sigs) external {
+        _authorize(OwnerAuth.unpauseHash(nonce, deadline), nonce, deadline, sigs, OwnerPurpose.Manage);
         if (!paused) revert NotPaused();
         paused = false;
         emit Unpaused();
     }
 
-    /// @dev Deadline, then nonce, then the passkey over the digest computed here (never a
-    /// digest from the caller). The nonce is used only if the whole action succeeds.
-    function _authorize(bytes32 structHash, uint256 nonce, uint64 deadline, WebAuthn.WebAuthnAuth calldata auth)
-        private
-    {
+    /// @notice Replaces the owners and the thresholds (D36), signed by the manage threshold of
+    /// the current owners. One to five keys, each on the curve and none twice; each threshold at
+    /// least one and at most the number of owners.
+    function setOwners(
+        OwnerKey[] calldata keys,
+        uint8 manage,
+        uint8 release,
+        uint256 nonce,
+        uint64 deadline,
+        OwnerSig[] calldata sigs
+    ) external {
+        _authorize(
+            OwnerAuth.setOwnersHash(keys, manage, release, nonce, deadline), nonce, deadline, sigs, OwnerPurpose.Manage
+        );
+        uint256 n = keys.length;
+        if (n == 0 || n > MAX_OWNERS) revert InvalidOwners();
+        if (manage == 0 || manage > n || release == 0 || release > n) revert InvalidOwners();
+        for (uint256 i = 0; i < n; i++) {
+            if (!P256.isValidPublicKey(keys[i].qx, keys[i].qy)) revert InvalidOwnerKey();
+            for (uint256 j = 0; j < i; j++) {
+                if (keys[i].qx == keys[j].qx && keys[i].qy == keys[j].qy) revert InvalidOwners();
+            }
+        }
+        delete _owners;
+        for (uint256 i = 0; i < n; i++) {
+            _owners.push(keys[i]);
+        }
+        manageThreshold = manage;
+        releaseThreshold = release;
+        emit OwnersSet(n, manage, release);
+    }
+
+    /// @dev Deadline, then nonce, then enough owners' passkeys over the digest computed here
+    /// (never a digest from the caller). The nonce is used only if the whole action succeeds.
+    function _authorize(
+        bytes32 structHash,
+        uint256 nonce,
+        uint64 deadline,
+        OwnerSig[] calldata sigs,
+        OwnerPurpose purpose
+    ) private {
         if (block.timestamp > deadline) revert DeadlinePassed();
         if (nonce != ownerNonce) revert BadNonce();
-        if (!OwnerAuth.verify(_hashTypedDataV4(structHash), auth, _qx, _qy)) revert InvalidOwnerSignature();
+        _requireOwners(_hashTypedDataV4(structHash), sigs, purpose);
         ownerNonce = nonce + 1;
+    }
+
+    /// @dev Too few signatures fail before any is checked (cheap, and how the gateway learns it
+    /// must wait for another owner). Then every signature given must be valid, from an owner the
+    /// account has, in strictly increasing owner order so that none counts twice.
+    function _requireOwners(bytes32 digest, OwnerSig[] calldata sigs, OwnerPurpose purpose) private view {
+        uint256 need =
+            purpose == OwnerPurpose.Manage ? manageThreshold : purpose == OwnerPurpose.Release ? releaseThreshold : 1;
+        if (sigs.length < need) revert NotEnoughSigners();
+        uint256 count = _owners.length;
+        for (uint256 i = 0; i < sigs.length; i++) {
+            uint8 o = sigs[i].owner;
+            if (i > 0 && o <= sigs[i - 1].owner) revert OwnersOutOfOrder();
+            if (o >= count) revert UnknownOwner();
+            OwnerKey storage k = _owners[o];
+            if (!OwnerAuth.verify(digest, sigs[i].auth, k.qx, k.qy)) revert InvalidOwnerSignature();
+        }
     }
 
     // ---------- reads ----------
@@ -245,14 +308,18 @@ contract CountersignAccount is Initializable, EIP712, ICountersignAccount {
             newAddressCap: p.newAddressCap,
             newAddressPeriod: p.newAddressPeriod,
             policyExpiry: p.expiry,
-            paused: paused,
-            ownerQx: _qx,
-            ownerQy: _qy
+            paused: paused
         });
     }
 
-    function ownerKey() external view returns (bytes32 qx, bytes32 qy) {
-        return (_qx, _qy);
+    /// @inheritdoc ICountersignAccount
+    function requireOwners(bytes32 digest, OwnerSig[] calldata sigs, OwnerPurpose purpose) external view {
+        _requireOwners(digest, sigs, purpose);
+    }
+
+    /// The owners' passkeys, in the order signatures name them.
+    function owners() external view returns (OwnerKey[] memory) {
+        return _owners;
     }
 
     function policy() external view returns (Policy memory) {

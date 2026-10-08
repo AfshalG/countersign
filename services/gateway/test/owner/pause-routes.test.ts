@@ -27,6 +27,7 @@ afterAll(async () => {
 beforeEach(async () => {
   await truncate(database);
   const fake = demoDeps(store);
+  fake.chain.ownerKeys.set(ACCOUNT.toLowerCase(), { qx: owner.qx, qy: owner.qy });
   pause = { ...fake.deps, store, chain: fake.chain };
 });
 

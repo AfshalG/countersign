@@ -241,7 +241,10 @@ export function setUpDemoAccount(deps: DemoDeps, account: Address, assertions: u
     try {
       for (let i = Number(await deps.chain.ownerNonce(account)); i < 3; i++) {
         const index = i as SetupIndex;
-        const data = setupCall(plan, index, auths[index] as (typeof auths)[number]);
+        // A new demo account has one owner (D36: thresholds of one until it adds more).
+        const data = setupCall(plan, index, [
+          { owner: 0, auth: auths[index] as (typeof auths)[number] },
+        ]);
         const refusal = await deps.chain.dryRun(account, data);
         if (refusal === 'InvalidOwnerSignature')
           throw new DemoError(422, 'invalid_passkey', 'not this account’s passkey', {

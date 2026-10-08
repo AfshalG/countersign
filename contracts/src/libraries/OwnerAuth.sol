@@ -2,7 +2,7 @@
 pragma solidity ^0.8.24;
 
 import {WebAuthn} from "@openzeppelin-contracts/utils/cryptography/WebAuthn.sol";
-import {Policy} from "../CountersignTypes.sol";
+import {Policy, OwnerKey} from "../CountersignTypes.sol";
 
 /// @notice EIP-712 types for every owner action, and the passkey check.
 /// @dev Each action carries the account's current nonce and a deadline, so a signed
@@ -25,6 +25,11 @@ library OwnerAuth {
         keccak256("Withdraw(address to,uint256 amount,uint256 nonce,uint64 deadline)");
     bytes32 internal constant PAUSE_TYPEHASH = keccak256("Pause(uint256 nonce,uint64 deadline)");
     bytes32 internal constant UNPAUSE_TYPEHASH = keccak256("Unpause(uint256 nonce,uint64 deadline)");
+    /// D36: the owners and thresholds, as nested EIP-712 types so the phone can show each key.
+    bytes32 internal constant OWNER_KEY_TYPEHASH = keccak256("OwnerKey(bytes32 qx,bytes32 qy)");
+    bytes32 internal constant SET_OWNERS_TYPEHASH = keccak256(
+        "SetOwners(OwnerKey[] owners,uint8 manage,uint8 release,uint256 nonce,uint64 deadline)OwnerKey(bytes32 qx,bytes32 qy)"
+    );
 
     /// True if the passkey (qx, qy) signed `digest`, with user verification (Face ID,
     /// fingerprint or PIN), as a `webauthn.get` ceremony, with a low-s signature.
@@ -92,5 +97,20 @@ library OwnerAuth {
 
     function unpauseHash(uint256 nonce, uint64 deadline) internal pure returns (bytes32) {
         return keccak256(abi.encode(UNPAUSE_TYPEHASH, nonce, deadline));
+    }
+
+    function setOwnersHash(OwnerKey[] memory owners, uint8 manage, uint8 release, uint256 nonce, uint64 deadline)
+        internal
+        pure
+        returns (bytes32)
+    {
+        bytes32[] memory each = new bytes32[](owners.length);
+        for (uint256 i = 0; i < owners.length; i++) {
+            each[i] = keccak256(abi.encode(OWNER_KEY_TYPEHASH, owners[i].qx, owners[i].qy));
+        }
+        return
+            keccak256(
+                abi.encode(SET_OWNERS_TYPEHASH, keccak256(abi.encodePacked(each)), manage, release, nonce, deadline)
+            );
     }
 }

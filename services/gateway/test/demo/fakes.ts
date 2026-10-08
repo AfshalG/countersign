@@ -59,9 +59,13 @@ export class FakeDemoChain implements DemoChain {
       this.suppliers.get(`${account.toLowerCase()}:${supplierId.toLowerCase()}`) ?? null,
     );
   }
-  ownerKey(account: Address) {
+  /** Every account here has one owner (D36's thresholds of one); `extraOwners` adds more. */
+  extraOwners = new Map<string, { qx: Hex; qy: Hex }[]>();
+  owners(account: Address) {
     const key = this.ownerKeys.get(account.toLowerCase());
-    return key ? Promise.resolve(key) : Promise.reject(new Error('no such account'));
+    return key
+      ? Promise.resolve([key, ...(this.extraOwners.get(account.toLowerCase()) ?? [])])
+      : Promise.reject(new Error('no such account'));
   }
   effectiveWaitingPeriod() {
     return Promise.resolve(this.waitingPeriod);

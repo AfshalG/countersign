@@ -47,15 +47,43 @@ export const WS_URL = 'wss://testnet-rpc.monad.xyz';
  */
 export const GAS_LIMITS = {
   pay: 266_000n,
-  payWithOwner: 232_000n,
+  // D36 (several owners): each limit below is for one owner's signature and was scaled from the
+  // Slice 5 broadcast by the Foundry gas test's change (the owners array, thresholds and
+  // OwnerSig[] encoding). The D36 testnet deployment re-measures them with eth_estimateGas.
+  payWithOwner: 249_000n,
   recordDecision: 94_000n,
-  // Judge mode's account setup (Slice 9 part 4), from Slice 5's testnet broadcast: 197,928,
-  // 153,729, 104,685 and 296,429 gas used.
-  createAccount: 214_000n,
-  setPolicy: 166_000n,
-  setSupplier: 114_000n,
-  approveOrder: 320_000n,
-  // The stop button (Slice 9 part 3): 88,185 and 71,664 gas in Slice 5's broadcast.
-  pause: 96_000n,
-  unpause: 80_000n,
+  // Judge mode's account setup (Slice 9 part 4), from Slice 5's testnet broadcast (197,928,
+  // 153,729, 104,685 and 296,429 gas used), scaled for D36.
+  createAccount: 270_000n,
+  setPolicy: 173_000n,
+  setSupplier: 122_000n,
+  approveOrder: 331_000n,
+  // The stop button (Slice 9 part 3): 88,185 and 71,664 gas in Slice 5's broadcast, plus D36's
+  // encoding (about 6,000 on every owner action).
+  pause: 103_000n,
+  unpause: 87_000n,
+  // D36: replacing the owners, for up to two keys; more keys add GAS_PER_OWNER_KEY each.
+  setOwners: 230_000n,
 } as const;
+
+/**
+ * What each signature beyond the first adds (D36): one more P-256 check and its calldata (about
+ * 25,000 gas in Foundry on an account action; 60,000 on payWithOwner, whose vault passes the
+ * signatures on to the account).
+ */
+export const GAS_PER_EXTRA_SIGNER = { account: 33_000n, payWithOwner: 66_000n } as const;
+/** Each owner key beyond two in setOwners: two new storage slots on Monad. */
+export const GAS_PER_OWNER_KEY = 50_000n;
+
+/** The limit for an owner action carrying `signers` signatures. */
+export function ownerGas(
+  action: Exclude<keyof typeof GAS_LIMITS, 'pay' | 'recordDecision' | 'createAccount'>,
+  signers: number,
+  keys = 0,
+): bigint {
+  const extra = BigInt(Math.max(0, signers - 1));
+  const perSigner =
+    action === 'payWithOwner' ? GAS_PER_EXTRA_SIGNER.payWithOwner : GAS_PER_EXTRA_SIGNER.account;
+  const perKey = action === 'setOwners' ? BigInt(Math.max(0, keys - 2)) * GAS_PER_OWNER_KEY : 0n;
+  return GAS_LIMITS[action] + extra * perSigner + perKey;
+}

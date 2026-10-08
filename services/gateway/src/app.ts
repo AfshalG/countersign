@@ -41,7 +41,10 @@ import {
 
 export type AppDeps = {
   store: Store;
-  chain: Pick<Chain, 'simulate' | 'verifyOwnerDecision' | 'addressOnFile' | 'orderState'>;
+  chain: Pick<
+    Chain,
+    'simulate' | 'verifyOwnerDecision' | 'addressOnFile' | 'orderState' | 'owners'
+  >;
   /** The order index (Slice 12); without it, registering an account answers 503. */
   indexing?: Indexing;
   /** Where people open status pages, e.g. https://gateway-production-e17a.up.railway.app. */

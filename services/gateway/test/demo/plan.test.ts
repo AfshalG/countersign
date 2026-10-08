@@ -71,11 +71,11 @@ describe('the demo account plan (judge mode)', () => {
 
   it('encodes each action exactly as the account contract takes it', () => {
     const decoded = (data: Hex) => decodeFunctionData({ abi: countersignAccountAbi, data });
-    const p = decoded(setupCall(plan, 0, auth));
+    const p = decoded(setupCall(plan, 0, [{ owner: 0, auth }]));
     expect(p.functionName).toBe('setPolicy');
     expect(p.args[1]).toBe(0n);
     expect(p.args[2]).toBe(plan.deadline);
-    const s = decoded(setupCall(plan, 1, auth));
+    const s = decoded(setupCall(plan, 1, [{ owner: 0, auth }]));
     expect(s.functionName).toBe('setSupplier');
     expect(s.args.slice(0, 5)).toEqual([
       KALIBRE.supplierId,
@@ -84,7 +84,7 @@ describe('the demo account plan (judge mode)', () => {
       plan.supplier.proofHash,
       1n,
     ]);
-    const o = decoded(setupCall(plan, 2, auth));
+    const o = decoded(setupCall(plan, 2, [{ owner: 0, auth }]));
     expect(o.functionName).toBe('approveOrder');
     expect(o.args[3]).toBe(5_000n);
     expect(o.args[5]).toBe(2n);

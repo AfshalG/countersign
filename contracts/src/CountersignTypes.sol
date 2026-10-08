@@ -1,6 +1,31 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
+import {WebAuthn} from "@openzeppelin-contracts/utils/cryptography/WebAuthn.sol";
+
+/// One of the account's owners: a passkey's P-256 public key (D36: up to five).
+struct OwnerKey {
+    bytes32 qx;
+    bytes32 qy;
+}
+
+/// One owner's signature on an owner action or a held payment: which owner (its index in
+/// `owners()`), and their passkey's WebAuthn assertion over the digest. Several are given in
+/// strictly increasing owner order, so no owner counts twice.
+struct OwnerSig {
+    uint8 owner;
+    WebAuthn.WebAuthnAuth auth;
+}
+
+/// How many owners an action needs (D36): manage (set the policy, a supplier or an order,
+/// withdraw, change the owners, unpause), release (pay a held payment once), or any one owner
+/// (pause, refuse), because stopping money must never wait for a second person.
+enum OwnerPurpose {
+    Manage,
+    Release,
+    AnyOne
+}
+
 /// What the owner allows the agent and checker to do. Set with the owner's passkey.
 struct Policy {
     address agentKey;
@@ -50,8 +75,6 @@ struct PaymentContext {
     uint64 newAddressPeriod;
     uint64 policyExpiry;
     bool paused;
-    bytes32 ownerQx;
-    bytes32 ownerQy;
 }
 
 /// Who released a payment or recorded a decision.

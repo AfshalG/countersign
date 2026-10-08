@@ -19,7 +19,7 @@ import {
 } from '@countersign/chain';
 import { decodeRefusal, type DecodedRefusal } from './refusals.js';
 import { rpc, RpcError } from './rpc.js';
-import type { Chain, Decision, PaymentCall, WebAuthnAuth } from './types.js';
+import type { Chain, Decision, OwnerKey, OwnerSig, PaymentCall } from './types.js';
 import type { BlockReceipt, Head, Receipts } from './finality.js';
 import type { LogSource, RawLog } from './indexer.js';
 import type { Sender, SendOutcome } from '../relay/pool.js';
@@ -101,7 +101,7 @@ export class MonadClient
         : encodeFunctionData({
             abi: orderVaultAbi,
             functionName: 'payWithOwner',
-            args: [payment, call.ownerAuth],
+            args: [payment, call.ownerSigs],
           });
     try {
       await this.read('eth_call', [{ from: this.simulator, to: vault, data }, 'latest']);
@@ -214,17 +214,16 @@ export class MonadClient
     );
   }
 
-  async ownerKey(account: Address): Promise<{ qx: Hex; qy: Hex }> {
+  async owners(account: Address): Promise<OwnerKey[]> {
     const out = await this.call(
       account,
-      encodeFunctionData({ abi: countersignAccountAbi, functionName: 'ownerKey' }),
+      encodeFunctionData({ abi: countersignAccountAbi, functionName: 'owners' }),
     );
-    const [qx, qy] = decodeFunctionResult({
+    return decodeFunctionResult({
       abi: countersignAccountAbi,
-      functionName: 'ownerKey',
+      functionName: 'owners',
       data: out,
-    });
-    return { qx, qy };
+    }).map((k) => ({ qx: k.qx, qy: k.qy }));
   }
 
   async usdcBalance(address: Address): Promise<bigint> {
@@ -281,12 +280,12 @@ export class MonadClient
   async verifyOwnerDecision(
     vault: Address,
     decision: Decision,
-    auth: WebAuthnAuth,
+    sigs: OwnerSig[],
   ): Promise<boolean> {
     const data = encodeFunctionData({
       abi: orderVaultAbi,
       functionName: 'recordDecisionByOwner',
-      args: [decision, auth],
+      args: [decision, sigs],
     });
     try {
       await this.read('eth_call', [{ from: this.simulator, to: vault, data }, 'latest']);

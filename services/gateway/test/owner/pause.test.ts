@@ -31,6 +31,7 @@ beforeEach(async () => {
   ({ chain, sent } = fake);
   deps = { ...fake.deps, store, chain };
   chain.nonces.set(ACCOUNT.toLowerCase(), 7n);
+  chain.ownerKeys.set(ACCOUNT.toLowerCase(), { qx: owner.qx, qy: owner.qy });
 });
 
 const browser = (digest: Hex) => {

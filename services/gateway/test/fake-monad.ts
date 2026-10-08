@@ -73,6 +73,10 @@ export class FakeMonad implements Chain, Sender, Receipts {
     return Promise.resolve(true);
   }
 
+  owners(): Promise<{ qx: Hex; qy: Hex }[]> {
+    return Promise.resolve([{ qx: `0x${'11'.repeat(32)}`, qy: `0x${'22'.repeat(32)}` }]);
+  }
+
   finalizedReceipt(
     hash: Hex,
   ): Promise<{ status: 'success' | 'reverted'; blockNumber: number } | null> {

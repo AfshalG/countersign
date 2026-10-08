@@ -8,7 +8,7 @@ import {AccountFactory} from "../src/AccountFactory.sol";
 import {CountersignAccount} from "../src/CountersignAccount.sol";
 import {OrderVault} from "../src/OrderVault.sol";
 import {OwnerAuth} from "../src/libraries/OwnerAuth.sol";
-import {Policy, Payment, Decision, OUTCOME_HELD} from "../src/CountersignTypes.sol";
+import {Policy, Payment, Decision, OUTCOME_HELD, OwnerSig} from "../src/CountersignTypes.sol";
 import "../src/CountersignErrors.sol";
 import {PasskeySigner} from "../test/helpers/PasskeySigner.sol";
 
@@ -61,12 +61,8 @@ contract Slice05Testnet is Script {
         return uint64(block.timestamp + 1 hours);
     }
 
-    function _owner(CountersignAccount account, bytes32 structHash)
-        internal
-        view
-        returns (WebAuthn.WebAuthnAuth memory)
-    {
-        return PasskeySigner.sign(ownerP256, account.ownerDigest(structHash));
+    function _owner(CountersignAccount account, bytes32 structHash) internal view returns (OwnerSig[] memory) {
+        return PasskeySigner.one(ownerP256, account.ownerDigest(structHash));
     }
 
     function _sig(uint256 pk, bytes32 digest) internal pure returns (bytes memory) {
@@ -126,10 +122,10 @@ contract Slice05Testnet is Script {
             expiry: uint64(block.timestamp + 30 days)
         });
         uint64 dl = _deadline();
-        WebAuthn.WebAuthnAuth memory a1 = _owner(account, OwnerAuth.setPolicyHash(p, 0, dl));
-        WebAuthn.WebAuthnAuth memory a2 = _owner(account, OwnerAuth.setSupplierHash(SUPPLIER, KALIBRE, true, 0, 1, dl));
+        OwnerSig[] memory a1 = _owner(account, OwnerAuth.setPolicyHash(p, 0, dl));
+        OwnerSig[] memory a2 = _owner(account, OwnerAuth.setSupplierHash(SUPPLIER, KALIBRE, true, 0, 1, dl));
         uint64 expiry = uint64(block.timestamp + 30 days);
-        WebAuthn.WebAuthnAuth memory a3 =
+        OwnerSig[] memory a3 =
             _owner(account, OwnerAuth.approveOrderHash(ORDER, SUPPLIER, ORDER_HASH, 5_000, expiry, 2, dl));
 
         vm.startBroadcast(deployerKey);
@@ -189,7 +185,7 @@ contract Slice05Testnet is Script {
         // Stop button: pause, a payment is refused, withdraw still works, unpause.
         uint64 dl = _deadline();
         uint256 n = account.ownerNonce();
-        WebAuthn.WebAuthnAuth memory pauseAuth = _owner(account, OwnerAuth.pauseHash(n, dl));
+        OwnerSig[] memory pauseAuth = _owner(account, OwnerAuth.pauseHash(n, dl));
         vm.startBroadcast(deployerKey);
         account.pause(n, dl, pauseAuth);
         vm.stopBroadcast();
@@ -204,8 +200,8 @@ contract Slice05Testnet is Script {
         );
 
         address deployer = vm.addr(deployerKey);
-        WebAuthn.WebAuthnAuth memory wAuth = _owner(account, OwnerAuth.withdrawHash(deployer, 1_000, n + 1, dl));
-        WebAuthn.WebAuthnAuth memory uAuth = _owner(account, OwnerAuth.unpauseHash(n + 2, dl));
+        OwnerSig[] memory wAuth = _owner(account, OwnerAuth.withdrawHash(deployer, 1_000, n + 1, dl));
+        OwnerSig[] memory uAuth = _owner(account, OwnerAuth.unpauseHash(n + 2, dl));
         vm.startBroadcast(deployerKey);
         account.withdraw(deployer, 1_000, n + 1, dl, wAuth);
         account.unpause(n + 2, dl, uAuth);
@@ -225,7 +221,7 @@ contract Slice05Testnet is Script {
         uint64 expiry = uint64(block.timestamp + 30 days);
         uint64 dl = _deadline();
         uint256 n = account.ownerNonce();
-        WebAuthn.WebAuthnAuth memory auth = _owner(
+        OwnerSig[] memory auth = _owner(
             account,
             OwnerAuth.approveOrderHash(
                 orderId, SUPPLIER, keccak256("purchase order 2026-002, PDF"), 30_000, expiry, n, dl
@@ -259,7 +255,7 @@ contract Slice05Testnet is Script {
 
         // The owner looks at it and pays it once with the passkey.
         Payment memory held = _payment(1_000, invoice, KALIBRE);
-        WebAuthn.WebAuthnAuth memory auth = PasskeySigner.sign(ownerP256, vault.paymentDigest(held));
+        OwnerSig[] memory auth = PasskeySigner.one(ownerP256, vault.paymentDigest(held));
         uint256 before = USDC.balanceOf(KALIBRE);
 
         vm.startBroadcast(deployerKey);
@@ -275,7 +271,7 @@ contract Slice05Testnet is Script {
             AlreadyPaid.selector,
             "the same held payment again (AlreadyPaid)"
         );
-        WebAuthn.WebAuthnAuth memory stranger = PasskeySigner.sign(
+        OwnerSig[] memory stranger = PasskeySigner.one(
             uint256(keccak256("not the owner")), vault.paymentDigest(_payment(1_000, keccak256("x"), KALIBRE))
         );
         _mustRefuse(

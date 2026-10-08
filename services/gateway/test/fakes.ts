@@ -1,6 +1,6 @@
 import { encodeErrorResult, type Address, type Hex } from 'viem';
-import { orderVaultAbi } from '@countersign/chain';
-import type { Chain, PaymentCall } from '../src/chain/types.js';
+import { countersignAccountAbi, orderVaultAbi } from '@countersign/chain';
+import type { Chain, OwnerKey, PaymentCall } from '../src/chain/types.js';
 import type { Payment } from '../src/payment.js';
 import { decodeRefusal, type DecodedRefusal } from '../src/chain/refusals.js';
 
@@ -43,6 +43,12 @@ export class FakeChain implements Chain {
     return Promise.resolve(this.ownerKeyValid);
   }
 
+  /** One owner unless set (D36): a single owner's signature is owner 0's without an off-chain check. */
+  ownerKeys: OwnerKey[] = [{ qx: `0x${'11'.repeat(32)}`, qy: `0x${'22'.repeat(32)}` }];
+  owners(): Promise<OwnerKey[]> {
+    return Promise.resolve(this.ownerKeys);
+  }
+
   finalizedReceipt(): Promise<null> {
     return Promise.resolve(null);
   }
@@ -56,7 +62,8 @@ export class FakeChain implements Chain {
     if (call.kind === 'payWithOwner' && !this.ownerKeyValid) {
       return Promise.resolve(
         decodeRefusal(
-          encodeErrorResult({ abi: orderVaultAbi, errorName: 'InvalidOwnerSignature' }),
+          // The vault asks the account to check owners (D36), so this error is the account's.
+          encodeErrorResult({ abi: countersignAccountAbi, errorName: 'InvalidOwnerSignature' }),
         ),
       );
     }

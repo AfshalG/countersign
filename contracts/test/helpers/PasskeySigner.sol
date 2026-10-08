@@ -4,6 +4,7 @@ pragma solidity ^0.8.24;
 import {Vm} from "forge-std/Vm.sol";
 import {Base64} from "@openzeppelin-contracts/utils/Base64.sol";
 import {WebAuthn} from "@openzeppelin-contracts/utils/cryptography/WebAuthn.sol";
+import {OwnerSig} from "../../src/CountersignTypes.sol";
 
 /// @notice Produces WebAuthn assertions in tests from a software P-256 key, the way a
 /// phone's passkey does in Slice 1: the challenge is the 32-byte EIP-712 digest, the
@@ -21,6 +22,17 @@ library PasskeySigner {
     function publicKey(uint256 privateKey) internal pure returns (bytes32 qx, bytes32 qy) {
         (uint256 x, uint256 y) = vm.publicKeyP256(privateKey);
         return (bytes32(x), bytes32(y));
+    }
+
+    /// One assertion as owner 0's signature: how a single-owner account takes it (D36).
+    function only(WebAuthn.WebAuthnAuth memory auth) internal pure returns (OwnerSig[] memory s) {
+        s = new OwnerSig[](1);
+        s[0] = OwnerSig({owner: 0, auth: auth});
+    }
+
+    /// Signs as owner 0 of a single-owner account.
+    function one(uint256 privateKey, bytes32 digest) internal pure returns (OwnerSig[] memory) {
+        return only(sign(privateKey, digest));
     }
 
     /// A normal assertion: user verified, low-s.

@@ -5,7 +5,15 @@ import {WebAuthn} from "@openzeppelin-contracts/utils/cryptography/WebAuthn.sol"
 import {Base} from "../helpers/Base.sol";
 import {PasskeySigner} from "../helpers/PasskeySigner.sol";
 import {OrderVault} from "../../src/OrderVault.sol";
-import {Policy, Payment, Decision, DecidedBy, OUTCOME_HELD, OUTCOME_REFUSED} from "../../src/CountersignTypes.sol";
+import {
+    Policy,
+    Payment,
+    Decision,
+    DecidedBy,
+    OUTCOME_HELD,
+    OUTCOME_REFUSED,
+    OwnerSig
+} from "../../src/CountersignTypes.sol";
 import "../../src/CountersignErrors.sol";
 
 contract VaultPayTest is Base {
@@ -216,13 +224,13 @@ contract VaultOwnerTest is Base {
         vault = _readyVault();
     }
 
-    function _ownerAuth(Payment memory p, uint256 pk) internal view returns (WebAuthn.WebAuthnAuth memory) {
-        return PasskeySigner.sign(pk, vault.paymentDigest(p));
+    function _ownerAuth(Payment memory p, uint256 pk) internal view returns (OwnerSig[] memory) {
+        return PasskeySigner.one(pk, vault.paymentDigest(p));
     }
 
     function test_TheOwnerPaysAHeldPaymentOnce() public {
         Payment memory p = _payment(10_000, INVOICE);
-        WebAuthn.WebAuthnAuth memory auth = _ownerAuth(p, OWNER_PK);
+        OwnerSig[] memory auth = _ownerAuth(p, OWNER_PK);
         vm.expectEmit(address(vault));
         emit OrderVault.PaymentExecuted(INVOICE, supplierAddr, 10_000, 40_000, DecidedBy.Owner);
         vault.payWithOwner(p, auth);
@@ -233,7 +241,7 @@ contract VaultOwnerTest is Base {
 
     function test_AnotherPasskeyCannotPay() public {
         Payment memory p = _payment(10_000, INVOICE);
-        WebAuthn.WebAuthnAuth memory auth = _ownerAuth(p, OTHER_PK);
+        OwnerSig[] memory auth = _ownerAuth(p, OTHER_PK);
         vm.expectRevert(InvalidOwnerSignature.selector);
         vault.payWithOwner(p, auth);
     }
@@ -241,7 +249,7 @@ contract VaultOwnerTest is Base {
     function test_TheOwnerStillPaysOnlyTheAddressOnFile() public {
         Payment memory p = _payment(10_000, INVOICE);
         p.payTo = makeAddr("look-alike wallet");
-        WebAuthn.WebAuthnAuth memory auth = _ownerAuth(p, OWNER_PK);
+        OwnerSig[] memory auth = _ownerAuth(p, OWNER_PK);
         vm.expectRevert(PayToNotOnFile.selector);
         vault.payWithOwner(p, auth);
     }
@@ -249,7 +257,7 @@ contract VaultOwnerTest is Base {
     function test_TheOwnerCannotPayWhilePaused() public {
         _pause();
         Payment memory p = _payment(10_000, INVOICE);
-        WebAuthn.WebAuthnAuth memory auth = _ownerAuth(p, OWNER_PK);
+        OwnerSig[] memory auth = _ownerAuth(p, OWNER_PK);
         vm.expectRevert(AccountPaused.selector);
         vault.payWithOwner(p, auth);
     }
@@ -316,7 +324,7 @@ contract VaultDecisionTest is Base {
 
     function test_TheOwnerRecordsARefusal() public {
         Decision memory d = _decision(INVOICE, OUTCOME_REFUSED);
-        WebAuthn.WebAuthnAuth memory auth = PasskeySigner.sign(OWNER_PK, vault.decisionDigest(d));
+        OwnerSig[] memory auth = PasskeySigner.one(OWNER_PK, vault.decisionDigest(d));
         vm.expectEmit(address(vault));
         emit OrderVault.DecisionRecorded(INVOICE, OUTCOME_REFUSED, d.reasonHash, d.evidenceHash, DecidedBy.Owner);
         vault.recordDecisionByOwner(d, auth);

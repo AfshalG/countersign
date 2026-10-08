@@ -18,8 +18,8 @@ import {
 import type { ProposalRow } from '../db/schema.js';
 import type { Store } from '../db/store.js';
 import { AssertionError, fromBrowser, type BrowserAssertion } from '../api/webauthn.js';
-import type { WebAuthnAuth } from '../chain/types.js';
-import { ownerSigned } from './passkey.js';
+import type { OwnerSig, WebAuthnAuth } from '../chain/types.js';
+import { ownerSigOf } from './signers.js';
 import { OwnerActionError, sendAndWait, type OwnerSendDeps } from './send.js';
 
 /**
@@ -39,7 +39,7 @@ export interface ProposalChain {
   ): Promise<{ payTo: Address; active: boolean; activeAfter: number } | null>;
   usdcBalance(address: Address): Promise<bigint>;
   effectiveWaitingPeriod(account: Address): Promise<number>;
-  ownerKey(account: Address): Promise<{ qx: Hex; qy: Hex }>;
+  owners(account: Address): Promise<{ qx: Hex; qy: Hex }[]>;
   dryRun(to: Address, data: Hex): Promise<string | undefined>;
   finalizedReceipt(
     hash: Hex,
@@ -72,7 +72,7 @@ type Step = {
   summary: string;
   challenge: Hex;
   typedData: unknown;
-  call: (auth: WebAuthnAuth) => Hex;
+  call: (sigs: OwnerSig[]) => Hex;
   gas: bigint;
 };
 
@@ -128,11 +128,11 @@ async function planOf(deps: ProposalDeps, p: ProposalRow) {
         types: { SetSupplier: ownerActionTypes.SetSupplier },
         message: strings(message),
       },
-      call: (auth) =>
+      call: (sigs) =>
         encodeFunctionData({
           abi: countersignAccountAbi,
           functionName: 'setSupplier',
-          args: [id, payTo, true, zeroHash, nonce, deadline, auth],
+          args: [id, payTo, true, zeroHash, nonce, deadline, sigs],
         }),
       gas: GAS_LIMITS.setSupplier,
     });
@@ -155,7 +155,7 @@ async function planOf(deps: ProposalDeps, p: ProposalRow) {
       types: { ApproveOrder: ownerActionTypes.ApproveOrder },
       message: strings(orderMessage),
     },
-    call: (auth) =>
+    call: (sigs) =>
       encodeFunctionData({
         abi: countersignAccountAbi,
         functionName: 'approveOrder',
@@ -167,7 +167,7 @@ async function planOf(deps: ProposalDeps, p: ProposalRow) {
           order.expiry,
           orderNonce,
           deadline,
-          auth,
+          sigs,
         ],
       }),
     gas: GAS_LIMITS.approveOrder,
@@ -293,7 +293,9 @@ export async function approveProposal(
     auth: checked(assertions[s.key], s.challenge, s.key),
   }));
   for (const { step, auth } of signed) {
-    const data = step.call(auth);
+    const sig = await ownerSigOf(deps.chain, plan.account, auth);
+    if (!sig) throw new OwnerActionError(422, 'invalid_passkey', 'not this account’s passkey');
+    const data = step.call([sig]);
     const refusal = await deps.chain.dryRun(plan.account, data);
     if (refusal === 'InvalidOwnerSignature')
       throw new OwnerActionError(422, 'invalid_passkey', 'not this account’s passkey');
@@ -321,7 +323,8 @@ export async function refuseProposal(deps: ProposalDeps, id: string, assertion: 
     refuseChallenge(deps.chainId, p.account as Address, p.id as Hex),
     'refuse',
   );
-  if (!ownerSigned(await deps.chain.ownerKey(p.account as Address), auth))
+  // Off chain only (a refusal changes nothing on chain): any one owner, always checked.
+  if (!(await ownerSigOf(deps.chain, p.account as Address, auth, true)))
     throw new OwnerActionError(422, 'invalid_passkey', 'not this account’s passkey');
   const decided = await deps.store.decideProposal(id, 'refused');
   if (!decided)

@@ -7,7 +7,16 @@ import {Clones} from "@openzeppelin-contracts/proxy/Clones.sol";
 import {ECDSA} from "@openzeppelin-contracts/utils/cryptography/ECDSA.sol";
 import {EIP712} from "@openzeppelin-contracts/utils/cryptography/EIP712.sol";
 import {WebAuthn} from "@openzeppelin-contracts/utils/cryptography/WebAuthn.sol";
-import {Payment, Decision, PaymentContext, DecidedBy, OUTCOME_HELD, OUTCOME_BLOCKED} from "./CountersignTypes.sol";
+import {
+    Payment,
+    Decision,
+    PaymentContext,
+    DecidedBy,
+    OwnerSig,
+    OwnerPurpose,
+    OUTCOME_HELD,
+    OUTCOME_BLOCKED
+} from "./CountersignTypes.sol";
 import {PaymentRules, VaultState} from "./libraries/PaymentRules.sol";
 import {OwnerAuth} from "./libraries/OwnerAuth.sol";
 import {ICountersignAccount} from "./interfaces/ICountersignAccount.sol";
@@ -115,12 +124,13 @@ contract OrderVault is EIP712, IOrderVault {
 
     /// @notice Pays a held payment with the owner's passkey. The same rules apply: the
     /// address on file, its waiting period, the caps, what is left, and once per invoice.
-    function payWithOwner(Payment calldata p, WebAuthn.WebAuthnAuth calldata auth) external onlyClone {
+    function payWithOwner(Payment calldata p, OwnerSig[] calldata sigs) external onlyClone {
         (address acct, bytes32 sid,, uint64 exp, uint256 funded) = _args();
         PaymentContext memory ctx = ICountersignAccount(acct).paymentContext(sid);
         PaymentRules.check(p, ctx, VaultState(funded, spent, exp, closed, paid[p.invoiceHash]));
         bytes32 digest = _hashTypedDataV4(PaymentRules.hashPayment(p));
-        if (!OwnerAuth.verify(digest, auth, ctx.ownerQx, ctx.ownerQy)) revert InvalidOwnerSignature();
+        // As many owners as the account's release threshold (D36); the account holds their keys.
+        ICountersignAccount(acct).requireOwners(digest, sigs, OwnerPurpose.Release);
         _execute(p, funded, DecidedBy.Owner);
     }
 
@@ -153,13 +163,12 @@ contract OrderVault is EIP712, IOrderVault {
     }
 
     /// @notice Records the owner's decision (typically a refusal) with their passkey.
-    function recordDecisionByOwner(Decision calldata d, WebAuthn.WebAuthnAuth calldata auth) external onlyClone {
+    function recordDecisionByOwner(Decision calldata d, OwnerSig[] calldata sigs) external onlyClone {
         _validOutcome(d.outcome);
-        (address acct, bytes32 sid,,,) = _args();
-        PaymentContext memory ctx = ICountersignAccount(acct).paymentContext(sid);
-        if (!OwnerAuth.verify(_hashTypedDataV4(PaymentRules.hashDecision(d)), auth, ctx.ownerQx, ctx.ownerQy)) {
-            revert InvalidOwnerSignature();
-        }
+        (address acct,,,,) = _args();
+        // Any one owner can refuse (D36): stopping money never waits for a second person.
+        ICountersignAccount(acct)
+            .requireOwners(_hashTypedDataV4(PaymentRules.hashDecision(d)), sigs, OwnerPurpose.AnyOne);
         emit DecisionRecorded(d.invoiceHash, d.outcome, d.reasonHash, d.evidenceHash, DecidedBy.Owner);
     }
 

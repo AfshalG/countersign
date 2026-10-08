@@ -4,6 +4,7 @@ import { accountDomain, ownerActionTypes } from '@countersign/shared';
 import type { Store } from '../db/store.js';
 import { AssertionError, fromBrowser, type BrowserAssertion } from '../api/webauthn.js';
 import { OwnerActionError, sendAndWait, type OwnerSendDeps } from './send.js';
+import { ownerSigOf } from './signers.js';
 
 /**
  * The stop button (Slice 9 part 3, D23): the owner pauses the account with their passkey, and
@@ -14,6 +15,7 @@ import { OwnerActionError, sendAndWait, type OwnerSendDeps } from './send.js';
  */
 
 export interface PauseChain {
+  owners(account: Address): Promise<{ qx: Hex; qy: Hex }[]>;
   paused(account: Address): Promise<boolean>;
   ownerNonce(account: Address): Promise<bigint>;
   dryRun(to: Address, data: Hex): Promise<string | undefined>;
@@ -109,10 +111,12 @@ export async function setPaused(
     if (!(e instanceof AssertionError)) throw e;
     throw new OwnerActionError(e.code === 'challenge_mismatch' ? 422 : 400, e.code, e.message);
   }
+  const sig = await ownerSigOf(deps.chain, account, auth);
+  if (!sig) throw new OwnerActionError(422, 'invalid_passkey', 'not this account’s passkey');
   const data = encodeFunctionData({
     abi: countersignAccountAbi,
     functionName: action,
-    args: [nonce, BigInt(deadline), auth],
+    args: [nonce, BigInt(deadline), [sig]],
   });
   const refusal = await deps.chain.dryRun(account, data);
   if (refusal === 'InvalidOwnerSignature')

@@ -1,6 +1,7 @@
 import { encodeFunctionData, type Address, type Hex } from 'viem';
 import { GAS_LIMITS, orderVaultAbi } from '@countersign/chain';
-import type { Chain, PaymentCall, WebAuthnAuth } from '../chain/types.js';
+import type { Chain, PaymentCall } from '../chain/types.js';
+import { sigsOf } from '../owner/signers.js';
 import type { PaymentRequestRow } from '../db/schema.js';
 import type { Store } from '../db/store.js';
 import { paymentOf } from '../payment.js';
@@ -9,27 +10,8 @@ import { SimulationUnavailable } from './check.js';
 
 export type SendDeps = { store: Store; chain: Pick<Chain, 'simulate'>; pool: RelayerPool };
 
-/** The owner's passkey assertion as stored (JSON: bigints as strings). */
-function ownerAuthOf(stored: unknown): WebAuthnAuth {
-  const a = stored as Record<string, string>;
-  const field = (k: string) => {
-    const v = a[k];
-    if (typeof v !== 'string') throw new Error(`owner assertion is missing ${k}`);
-    return v;
-  };
-  return {
-    r: field('r') as Hex,
-    s: field('s') as Hex,
-    challengeIndex: BigInt(field('challengeIndex')),
-    typeIndex: BigInt(field('typeIndex')),
-    authenticatorData: field('authenticatorData') as Hex,
-    clientDataJSON: field('clientDataJSON'),
-  };
-}
-
 function callOf(row: PaymentRequestRow): PaymentCall {
-  if (row.ownerAuth !== null)
-    return { kind: 'payWithOwner', ownerAuth: ownerAuthOf(row.ownerAuth) };
+  if (row.ownerAuth !== null) return { kind: 'payWithOwner', ownerSigs: sigsOf(row.ownerAuth) };
   if (row.checkerSig === null)
     throw new Error(`request ${row.id} is released without a checker signature or a passkey`);
   return { kind: 'pay', agentSig: row.agentSig as Hex, checkerSig: row.checkerSig as Hex };
@@ -92,7 +74,7 @@ export async function sendOne(deps: SendDeps, row: PaymentRequestRow): Promise<v
       : encodeFunctionData({
           abi: orderVaultAbi,
           functionName: 'payWithOwner',
-          args: [payment, call.ownerAuth],
+          args: [payment, call.ownerSigs],
         });
   const gas = call.kind === 'pay' ? GAS_LIMITS.pay : GAS_LIMITS.payWithOwner;
   const signed = await pool.sign({ to: vault, data, gas }, row.id);

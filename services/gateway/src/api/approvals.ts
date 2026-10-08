@@ -14,6 +14,7 @@ import type { Store } from '../db/store.js';
 import { paymentOf } from '../payment.js';
 import { HEADLINE } from './status-page.js';
 import { AssertionError, fromBrowser } from './webauthn.js';
+import { ownerSigOf, storedSigs } from '../owner/signers.js';
 import {
   approveProposal,
   proposalApprovalView,
@@ -31,7 +32,7 @@ import { OwnerActionError } from '../owner/send.js';
 
 export type DecisionDeps = {
   store: Store;
-  chain: Pick<Chain, 'simulate' | 'verifyOwnerDecision'>;
+  chain: Pick<Chain, 'simulate' | 'verifyOwnerDecision' | 'owners'>;
 };
 
 type Refused = {
@@ -40,13 +41,6 @@ type Refused = {
   body: { error: string; status?: string; reason?: string; contract?: string };
 };
 export type DecisionResult = { ok: true; row: PaymentRequestRow } | Refused;
-
-/** Stored as JSON: bigints as strings. */
-export const storedAuth = (a: WebAuthnAuth) => ({
-  ...a,
-  challengeIndex: a.challengeIndex.toString(),
-  typeIndex: a.typeIndex.toString(),
-});
 
 async function heldRow(store: Store, id: string): Promise<PaymentRequestRow | Refused> {
   const row = await store.get(id);
@@ -69,9 +63,11 @@ export async function payOnce(
 ): Promise<DecisionResult> {
   const row = await heldRow(deps.store, id);
   if ('ok' in row) return row;
+  const sig = await ownerSigOf(deps.chain, row.account as Address, auth);
+  if (!sig) return { ok: false, status: 422, body: { error: 'invalid_passkey' } };
   const refusal = await deps.chain.simulate(row.vault as Address, paymentOf(row), {
     kind: 'payWithOwner',
-    ownerAuth: auth,
+    ownerSigs: [sig],
   });
   if (refusal?.error === 'InvalidOwnerSignature')
     return { ok: false, status: 422, body: { error: 'invalid_passkey' } };
@@ -82,7 +78,7 @@ export async function payOnce(
       body: { error: 'contract_refuses', reason: refusal.reason, contract: refusal.error },
     };
   const moved = await deps.store.transition(row.id, 'held', 'released', {
-    ownerAuth: storedAuth(auth),
+    ownerAuth: storedSigs([sig]),
     decidedBy: 'user_once',
     decidedAt: new Date(),
   });
@@ -104,13 +100,14 @@ export async function refuseHeld(
     outcome: OUTCOME.refused,
     ...decision,
   };
-  if (!(await deps.chain.verifyOwnerDecision(row.vault as Address, signed, auth)))
+  const sig = await ownerSigOf(deps.chain, row.account as Address, auth);
+  if (!sig || !(await deps.chain.verifyOwnerDecision(row.vault as Address, signed, [sig])))
     return { ok: false, status: 422, body: { error: 'invalid_passkey' } };
   const moved = await deps.store.transition(row.id, 'held', 'refused', {
     reason: 'user_refused',
     decidedBy: 'user_refused',
     decidedAt: new Date(),
-    ownerAuth: storedAuth(auth),
+    ownerAuth: storedSigs([sig]),
     detail: { decision },
   });
   if (!moved) return { ok: false, status: 409, body: { error: 'not_held' } };
