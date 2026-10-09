@@ -2,7 +2,7 @@
 
 ## Status
 
-**BUILT (8 Oct 2026); live check waits on recording being switched on (Afshal: it spends testnet MON).** Technical decisions made by Claude (Afshal, 7 Oct: decide technical choices). Owner: Afshal; built by Claude.
+**DONE (8 Oct 2026): live on testnet, recording on.** Technical decisions made by Claude (Afshal, 7 Oct: decide technical choices). Owner: Afshal; built by Claude.
 
 ## Goal
 
@@ -67,7 +67,9 @@ A held invoice (KS-1003) and a refused one through the demo account: each decisi
 
 Found while building: a refusal's signed "evidence hash" was the request's id; holds were never recorded. Both fixed above. And in my own first version: decisions were kept one per payment, so an owner's refusal of a payment the checker had held would have been dropped. Now one per payment and decider (migration 0012), each on Monad on its own, each listed in the record and checked by `verifyRecord`. Found before anything was recorded: production runs with `RECORD_DECISIONS=false` until Afshal decides the MON.
 
-**Live (8 Oct):** deployed with recording off. The live check (a held invoice and its refusal on the demo account, their two transactions, the record verified with `countersign-verify` against Monad's RPC) costs about 0.03 MON plus a test account's setup (about 0.09), and waits on Afshal.
+**Live (8 Oct, ~9:30 PM PDT): done.** Recording switched on (Afshal: "ok go ahead"). `scripts/record-smoke.ts` on a fresh test account: KS-1003 held by the checker; the hold on Monad 1.2 s later (`0x550fec1f…`); the owner refused it with the test passkey; the refusal on Monad (`0x90289bdf…`); the record downloaded and verified against Monad's RPC, every check passing (`results/2026-10-08-record-ks-1003.json`). `npx countersign-verify` on the file from a clean install of SDK 0.3.0: matches; a copy with one finding flipped: "evidence hash … it was changed".
+
+**The load check that followed (20 invoices, `results/2026-10-08-run-20-recording.json`):** all 20 as expected (15 paid, 5 of 5 doctored caught, 0 clean held; the four checker holds written on Monad), but its times do not count: the relayers had run down to 0.13 MON (each run opens 11 orders at about 0.042 MON each, which the estimates had left out), so 12 released payments waited 12 minutes for a top-up. Once topped up, the 12 were sent and marked settled within 2 s. Found by it, and fixed: `/health` said nothing (a wallet is "starved" only after a node refuses it, and the pool never picked an empty one), so it now reports `funds.paymentsLeft`; the run script now refuses to start without enough gas for the whole run.
 
 Tests: 666 across the repo.
 

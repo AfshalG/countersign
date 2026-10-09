@@ -1,0 +1,269 @@
+{
+  "date": "2026-10-09T04:42:55.905Z",
+  "gateway": "https://gateway-production-e17a.up.railway.app",
+  "account": "0x407AD5643f05677a609443d5b00F06a3DDA22995",
+  "runId": "0x89435b160ee3db137f2f17122a19eacfd7fc62293858526570f815fcc70098cd",
+  "board": "https://gateway-production-e17a.up.railway.app/r/0x89435b160ee3db137f2f17122a19eacfd7fc62293858526570f815fcc70098cd",
+  "size": 20,
+  "orders": 10,
+  "intakeToLastDecisionMs": 723454,
+  "wallClockMs": 725560,
+  "settled": {
+    "count": 15,
+    "p50Ms": 722804,
+    "p95Ms": 723392,
+    "maxMs": 723392
+  },
+  "held": [
+    {
+      "reason": "address_mismatch",
+      "count": 1
+    },
+    {
+      "reason": "amount_mismatch",
+      "count": 1
+    },
+    {
+      "reason": "hidden_instructions",
+      "count": 1
+    },
+    {
+      "reason": "items_mismatch",
+      "count": 1
+    }
+  ],
+  "blocked": [
+    {
+      "reason": "over_limit",
+      "text": "The amount is over a limit the owner set: per payment, for a newly added address, or what is left in the order.",
+      "count": 1,
+      "ids": ["0xdbb1ce560eb1cefa6329a3bbcd531cf76745ece1b18ab441ebddc89189c5551f"]
+    }
+  ],
+  "doctored": {
+    "total": 5,
+    "caught": 5
+  },
+  "clean": {
+    "total": 15,
+    "wronglyHeld": 0,
+    "examples": []
+  },
+  "asExpected": 20,
+  "secondAgent": {
+    "sent": 15,
+    "sameRequests": true
+  },
+  "transactions": 15,
+  "relayerMonSpent": -1.0348,
+  "groupRefusal": {
+    "reason": "address_mismatch",
+    "shown": 1,
+    "status": 200,
+    "runId": "0x89435b160ee3db137f2f17122a19eacfd7fc62293858526570f815fcc70098cd",
+    "refused": 1,
+    "ids": ["0x5e0bbd1e7e965acf41692575563adb6248f0092b1249b64a97ad4510a7838789"]
+  },
+  "invoices": [
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-22995-R3000",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1006",
+      "number": "KS-1006-22995-R3001",
+      "expected": {
+        "outcome": "blocked",
+        "reason": "over_limit"
+      },
+      "outcome": "blocked",
+      "reason": "over_limit"
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-22995-R3002",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1005",
+      "number": "KS-1005-22995-R3003",
+      "expected": {
+        "outcome": "held",
+        "reason": "hidden_instructions"
+      },
+      "outcome": "held",
+      "reason": "hidden_instructions"
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-22995-R3004",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-22995-R3005",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-22995-R3006",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1004",
+      "number": "KS-1004-22995-R3007",
+      "expected": {
+        "outcome": "held",
+        "reason": "amount_mismatch"
+      },
+      "outcome": "held",
+      "reason": "amount_mismatch"
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-22995-R3008",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-22995-R3009",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-22995-R30010",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-22995-R30011",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-22995-R30012",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-22995-R30013",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-22995-R30014",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-22995-R30015",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1003",
+      "number": "KS-1003-22995-R30016",
+      "expected": {
+        "outcome": "held",
+        "reason": "items_mismatch"
+      },
+      "outcome": "held",
+      "reason": "items_mismatch"
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-22995-R30017",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-22995-R30018",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1002",
+      "number": "KS-1002-22995-R30019",
+      "expected": {
+        "outcome": "held",
+        "reason": "address_mismatch"
+      },
+      "outcome": "held",
+      "reason": "address_mismatch"
+    }
+  ]
+}

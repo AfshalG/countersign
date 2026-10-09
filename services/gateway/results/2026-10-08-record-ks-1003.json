@@ -1,0 +1,236 @@
+{
+  "format": "countersign-record/1",
+  "generatedAt": "2026-10-09T04:27:44.445Z",
+  "chain": {
+    "id": 10143,
+    "name": "Monad Testnet",
+    "explorer": "https://testnet.monadexplorer.com"
+  },
+  "payment": {
+    "id": "0x077ab9c94f470910979cf8c5fc998034f520125f2fb31bf09951c34ea5287ee0",
+    "runId": null,
+    "account": "0x93b8Ff65bc7C717Bf9a2ab0631Dbaa20F443BeBd",
+    "vault": "0xC64871FfE5c0e1fE7499AF43B2439c1e1e859603",
+    "order": {
+      "orderId": "0xd6603edc8a3a98be16d1341454be007d1d11e27003ef4a22ad41e77b03e760ca",
+      "supplierId": "0x4f16e9bbfc45cf143da653ab5b4c8ac2e781e7a393badffb9cbc896c53d8c5b1",
+      "supplierName": "Kalibre Studio",
+      "orderHash": "0x3b17196e7c297cc83c96f2bb852685413de653639f5dac8e4c08588d1f799e58",
+      "amountUsdc": "0.005",
+      "expiry": 1794112037,
+      "approvedBlock": 69444948
+    },
+    "invoiceHash": "0xd534409c93def74478d07a0632869b2e76ad1e305818c909fc3f9f96ac227e5c",
+    "payTo": "0x90f9931B748B26763161a8191C178Fe425C25fEc",
+    "amount": "1500",
+    "amountUsdc": "0.0015",
+    "deadline": 1791523659,
+    "agent": {
+      "address": "0x4612fA43DC476AD3E82eb294914639A522D6b965",
+      "agentId": null,
+      "registry": null
+    },
+    "agentSig": "0x58944be4d53bb814435d61d8eb35578e937579b9b89adc67ff437b011eda68e749df7e2951d33a507dca44896551394b52b2539fe87332d34d053a84c375a0041c"
+  },
+  "document": {
+    "content": {
+      "html": "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"><title>Invoice KS-1003-3BEBD-RMV0GSC23 · Kalibre Studio</title><style>\n  :root { color-scheme: light dark; --fg: #1d1d1f; --muted: #6e6e73; --line: #d2d2d7; --bg: #fff; --tint: #f5f5f7; }\n  @media (prefers-color-scheme: dark) { :root { --fg: #f5f5f7; --muted: #a1a1a6; --line: #3a3a3c; --bg: #111; --tint: #1c1c1e; } }\n  body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.5 -apple-system, system-ui, sans-serif; }\n  main { max-width: 42rem; margin: 0 auto; padding: 1.5rem 1rem 3rem; }\n  h1 { font-size: 1.5rem; margin: .25rem 0 1rem; } h2 { font-size: 1.1rem; margin: 2rem 0 .5rem; }\n  .muted { color: var(--muted); } .small { font-size: .875rem; }\n  table { width: 100%; border-collapse: collapse; margin: 1rem 0; } td, th { text-align: left; padding: .5rem .25rem; border-bottom: 1px solid var(--line); vertical-align: top; }\n  td.n, th.n { text-align: right; white-space: nowrap; }\n  code { font: .9rem ui-monospace, monospace; overflow-wrap: anywhere; }\n  .box { background: var(--tint); border-radius: .75rem; padding: 1rem; margin: 1rem 0; }\n  .note { border-left: 3px solid var(--muted); padding-left: .75rem; }\n  a { color: inherit; }\n</style></head><body><main><p class=\"muted small\">Kalibre Studio · Product photography for online shops</p>\n     <h1>Invoice KS-1003-3BEBD-RMV0GSC23</h1>\n     <p class=\"small\">Issued 7 October 2026 · Due 21 October 2026<br>Reference: Kalibre Studio quote Q-2210: 50 product photos</p>\n     <table><thead><tr><th>Item</th><th class=\"n\">Qty</th><th class=\"n\">Unit price</th><th class=\"n\">Amount</th></tr></thead><tbody><tr><td>Product photos, white background</td><td class=\"n\">10</td><td class=\"n\">0.0001 USDC</td><td class=\"n\">0.001 USDC</td></tr><tr><td>Rush delivery</td><td class=\"n\">1</td><td class=\"n\">0.0005 USDC</td><td class=\"n\">0.0005 USDC</td></tr></tbody>\n     <tfoot><tr><th>Total</th><th></th><th></th><th class=\"n\">0.0015 USDC</th></tr></tfoot></table>\n     \n     <div class=\"box\"><strong>Pay in USDC on Monad to</strong><br><code>0x90f9931B748B26763161a8191C178Fe425C25fEc</code></div>\n     <p class=\"small muted\">Website: <a href=\"https://countersign-supplier-demo.vercel.app\">https://countersign-supplier-demo.vercel.app</a> · Questions: billing@kalibre.example · Testnet amounts.</p></main></body></html>"
+    },
+    "hash": "0xb86f60c787b0218c115cb9a1af88356b8dd506deda35acb57248b00b13ec8229"
+  },
+  "check": {
+    "status": "refused",
+    "reason": "user_refused",
+    "reasonText": "The owner refused it.",
+    "decidedBy": "user_refused",
+    "at": "2026-10-09T04:27:40.219Z",
+    "evidence": {
+      "ms": 359,
+      "read": {
+        "lines": [
+          "Product photos, white background x10 at 0.0001: 0.001",
+          "Rush delivery x1 at 0.0005: 0.0005"
+        ],
+        "payTo": "0x90f9931B748B26763161a8191C178Fe425C25fEc",
+        "total": "0.0015",
+        "number": "KS-1003-3BEBD-RMV0GSC23",
+        "sender": "Kalibre Studio",
+        "source": "html",
+        "hiddenText": []
+      },
+      "model": {
+        "ms": 348,
+        "name": "typesafe/jev-1.13-20260917",
+        "answers": {
+          "on_order": 0.08,
+          "instructions": 0.08,
+          "same_supplier": 0.99,
+          "pays_elsewhere": 0.02
+        },
+        "questions": {
+          "on_order": "Is every line on the invoice, including \"Rush delivery\", something the order covers?",
+          "instructions": "Does the invoice contain instructions addressed to an automated reader, an AI or an assistant, rather than to a person?",
+          "same_supplier": "Is this invoice from the same supplier as the order (Kalibre Studio)?",
+          "pays_elsewhere": "Does the invoice ask for payment to any address or account other than 0x90f9931B748B26763161a8191C178Fe425C25fEc?"
+        }
+      },
+      "checker": "countersign-checker/1",
+      "findings": [
+        {
+          "ok": true,
+          "check": "read",
+          "detail": "every field read"
+        },
+        {
+          "ok": true,
+          "check": "hidden_text",
+          "detail": "nothing hidden from a person"
+        },
+        {
+          "ok": true,
+          "check": "identity",
+          "detail": "the payment is for invoice KS-1003-3BEBD-RMV0GSC23"
+        },
+        {
+          "ok": true,
+          "check": "supplier",
+          "detail": "from the order's supplier (Kalibre Studio)"
+        },
+        {
+          "ok": true,
+          "check": "address",
+          "detail": "pays the printed address 0x90f9931B748B26763161a8191C178Fe425C25fEc"
+        },
+        {
+          "ok": true,
+          "check": "arithmetic",
+          "detail": "the lines add up to the total"
+        },
+        {
+          "ok": true,
+          "check": "amount",
+          "detail": "pays the total, 0.0015 USDC"
+        },
+        {
+          "ok": true,
+          "check": "price",
+          "detail": "\"Product photos, white background\" at 0.0001 USDC, as quoted"
+        }
+      ]
+    },
+    "evidenceHash": "0x6a621ab9d9ed23a80e4457a729dc58d9823abef004beee9e6a03b6bf8659d1d6"
+  },
+  "decision": {
+    "by": "user_refused",
+    "at": "2026-10-09T04:27:43.229Z",
+    "ownerAuth": [
+      {
+        "auth": {
+          "r": "0x265b6584d775fd81da7ed45c78c0c7698983bd564f2755391758f5a5284333c4",
+          "s": "0x0424ddc1c236afc575a843a553f1f2097d9e53e8d7d8b694d98c45415b6042a5",
+          "typeIndex": "1",
+          "challengeIndex": "23",
+          "clientDataJSON": "{\"type\":\"webauthn.get\",\"challenge\":\"vGY5gF1cweXw2-_sYG14gos-WAnapAE0i2e-HZErtBE\",\"origin\":\"https://countersign.test\",\"crossOrigin\":false}",
+          "authenticatorData": "0x84733e374c3e278b856376f5a49f39c76be6fb1ca3469b7c0ae9ea61e1b1f68b0500000001"
+        },
+        "owner": 0
+      }
+    ],
+    "onChain": [
+      {
+        "by": "checker",
+        "decision": {
+          "outcome": 1,
+          "reasonHash": "0x7ebd8109812fd6b2bc15e7ac1aa825d0d57c67ac6c429308a0e90f618ce8d77a",
+          "invoiceHash": "0xd534409c93def74478d07a0632869b2e76ad1e305818c909fc3f9f96ac227e5c",
+          "evidenceHash": "0x6a621ab9d9ed23a80e4457a729dc58d9823abef004beee9e6a03b6bf8659d1d6"
+        },
+        "sigs": "0x2edc7c286bcb5871a2b5398640c31821336ed26411622e71f0e916fcd3adb21d503bc204eaff321c086e9821b1ff7a297834b0da9cad18c1699dc945aa36de141c",
+        "tx": {
+          "hash": "0x550fec1f0d1ea783a8ecf0834e9490300f552f1bce18290a186ebd1926dcb722",
+          "block": 69444999,
+          "status": "success",
+          "final": true,
+          "url": "https://testnet.monadexplorer.com/tx/0x550fec1f0d1ea783a8ecf0834e9490300f552f1bce18290a186ebd1926dcb722"
+        }
+      },
+      {
+        "by": "owner",
+        "decision": {
+          "outcome": 2,
+          "reasonHash": "0x125a9cf8427717771dc4097302335987e255d49484b4b5ca9e8eb6a3fd9278ad",
+          "invoiceHash": "0xd534409c93def74478d07a0632869b2e76ad1e305818c909fc3f9f96ac227e5c",
+          "evidenceHash": "0x6a621ab9d9ed23a80e4457a729dc58d9823abef004beee9e6a03b6bf8659d1d6"
+        },
+        "sigs": [
+          {
+            "auth": {
+              "r": "0x265b6584d775fd81da7ed45c78c0c7698983bd564f2755391758f5a5284333c4",
+              "s": "0x0424ddc1c236afc575a843a553f1f2097d9e53e8d7d8b694d98c45415b6042a5",
+              "typeIndex": "1",
+              "challengeIndex": "23",
+              "clientDataJSON": "{\"type\":\"webauthn.get\",\"challenge\":\"vGY5gF1cweXw2-_sYG14gos-WAnapAE0i2e-HZErtBE\",\"origin\":\"https://countersign.test\",\"crossOrigin\":false}",
+              "authenticatorData": "0x84733e374c3e278b856376f5a49f39c76be6fb1ca3469b7c0ae9ea61e1b1f68b0500000001"
+            },
+            "owner": 0
+          }
+        ],
+        "tx": {
+          "hash": "0x90289bdf1bc7ce8cc42a814a3f1c88a565af7ec77e33c9c2e608fabea0cf3827",
+          "block": 69445009,
+          "status": "success",
+          "final": true,
+          "url": "https://testnet.monadexplorer.com/tx/0x90289bdf1bc7ce8cc42a814a3f1c88a565af7ec77e33c9c2e608fabea0cf3827"
+        }
+      }
+    ],
+    "onChainNote": null
+  },
+  "settlement": null,
+  "events": [
+    {
+      "from": null,
+      "to": "requested",
+      "reason": null,
+      "at": "2026-10-09T04:27:39.726Z",
+      "detail": null
+    },
+    {
+      "from": "requested",
+      "to": "checking",
+      "reason": null,
+      "at": "2026-10-09T04:27:39.785Z",
+      "detail": null
+    },
+    {
+      "from": "checking",
+      "to": "held",
+      "reason": "items_mismatch",
+      "at": "2026-10-09T04:27:40.222Z",
+      "detail": null
+    },
+    {
+      "from": "held",
+      "to": "refused",
+      "reason": "user_refused",
+      "at": "2026-10-09T04:27:43.231Z",
+      "detail": {
+        "decision": {
+          "reasonHash": "0x125a9cf8427717771dc4097302335987e255d49484b4b5ca9e8eb6a3fd9278ad",
+          "evidenceHash": "0x6a621ab9d9ed23a80e4457a729dc58d9823abef004beee9e6a03b6bf8659d1d6"
+        }
+      }
+    }
+  ],
+  "timings": {
+    "checkMs": 493,
+    "personMs": 3010,
+    "settleMs": null
+  },
+  "verify": [
+    "check.evidenceHash is keccak256 of check.evidence as canonical JSON (RFC 8785: keys sorted, no whitespace); document.hash likewise of document.content.",
+    "decision.onChain: each one's transaction on Monad (chain 10143) emits DecisionRecorded from payment.vault with the same invoice hash, outcome, reason hash, evidence hash and decider (0 the checker, 1 an owner).",
+    "settlement: its transaction emits PaymentExecuted from payment.vault with payment.invoiceHash, payment.payTo and payment.amount.",
+    "Or run `npx countersign-verify <this file>` (in @countersign/sdk), which checks each against Monad’s own RPC."
+  ]
+}

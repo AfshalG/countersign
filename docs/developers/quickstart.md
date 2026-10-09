@@ -11,7 +11,7 @@ Countersign gives an AI agent an account that pays only what its owner approved.
 ## 1. Get a test account (one command)
 
 ```bash
-npx --package=https://github.com/AfshalG/countersign/releases/download/sdk-v0.2.0/countersign-sdk-0.2.0.tgz countersign-test-account > .env
+npx --package=https://github.com/AfshalG/countersign/releases/download/sdk-v0.3.0/countersign-sdk-0.3.0.tgz countersign-test-account > .env
 ```
 
 In about ten seconds, with nobody from us involved, you have your own account on Monad testnet:
@@ -26,7 +26,7 @@ The same from code: `createTestAccount()` from `@countersign/sdk/test-account` (
 ## 2a. The SDK
 
 ```bash
-npm i https://github.com/AfshalG/countersign/releases/download/sdk-v0.2.0/countersign-sdk-0.2.0.tgz
+npm i https://github.com/AfshalG/countersign/releases/download/sdk-v0.3.0/countersign-sdk-0.3.0.tgz
 ```
 
 [`examples/pay-an-invoice`](../../examples/pay-an-invoice) is a complete script: `npm run account` makes your test account, and `npm start` reads Kalibre Studio's clean invoice from the supplier's own page and pays it (0.001 USDC), waiting until it is settled at Monad's Finalized stage. Pass the invoice itself (`document: { html }` or `{ text }`): the checker reads it, and a payment with nothing to read waits for the owner.

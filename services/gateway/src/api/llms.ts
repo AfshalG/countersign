@@ -8,7 +8,7 @@ import { readFile } from 'node:fs/promises';
 
 const REPO = 'https://github.com/AfshalG/countersign';
 const RAW = 'https://raw.githubusercontent.com/AfshalG/countersign/development';
-const SDK_TGZ = `${REPO}/releases/download/sdk-v0.2.0/countersign-sdk-0.2.0.tgz`;
+const SDK_TGZ = `${REPO}/releases/download/sdk-v0.3.0/countersign-sdk-0.3.0.tgz`;
 const MCP_URL = 'https://countersign-mcp.vercel.app/api/mcp';
 
 export function llmsTxt(publicUrl: string): string {

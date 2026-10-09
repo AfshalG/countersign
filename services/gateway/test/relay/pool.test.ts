@@ -182,6 +182,36 @@ describe('relayer pool', () => {
     expect(Math.max(...perEndpoint)).toBe(1);
   });
 
+  it('says how many payments the wallets can still pay for, before any payment waits (Slice 18)', async () => {
+    pool.stop();
+    // 127.5 gwei: a payment's 266,000 gas costs at most 0.033915 MON.
+    sender.balances.set(privateKeyToAccount(key0).address.toLowerCase(), 10n ** 17n); // 0.1 MON
+    pool = new RelayerPool({
+      keys: [key0],
+      store,
+      sender,
+      chainId: 10143,
+      endpoints: 1,
+      stallMs: 60_000,
+      tickMs: 20,
+    });
+    await pool.start();
+    expect(await pool.affordable(266_000n)).toBe(2);
+    sender.balances.set(privateKeyToAccount(key0).address.toLowerCase(), 10n ** 16n); // 0.01 MON
+    pool.stop();
+    pool = new RelayerPool({
+      keys: [key0],
+      store,
+      sender,
+      chainId: 10143,
+      endpoints: 1,
+      stallMs: 60_000,
+      tickMs: 20,
+    });
+    await pool.start();
+    expect(await pool.affordable(266_000n)).toBe(0);
+  });
+
   it('judges no wallet stalled while the finality tracker is behind (Slice 16)', async () => {
     pool.stop();
     let behind = true;
