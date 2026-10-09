@@ -29,6 +29,7 @@ export {
   type Refusal,
 } from './payment-state.js';
 export { USDC_DECIMALS, formatUsdc, usdc } from './amounts.js';
+export { compactIban, ibanValid, routingValid, spacedIban } from './bank.js';
 export { invoiceHash, normalizeInvoiceNumber, supplierId, supplierSlug } from './invoice.js';
 export {
   AGENT_WALLET_SET_TYPES,

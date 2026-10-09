@@ -397,7 +397,7 @@ const getApproval = createRoute({
   responses: { 200: json(approvalView, 'The approval'), 404: json(apiError, 'unknown_approval') },
 });
 
-const assertion = z
+export const assertion = z
   .object({
     authenticatorData: z.string().min(1).max(2048).openapi({ description: 'Hex or base64url' }),
     clientDataJSON: z

@@ -1,5 +1,6 @@
 import { getAddress, type Address } from 'viem';
 import { usdc } from '@countersign/shared';
+import { readBank, type ReadBank } from './bank.js';
 
 /**
  * The checker's own read of an invoice (Slice 10). It never takes the agent's word for a field:
@@ -29,6 +30,8 @@ export type ReadInvoice = {
   total: bigint | null;
   /** The USDC address printed for payment, from the text a person sees. */
   payTo: Address | null;
+  /** Bank details, from the text a person sees (Slice 17: advice for bank transfers). */
+  bank: ReadBank;
   /** Everything a machine reads: what the model is asked about. */
   machineText: string;
   /** Text present in the page that a person would not see. */
@@ -116,6 +119,7 @@ function fields(text: string) {
     lines: items,
     total: total ? amountOf(total) : null,
     payTo: payTo ? getAddress(payTo) : null,
+    bank: readBank(text),
   };
 }
 

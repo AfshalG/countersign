@@ -98,6 +98,31 @@ export function gateway(input: Parameters<typeof fetch>[0], init?: RequestInit):
     byInvoice.set(invoice, v);
     return reply(201, { created: true, request: v });
   }
+  if (url.pathname === '/v1/advice') {
+    // Slice 17: Kalibre's account on file is GB29…; anything else on the invoice is a mismatch.
+    const doc = JSON.stringify(body?.document ?? '');
+    const changed = doc.includes('GB33');
+    return reply(200, {
+      id: '0xadvice',
+      advice: changed ? 'mismatch' : 'match',
+      reason: changed ? 'bank_account_mismatch' : null,
+      reasonText: changed
+        ? "The invoice's bank account is not the supplier's account on file."
+        : null,
+      said: changed
+        ? "Advice: do not pay this invoice. The invoice's bank account is not the supplier's account on file. Advice only: do not pay it until the supplier confirms the account by phone, on a number you already have."
+        : 'Advice: the bank account on this invoice is the supplier’s account on file, and nothing else on it differs from the order. Countersign cannot stop or confirm a bank transfer: it is paid at the bank.',
+      invoiceNumber: 'KS-1007',
+      onFile: {
+        source: 'demo',
+        holder: 'Kalibre Studio Ltd',
+        iban: 'GB29NWBK60161331926819',
+        description: 'Kalibre Studio Ltd, IBAN GB29 NWBK 6016 1331 9268 19',
+      },
+      evidence: {},
+      checkedAt: '2026-10-08T00:00:00.000Z',
+    });
+  }
   if (url.pathname === '/v1/checks') {
     const payTo = (body?.payment as { payTo: string }).payTo;
     return payTo.toLowerCase() === ON_FILE.toLowerCase()

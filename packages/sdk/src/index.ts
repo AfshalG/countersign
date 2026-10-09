@@ -1,6 +1,7 @@
 export { Countersign, paymentDigest, type CountersignOptions, type WaitOptions } from './client.js';
 export { CountersignError, type Issue } from './errors.js';
 export type {
+  Advice,
   CheckVerdict,
   Invoice,
   Order,

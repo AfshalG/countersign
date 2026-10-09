@@ -52,7 +52,11 @@ describe('the API reference', () => {
         '/v1/payments/{id}/approve',
         '/v1/payments/{id}/refuse',
         '/v1/checks',
+        '/v1/advice',
         '/v1/accounts',
+        '/v1/accounts/{account}/banks',
+        '/v1/owner/{account}/banks',
+        '/v1/owner/{account}/banks/preview',
         '/v1/accounts/{account}/orders',
         '/v1/accounts/{account}/runs',
         '/v1/proposals',
@@ -66,8 +70,8 @@ describe('the API reference', () => {
     expect(doc.components.securitySchemes.Bearer).toMatchObject({ type: 'http', scheme: 'bearer' });
     for (const [path, ops] of Object.entries(doc.paths))
       for (const op of Object.values(ops))
-        // The approvals routes are the exception: the owner's passkey authorises them.
-        if (path.startsWith('/v1') && !path.startsWith('/v1/approvals'))
+        // The approvals and owner routes are the exception: the owner's passkey authorises them.
+        if (path.startsWith('/v1') && !/^\/v1\/(approvals|owner)\//.test(path))
           expect(op.security, path).toEqual([{ Bearer: [] }]);
   });
 

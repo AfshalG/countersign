@@ -1,5 +1,6 @@
 import { getAddress, keccak256, stringToHex, type Address, type Hex } from 'viem';
 import { REASONS, type Reason } from '@countersign/shared';
+import type { AdviceInput, AdviceResult, Advisor } from './advice.js';
 import type { CheckInput, CheckResult, Checker } from './checker.js';
 import type { PaymentRequestRow } from './db/schema.js';
 import type { Store } from './db/store.js';
@@ -40,7 +41,7 @@ function quoteOf(document: string): { html: string } | { text: string } {
  */
 export async function orderFacts(
   deps: { store: Pick<Store, 'orderByVault' | 'approvedQuote'> },
-  row: PaymentRequestRow,
+  row: Pick<PaymentRequestRow, 'vault' | 'account' | 'payTo'>,
 ): Promise<OrderFacts | null> {
   const order = await deps.store.orderByVault(row.vault);
   if (!order) return null;
@@ -66,7 +67,7 @@ export async function orderFacts(
 }
 
 /** The invoice as the agent passed it: a page, its text, or nothing the checker can read. */
-function pageOf(document: unknown): { html: string } | { text: string } {
+export function pageOf(document: unknown): { html: string } | { text: string } {
   if (typeof document === 'string') return { text: document };
   if (typeof document === 'object' && document !== null) {
     const d = document as { html?: unknown; text?: unknown };
@@ -79,7 +80,7 @@ function pageOf(document: unknown): { html: string } | { text: string } {
 /** Reading an order's facts (the index and the address on file) may take this long at volume. */
 const FACTS_TIMEOUT_MS = 10_000;
 
-export class RemoteChecker implements Checker {
+export class RemoteChecker implements Checker, Advisor {
   constructor(
     private readonly options: {
       url: string;
@@ -88,6 +89,21 @@ export class RemoteChecker implements Checker {
       fetchFn?: typeof fetch;
     },
   ) {}
+
+  /** Advice on a bank-transfer invoice (Slice 17): the checker's `/v1/advise`, which never signs. */
+  async advise(input: AdviceInput, signal: AbortSignal): Promise<AdviceResult> {
+    const res = await (this.options.fetchFn ?? fetch)(`${this.options.url}/v1/advise`, {
+      method: 'POST',
+      signal,
+      headers: {
+        authorization: `Bearer ${this.options.token}`,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify(input),
+    });
+    if (!res.ok) throw new Error(`the checker answered ${String(res.status)}`);
+    return (await res.json()) as AdviceResult;
+  }
 
   async check(input: CheckInput, startTimer: () => AbortSignal): Promise<CheckResult> {
     // Our own reads first (the database and the chain, paced at volume), with their own limit;

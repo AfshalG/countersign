@@ -243,6 +243,8 @@ const app = createApp({
   store,
   chain: monad,
   checker,
+  // Advice on bank-transfer invoices (Slice 17): only the checker service gives it.
+  ...(checker instanceof RemoteChecker ? { advisor: checker } : {}),
   chainId,
   checkerTimeoutMs: CHECKER_TIMEOUT_MS,
   indexing: { latestFinalized: () => monad.latestFinalized(), catchUp: () => indexer.catchUp() },

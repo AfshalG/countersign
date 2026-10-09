@@ -77,15 +77,23 @@ describe('what the scripted agent does with a document', () => {
     if (a.kind === 'propose') expect(a.document).toContain('Total 0.005 USDC');
   });
 
-  it('sends nothing for a supplier with no order, or for a bank transfer', () => {
+  it('sends nothing for a supplier with no order', () => {
     expect(decide(read('nw-77'), 'careful', orders, memory)).toEqual({
       kind: 'none',
       why: 'no_order',
     });
-    expect(decide(read('ks-1007'), 'careful', orders, memory)).toEqual({
-      kind: 'none',
-      why: 'bank_transfer',
-    });
+  });
+
+  it('asks for advice on a bank transfer instead of paying it (Slice 17)', () => {
+    for (const id of ['ks-1007', 'ks-1008'] as const) {
+      const a = decide(read(id), 'careful', orders, memory);
+      // Against Kalibre's order, as an invoice paid in USDC would be.
+      expect(a, id).toMatchObject({
+        kind: 'advise',
+        order: { supplierId: supplierId(supplierSlug('Kalibre Studio')) },
+      });
+      if (a.kind === 'advise') expect(a.document).toContain('IBAN');
+    }
   });
 
   it('sends nothing for a page it cannot read', () => {
@@ -111,6 +119,21 @@ describe('scoring a case against what its document says should happen', () => {
         { outcome: 'proposed', changesAddress: true },
       ).ok,
     ).toBe(true);
+  });
+
+  it('scores advice on its verdict (Slice 17)', () => {
+    const want = {
+      outcome: 'advised',
+      advice: 'mismatch',
+      reason: 'bank_account_mismatch',
+    } as const;
+    expect(compare(want, { ...want }).ok).toBe(true);
+    expect(
+      compare(want, { outcome: 'advised', advice: 'unsure', reason: 'checker_unsure' }),
+    ).toEqual({
+      ok: false,
+      why: 'expected advised: mismatch (bank_account_mismatch), got advised: unsure (checker_unsure)',
+    });
   });
 
   it('says why when it does not match', () => {
