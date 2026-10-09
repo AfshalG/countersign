@@ -1,0 +1,35 @@
+{
+  "at": "2026-10-09T07:47:57.438Z",
+  "gateway": "https://gateway-production-e17a.up.railway.app",
+  "account": "0xC127e7Dbc29d0d38Be3b2e557ce7d796bd2403A9",
+  "rows": [
+    {
+      "case": "b03",
+      "about": "a bank change to come",
+      "status": 200,
+      "advice": "mismatch",
+      "reason": "bank_account_mismatch",
+      "answers": {
+        "instructions": 0.05,
+        "same_supplier": 0.98,
+        "bank_elsewhere": 0.93
+      },
+      "definitionsSent": ["instructions", "same_supplier", "bank_elsewhere"],
+      "ms": 795
+    },
+    {
+      "case": "b02",
+      "about": "says the details are unchanged",
+      "status": 200,
+      "advice": "match",
+      "reason": null,
+      "answers": {
+        "instructions": 0.06,
+        "same_supplier": 0.98,
+        "bank_elsewhere": 0.06
+      },
+      "definitionsSent": ["instructions", "same_supplier", "bank_elsewhere"],
+      "ms": 369
+    }
+  ]
+}

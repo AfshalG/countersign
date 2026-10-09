@@ -119,6 +119,8 @@ Without the case the wider definition of instructions was written for ("pre-appr
 
 **Found on the way:** the first draft of the definitions held ks-1008, because "any other … bank account" covers the supplier's own account; the demo set caught it, and the narrower definition (redirection, not another way to pay) went into the measured version. Still weak, all held for a person rather than passed: a wallet named only by its last digits (0.64 to 0.68), a card link on another domain (0.24 to 0.29), a look-alike address given as an "update" (0.78 to 0.79), and the reworded quote line (0.59: a person is asked to pay it). Tuning further against the same 35 invoices would fit the wording to the test; the next step is a set written by someone else (Slice 20).
 
+**Live, before and after the deploy** (`services/gateway/scripts/criteria-smoke.ts`, `services/gateway/results/2026-10-09-criteria-live-before.json` and `…-after.json`): two of the bank invoices through the hosted gateway's advice on the demo account, nothing paid. "From November we bank with Revolut; new details to follow" went from unsure (0.73, no definitions) to mismatch (0.93, the three definitions in the evidence); "bank details as on file, unchanged" stayed a match (0.05, then 0.06).
+
 ## Next
 
 Slice 11 (Sophie's app) shows the checker's evidence; Slice 14 runs the same documents through real agents; Slice 20 widens the set.
