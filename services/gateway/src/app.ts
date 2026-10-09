@@ -22,6 +22,8 @@ import type { DemoDeps } from './demo/accounts.js';
 import type { ProposalDeps } from './owner/proposals.js';
 import type { PauseDeps } from './owner/pause.js';
 import { registerOwnerRoutes } from './api/owner.js';
+import { registerAdviceRoutes } from './api/advice.js';
+import type { Advisor } from './advice.js';
 import { registerWhatsAppRoutes, type WhatsAppRouteDeps } from './api/whatsapp.js';
 import { recoverAgent, type AgentDirectory } from './agents/identity.js';
 import { supplierNameOf } from './suppliers.js';
@@ -57,6 +59,8 @@ export type AppDeps = {
   publicUrl?: string;
   /** The checker and its time limit, for checks with no payment (POST /v1/checks). */
   checker: Checker;
+  /** Advice on bank-transfer invoices (Slice 17); without it POST /v1/advice answers 503. */
+  advisor?: Advisor;
   chainId: number;
   checkerTimeoutMs: number;
   /** The service token the MCP server and the apps send; developers' accounts use account tokens. */
@@ -399,7 +403,8 @@ export function createApp(deps: AppDeps) {
   });
   app.use('/v1/approvals/*', browserCors);
   if (deps.demo) app.use('/v1/demo/*', browserCors);
-  if (deps.pause) app.use('/v1/owner/*', browserCors);
+  // The owner's routes: the stop button's, and the bank accounts on file (Slice 17).
+  app.use('/v1/owner/*', browserCors);
   if (deps.whatsapp) app.use('/v1/whatsapp/*', browserCors);
   // The service token, or an account token limited to its own account (Slice 12 part 2).
   app.use(
@@ -671,6 +676,13 @@ export function createApp(deps: AppDeps) {
       }
     }),
   );
+
+  registerAdviceRoutes(app, {
+    store,
+    chain,
+    chainId: deps.chainId,
+    ...(deps.advisor ? { advisor: deps.advisor } : {}),
+  });
 
   registerOrderRoutes(app, {
     store,

@@ -394,3 +394,47 @@ export const supplierWebsites = pgTable(
 );
 
 export type WebsiteProofRow = typeof websiteProofs.$inferSelect;
+
+/**
+ * A supplier's bank account as an owner put it on file with their passkey (Slice 17): what a
+ * bank-transfer invoice's account is compared with. Off chain: the contract pays only USDC, and a
+ * bank transfer cannot be stopped from outside the bank, so this backs advice, not enforcement.
+ */
+export const supplierBanks = pgTable(
+  'supplier_banks',
+  {
+    account: text('account').notNull(),
+    supplierId: text('supplier_id').notNull(),
+    holder: text('holder').notNull(),
+    iban: text('iban'),
+    bic: text('bic'),
+    sortCode: text('sort_code'),
+    accountNumber: text('account_number'),
+    routingNumber: text('routing_number'),
+    /** The owner's signature over exactly these details (bank_challenge), kept as evidence. */
+    ownerAuth: jsonb('owner_auth').notNull(),
+    updatedAt: at('updated_at').notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.account, t.supplierId] })],
+);
+
+/** Each piece of advice given on a bank-transfer invoice (Slice 17), for the payment record. */
+export const adviceChecks = pgTable(
+  'advice_checks',
+  {
+    id: text('id').primaryKey(),
+    account: text('account').notNull(),
+    vault: text('vault').notNull(),
+    supplierId: text('supplier_id').notNull(),
+    advice: text('advice').$type<'match' | 'mismatch' | 'unsure'>().notNull(),
+    reason: text('reason').$type<Reason>(),
+    invoiceNumber: text('invoice_number'),
+    documentHash: text('document_hash').notNull(),
+    evidence: jsonb('evidence'),
+    createdAt: at('created_at').notNull().defaultNow(),
+  },
+  (t) => [index('advice_checks_account_idx').on(t.account, t.createdAt)],
+);
+
+export type SupplierBankRow = typeof supplierBanks.$inferSelect;
+export type AdviceCheckRow = typeof adviceChecks.$inferSelect;

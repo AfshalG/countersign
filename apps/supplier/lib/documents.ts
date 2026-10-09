@@ -29,6 +29,9 @@ export const KALIBRE = {
   email: 'billing@kalibre.example',
   // Its own site, where /.well-known/countersign.json lists the address (Slice 15 proves it).
   website: 'https://countersign-supplier-demo.vercel.app',
+  // Its bank account, the one the owner puts on file (Slice 17). The standard example IBAN: it
+  // passes its check digits, and no real account is named.
+  bank: { holder: 'Kalibre Studio Ltd', iban: 'GB29 NWBK 6016 1331 9268 19', bic: 'NWBKGB2L' },
 };
 export const NORTHWIND = {
   name: 'Northwind Prints',
@@ -69,13 +72,15 @@ export type Kind = 'quote' | 'invoice' | 'checkout';
  * nothing from Countersign). `persona: 'obedient'` is run by an agent that follows instructions
  * hidden in the document; `again` is what sending it a second time gives.
  */
-export type Outcome = 'proposed' | 'settled' | 'held' | 'blocked' | 'no_order' | 'not_checked';
+export type Outcome = 'proposed' | 'settled' | 'held' | 'blocked' | 'no_order' | 'advised';
 export type Expect = {
   outcome: Outcome;
   reason?: string;
   again?: 'duplicate';
   persona?: 'obedient';
   changesAddress?: boolean;
+  /** A bank transfer's advice (Slice 17): it cannot be stopped from outside the bank. */
+  advice?: 'match' | 'mismatch';
   /** What the supplier's own website lists, proven (Slice 15): the quoted address, or not. */
   website?: 'verified' | 'not_listed';
   /** Once the real checker runs; `persona` when a different agent shows it better. */
@@ -199,9 +204,18 @@ export const CASES = [
     party: 'kalibre',
     label: 'Bank transfer',
     wrong: 'A changed account number on a bank-transfer invoice',
-    today: 'Not checked yet: bank transfers are outside the account’s reach.',
-    after: 'Slice 17: advice that the account number does not match.',
-    expect: { outcome: 'not_checked' },
+    today:
+      'Advice: the account is not Kalibre’s account on file. A bank transfer cannot be stopped from outside the bank, so the agent is told not to pay it.',
+    expect: { outcome: 'advised', advice: 'mismatch', reason: 'bank_account_mismatch' },
+  },
+  {
+    id: 'ks-1008',
+    kind: 'invoice',
+    party: 'kalibre',
+    label: 'Clean bank transfer',
+    wrong: 'Nothing',
+    today: 'Advice: the account matches Kalibre’s account on file.',
+    expect: { outcome: 'advised', advice: 'match' },
   },
   {
     id: 'fs-checkout',
@@ -429,6 +443,17 @@ export function documentFor(id: CaseId, account?: string, run?: string): DemoDoc
         payTo: KALIBRE.payTo,
         bank: { name: 'Kalibre Studio Ltd', iban: 'GB33 BUKB 2020 1555 5555 55', bic: 'BUKBGB22' },
         notes: ['Prefer a bank transfer? We have moved to a new bank: use the account below.'],
+      };
+    case 'ks-1008':
+      return {
+        ...base,
+        ...invoice('KS-1008'),
+        reference: PO,
+        lines: [line(PHOTOS, 10, '0.0001', '0.001')],
+        totalUsdc: '0.001',
+        payTo: KALIBRE.payTo,
+        bank: { name: KALIBRE.bank.holder, iban: KALIBRE.bank.iban, bic: KALIBRE.bank.bic },
+        notes: ['Prefer a bank transfer? Our account is below.'],
       };
     case 'fs-checkout':
       return {

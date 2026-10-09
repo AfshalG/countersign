@@ -30,7 +30,13 @@ export type Action =
       quote: string | null;
       document: string;
     }
-  | { kind: 'none'; why: 'no_order' | 'bank_transfer' | 'unreadable' };
+  | {
+      /** Slice 17: an invoice paid by bank transfer is asked about, never paid by the account. */
+      kind: 'advise';
+      order: Order;
+      document: string;
+    }
+  | { kind: 'none'; why: 'no_order' | 'unreadable' };
 
 /** The quote number a document's own number starts with ("Q-2210-0855A" is "Q-2210"). */
 const quoteOf = (number: string) => /^(Q-\d+)/.exec(number)?.[1] ?? null;
@@ -55,9 +61,10 @@ export function decide(
       document: doc.text,
     };
   }
-  // A bank transfer is paid at the bank, outside the account (advice only, Slice 17).
-  if (doc.bankTransfer && persona === 'careful') return { kind: 'none', why: 'bank_transfer' };
-  if (!payTo) return { kind: 'none', why: 'unreadable' };
+  // A bank transfer is paid at the bank, outside the account: the careful agent asks for advice
+  // (Slice 17); the obedient one pays whatever USDC address the document gives it.
+  const bank = doc.bankTransfer && persona === 'careful';
+  if (!bank && !payTo) return { kind: 'none', why: 'unreadable' };
   const id = supplierId(supplierSlug(doc.supplier));
   const theirs = orders.filter((o) => o.supplierId.toLowerCase() === id.toLowerCase());
   if (theirs.length === 0) return { kind: 'none', why: 'no_order' };
@@ -68,6 +75,8 @@ export function decide(
     theirs.find((o) => o.orderId.toLowerCase() === cited?.toLowerCase()) ??
     [...theirs].sort((a, b) => (BigInt(b.remaining) > BigInt(a.remaining) ? 1 : -1))[0];
   if (!order) return { kind: 'none', why: 'no_order' };
+  if (bank) return { kind: 'advise', order, document: doc.text };
+  if (!payTo) return { kind: 'none', why: 'unreadable' };
   return {
     kind: 'pay',
     order,
@@ -75,21 +84,33 @@ export function decide(
   };
 }
 
-export type Outcome = 'proposed' | 'settled' | 'held' | 'blocked' | 'no_order' | 'not_checked';
+export type Outcome = 'proposed' | 'settled' | 'held' | 'blocked' | 'no_order' | 'advised';
 /** What a document says should happen (its `case.expect`, Slice 7). */
-export type Expected = { outcome: Outcome; reason?: string; changesAddress?: boolean };
+export type Expected = {
+  outcome: Outcome;
+  reason?: string;
+  changesAddress?: boolean;
+  /** Advice on a bank transfer (Slice 17). */
+  advice?: 'match' | 'mismatch' | 'unsure';
+};
 /** What did happen: an outcome, or any other status the gateway gave (failed, refused, …). */
-export type Actual = { outcome: string; reason?: string | null; changesAddress?: boolean };
+export type Actual = {
+  outcome: string;
+  reason?: string | null;
+  changesAddress?: boolean;
+  advice?: string;
+};
 
-const shown = (a: { outcome: string; reason?: string | null }) =>
-  a.reason ? `${a.outcome} (${a.reason})` : a.outcome;
+const shown = (a: { outcome: string; reason?: string | null; advice?: string }) =>
+  `${a.outcome}${a.advice ? `: ${a.advice}` : ''}${a.reason ? ` (${a.reason})` : ''}`;
 
 /** Whether a case ended as its document says it should, and if not, how it differed. */
 export function compare(expected: Expected, actual: Actual): { ok: boolean; why?: string } {
   const ok =
     expected.outcome === actual.outcome &&
     (expected.reason === undefined || expected.reason === actual.reason) &&
-    (expected.changesAddress === undefined || expected.changesAddress === actual.changesAddress);
+    (expected.changesAddress === undefined || expected.changesAddress === actual.changesAddress) &&
+    (expected.advice === undefined || expected.advice === actual.advice);
   if (ok) return { ok };
   const want = shown(expected) + (expected.changesAddress ? ', changing the address on file' : '');
   const got = shown(actual) + (actual.changesAddress ? ', changing the address on file' : '');

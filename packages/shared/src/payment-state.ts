@@ -31,6 +31,8 @@ export const REASON_TEXT: Record<Reason, string> = {
   supplier_unknown: 'The supplier is not on file.',
   supplier_inactive: 'The owner has switched this supplier off.',
   address_mismatch: "The invoice's payment address is not the supplier's address on file.",
+  bank_account_mismatch:
+    "The invoice's bank account is not the supplier's account on file. Advice only: do not pay it until the supplier confirms the account by phone, on a number you already have.",
   address_not_yet_active: "The supplier's address on file is new and still in its waiting period.",
   website_changed:
     "The supplier's own website no longer lists the address on file, so payments to it wait for the owner.",
@@ -68,6 +70,8 @@ export const REASONS = [
   'supplier_unknown',
   'supplier_inactive',
   'address_mismatch',
+  // Advice only (Slice 17): a bank-transfer invoice's account is not the one on file.
+  'bank_account_mismatch',
   'address_not_yet_active',
   'website_changed',
   'supplier_mismatch',

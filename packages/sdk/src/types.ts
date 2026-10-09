@@ -76,6 +76,34 @@ export type CheckVerdict = {
   evidence: unknown;
 };
 
+/**
+ * Advice on an invoice paid by bank transfer (Slice 17). A bank transfer happens inside the bank,
+ * so Countersign cannot stop one: this is advice, never a payment.
+ */
+export type Advice = {
+  /** The advice's record (one per account, order and document). */
+  id: Hex;
+  advice: 'match' | 'mismatch' | 'unsure';
+  reason: string | null;
+  reasonText: string | null;
+  /** What to tell a person, in plain words, always as advice. */
+  said: string;
+  invoiceNumber: string | null;
+  /** The supplier's bank account it was compared with, if one is on file. */
+  onFile: {
+    source: 'on_file' | 'demo';
+    holder: string;
+    iban?: string;
+    bic?: string;
+    sortCode?: string;
+    accountNumber?: string;
+    routingNumber?: string;
+    description: string;
+  } | null;
+  evidence: unknown;
+  checkedAt: string;
+};
+
 export type Run = { runId: Hex; requests: { id: Hex; status: PaymentStatus }[] };
 
 export type RunView = {

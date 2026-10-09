@@ -36,6 +36,23 @@ const invoiceInput = {
     ),
 };
 
+/**
+ * check_invoice's input: an invoice paid in USDC (with its payment address) or, with bankTransfer,
+ * one paid by bank transfer (Slice 17: advice only, from the invoice's own text).
+ */
+const checkInput = {
+  ...invoiceInput,
+  payTo: address
+    .optional()
+    .describe('The payment address printed on the invoice (needed unless bankTransfer)'),
+  bankTransfer: z
+    .boolean()
+    .optional()
+    .describe(
+      'The invoice is paid by bank transfer, not USDC: get advice (match, mismatch or unsure) on its bank account against the account on file. Give its full text as invoiceText',
+    ),
+};
+
 const orderOut = z.object({
   orderId: z.string(),
   vault: z.string(),
@@ -236,18 +253,59 @@ export function createTools(cs: Countersign, options: { waitMs?: number } = {}) 
         title: 'Check an invoice',
         description:
           'Checks an invoice against its order without paying: would it be paid, held for the owner, or blocked? A check is not a request: nothing is stored and the owner is not told. Use it for a dry run, or for an invoice paid by bank transfer (then it is advice only). For the owner to decide on an invoice, pay it with pay_invoice: if it is not clean it is held for them, with a link.',
-        inputSchema: z.object(invoiceInput),
+        inputSchema: z.object(checkInput),
         outputSchema: z.object({
           verdict: z.string(),
           reason: z.string().nullable(),
           reasonText: z.string().nullable(),
           addressOnFile: z.string().nullable(),
+          bankTransfer: z.boolean().optional(),
+          accountOnFile: z.string().nullable().optional(),
         }),
         annotations: { readOnlyHint: true, openWorldHint: true },
       },
-      handler: async (args: InvoiceArgs): Promise<ToolResult> => {
+      handler: async (
+        args: Omit<InvoiceArgs, 'payTo'> & {
+          payTo?: string | undefined;
+          bankTransfer?: boolean | undefined;
+        },
+      ): Promise<ToolResult> => {
+        const refuse = (t: string): ToolResult => ({
+          content: [{ type: 'text', text: t }],
+          isError: true,
+        });
+        if (args.bankTransfer === true) {
+          // Slice 17: the checker reads the invoice itself, so advice needs all of its text.
+          if (!args.invoiceText)
+            return refuse(
+              'Not done: give the invoice’s full text as invoiceText; advice on a bank transfer is read from the invoice itself.',
+            );
+          try {
+            const a = await cs.advise({
+              order: args.orderId as `0x${string}`,
+              document: { text: args.invoiceText },
+            });
+            const onFile = a.onFile?.description ?? null;
+            const said = `${a.said}${onFile ? ` Account on file: ${onFile}.` : ''} Countersign cannot stop a bank transfer: this is advice, nothing was paid, and the owner has not been told.`;
+            return text(said, {
+              verdict: a.advice,
+              reason: a.reason,
+              reasonText: a.reasonText,
+              addressOnFile: null,
+              bankTransfer: true,
+              accountOnFile: onFile,
+            });
+          } catch (e) {
+            return failure(e);
+          }
+        }
+        if (!args.payTo)
+          return refuse(
+            'Not done: give payTo, the payment address printed on the invoice; or, for an invoice paid by bank transfer, set bankTransfer and give its text as invoiceText.',
+          );
+        const usdc = { ...args, payTo: args.payTo };
         try {
-          const v = await cs.check(payInput(args));
+          const v = await cs.check(payInput(usdc));
           const evidence = v.evidence as { payTo?: { onFile?: string } } | null;
           const onFile = evidence?.payTo?.onFile ?? null;
           // dots-3 (Slice 14) reported checked invoices as held for the owner; a check stores

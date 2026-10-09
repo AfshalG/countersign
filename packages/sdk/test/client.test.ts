@@ -205,6 +205,44 @@ describe('pay', () => {
   });
 });
 
+describe('advice on a bank-transfer invoice (Slice 17)', () => {
+  const advice = {
+    id: '0xadvice',
+    advice: 'mismatch',
+    reason: 'bank_account_mismatch',
+    reasonText: 'The invoice’s bank account is not the supplier’s account on file.',
+    said: 'Advice: do not pay this invoice.',
+    invoiceNumber: 'KS-1007',
+    onFile: null,
+    evidence: {},
+    checkedAt: '2026-10-08T00:00:00.000Z',
+  };
+
+  it('asks about the invoice against its order, needs no agent key, and pays nothing', async () => {
+    const gw = fakeGateway((call) =>
+      call.url.endsWith('/orders')
+        ? { status: 200, body: { orders: [order] } }
+        : { status: 200, body: advice },
+    );
+    const cs = new Countersign({
+      gateway: 'https://gw.test/',
+      account: ACCOUNT,
+      token: 'cs_token',
+      fetch: gw.fetch,
+    });
+    const out = await cs.advise({ order: order.orderId, document: { html: '<p>Invoice</p>' } });
+    expect(out).toEqual(advice);
+    const asked = gw.calls.at(-1);
+    expect(asked?.url).toBe('https://gw.test/v1/advice');
+    expect(asked?.body).toEqual({
+      account: ACCOUNT,
+      vault: VAULT,
+      document: { html: '<p>Invoice</p>' },
+    });
+    expect(gw.calls.some((c) => c.url.endsWith('/v1/payments'))).toBe(false);
+  });
+});
+
 describe('errors', () => {
   it('turns the gateway’s typed errors into CountersignError, with the field issues', async () => {
     const gateway = fakeGateway(() => ({

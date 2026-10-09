@@ -35,6 +35,10 @@ import {
   runRequests,
   runs,
   supplierWebsites,
+  supplierBanks,
+  adviceChecks,
+  type SupplierBankRow,
+  type AdviceCheckRow,
   websiteProofs,
   whatsappContacts,
   whatsappLinks,
@@ -1133,6 +1137,86 @@ export class Store {
       )
       .returning({ id: proposals.id });
     return updated.length > 0;
+  }
+
+  // ---------- bank accounts on file and advice (Slice 17) ----------
+
+  /** Whether the account has an order (open or not) with this supplier. */
+  async hasSupplier(account: Address, supplier: Hex): Promise<boolean> {
+    const [row] = await this.db
+      .select({ vault: orders.vault })
+      .from(orders)
+      .where(
+        and(
+          sql`lower(${orders.account}) = ${account.toLowerCase()}`,
+          sql`lower(${orders.supplierId}) = ${supplier.toLowerCase()}`,
+        ),
+      )
+      .limit(1);
+    return row !== undefined;
+  }
+
+  /** An owner put (or replaced) a supplier's bank account on file. */
+  async setSupplierBank(row: Omit<SupplierBankRow, 'updatedAt'>): Promise<void> {
+    const values = {
+      ...row,
+      account: row.account.toLowerCase(),
+      supplierId: row.supplierId.toLowerCase(),
+    };
+    await this.db
+      .insert(supplierBanks)
+      .values(values)
+      .onConflictDoUpdate({
+        target: [supplierBanks.account, supplierBanks.supplierId],
+        set: { ...values, updatedAt: new Date() },
+      });
+  }
+
+  async supplierBank(account: Address, supplierId: Hex): Promise<SupplierBankRow | undefined> {
+    const [row] = await this.db
+      .select()
+      .from(supplierBanks)
+      .where(
+        and(
+          eq(supplierBanks.account, account.toLowerCase()),
+          eq(supplierBanks.supplierId, supplierId.toLowerCase()),
+        ),
+      );
+    return row;
+  }
+
+  async supplierBanksOf(account: Address): Promise<SupplierBankRow[]> {
+    return this.db
+      .select()
+      .from(supplierBanks)
+      .where(eq(supplierBanks.account, account.toLowerCase()));
+  }
+
+  /** The same invoice advised on twice is one record, updated with the latest advice. */
+  async recordAdvice(row: Omit<AdviceCheckRow, 'createdAt'>): Promise<AdviceCheckRow> {
+    const [saved] = await this.db
+      .insert(adviceChecks)
+      .values(row)
+      .onConflictDoUpdate({
+        target: adviceChecks.id,
+        set: {
+          advice: row.advice,
+          reason: row.reason,
+          evidence: row.evidence,
+          createdAt: new Date(),
+        },
+      })
+      .returning();
+    if (!saved) throw new Error('advice not recorded');
+    return saved;
+  }
+
+  async adviceOf(account: Address): Promise<AdviceCheckRow[]> {
+    return this.db
+      .select()
+      .from(adviceChecks)
+      .where(eq(adviceChecks.account, account.toLowerCase()))
+      .orderBy(desc(adviceChecks.createdAt));
   }
 
   /** The website a supplier was approved with on this account (S15-4). */

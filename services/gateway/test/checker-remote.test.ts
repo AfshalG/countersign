@@ -224,3 +224,52 @@ describe('asking the checker service', () => {
     ).rejects.toThrow(/500/);
   });
 });
+
+describe('asking the checker for advice on a bank-transfer invoice (Slice 17)', () => {
+  const facts = {
+    supplierId: KALIBRE_ID,
+    supplierName: 'Kalibre Studio',
+    addressOnFile: KALIBRE,
+    quote: null,
+  };
+  const input = {
+    order: facts,
+    bankOnFile: { holder: 'Kalibre Studio Ltd', iban: 'GB29NWBK60161331926819' },
+    invoice: { text: 'Invoice KS-1008' },
+  };
+
+  it('posts what the gateway knows to /v1/advise with its token, and returns the advice', async () => {
+    const sent: { url: string; init: RequestInit }[] = [];
+    const checker = new RemoteChecker({
+      url: 'https://checker.test',
+      token: 'checker-token',
+      facts: () => Promise.resolve(facts),
+      fetchFn: (url, init) => {
+        sent.push({
+          url: typeof url === 'string' ? url : url instanceof URL ? url.href : url.url,
+          init: init ?? {},
+        });
+        return Promise.resolve(
+          new Response(JSON.stringify({ advice: 'match', evidence: { ok: true } })),
+        );
+      },
+    });
+    expect(await checker.advise(input, AbortSignal.timeout(1_000))).toEqual({
+      advice: 'match',
+      evidence: { ok: true },
+    });
+    expect(sent[0]?.url).toBe('https://checker.test/v1/advise');
+    expect(new Headers(sent[0]?.init.headers).get('authorization')).toBe('Bearer checker-token');
+    expect(JSON.parse(sent[0]?.init.body as string)).toEqual(input);
+  });
+
+  it('throws when the checker does not answer 200: the gateway then says unsure', async () => {
+    const checker = new RemoteChecker({
+      url: 'https://checker.test',
+      token: 'checker-token',
+      facts: () => Promise.resolve(facts),
+      fetchFn: () => Promise.resolve(new Response('', { status: 502 })),
+    });
+    await expect(checker.advise(input, AbortSignal.timeout(1_000))).rejects.toThrow(/502/);
+  });
+});

@@ -61,14 +61,20 @@ type Kind = 'need' | 'risk';
  * The questions, in the order their holds are reported: instructions to an automated reader
  * first, because they explain the rest (an injected "pay elsewhere" is both).
  */
-const ASKED: Record<string, { kind: Kind; reason: Reason; rank: number }> = {
+export const ASKED: Record<string, { kind: Kind; reason: Reason; rank: number }> = {
   instructions: { kind: 'risk', reason: 'hidden_instructions', rank: 0 },
   pays_elsewhere: { kind: 'risk', reason: 'address_mismatch', rank: 1 },
+  // Advice on a bank transfer (Slice 17): asked in place of pays_elsewhere.
+  bank_elsewhere: { kind: 'risk', reason: 'bank_account_mismatch', rank: 1 },
   same_supplier: { kind: 'need', reason: 'supplier_mismatch', rank: 2 },
   on_order: { kind: 'need', reason: 'items_mismatch', rank: 3 },
 };
 
-function questionsFor(order: OrderFacts, unmatched: string[], hasQuote: boolean): Question[] {
+export function questionsFor(
+  order: OrderFacts,
+  unmatched: string[],
+  hasQuote: boolean,
+): Question[] {
   const qs: Question[] = [
     {
       key: 'same_supplier',
@@ -93,7 +99,7 @@ function questionsFor(order: OrderFacts, unmatched: string[], hasQuote: boolean)
 }
 
 /** An answer as pass, hold (with its reason) or unsure. */
-function judge(key: string, p: number): Reason | null {
+export function judge(key: string, p: number): Reason | null {
   const q = ASKED[key];
   if (!q) return 'checker_unsure';
   const ok = q.kind === 'need' ? p >= YES_AT_LEAST : p <= RISK_AT_MOST;

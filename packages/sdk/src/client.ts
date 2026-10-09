@@ -20,6 +20,7 @@ import {
 import { CountersignError, type Issue } from './errors.js';
 import { parseEvents } from './feed.js';
 import type {
+  Advice,
   CheckVerdict,
   Invoice,
   Order,
@@ -166,6 +167,24 @@ export class Countersign {
       ...(await this.submission(input)),
     });
     return { ...verdict, reasonText: reasonText(verdict.reason) };
+  }
+
+  /**
+   * Advice on an invoice paid by bank transfer (Slice 17): its bank account against the one on
+   * file for the order's supplier, and the same checks as a USDC invoice. Countersign cannot stop
+   * a bank transfer, so nothing is paid: on `mismatch`, do not pay it; on `unsure`, confirm the
+   * account with the supplier by phone, on a number you already have. Needs no agent key.
+   */
+  async advise(input: {
+    order: Order | Hex;
+    document: string | { html: string } | { text: string };
+  }): Promise<Advice> {
+    const order = await this.resolve(input.order);
+    return this.request('POST', '/v1/advice', {
+      account: this.account,
+      vault: order.vault,
+      document: input.document,
+    });
   }
 
   /** A run of up to 500 invoices; follow it with `run(id)` or `watch({ runId })`. */

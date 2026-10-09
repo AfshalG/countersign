@@ -175,6 +175,53 @@ describe('the MCP server', () => {
     expect(r.structuredContent).toMatchObject({ verdict: 'held', reason: 'address_mismatch' });
   });
 
+  it('gives advice on a bank-transfer invoice: a new account is “do not pay”, and nothing is paid (Slice 17)', async () => {
+    const r = await call('check_invoice', {
+      orderId: ORDER_ID,
+      invoiceNumber: 'KS-1007',
+      amount: '0.001',
+      bankTransfer: true,
+      invoiceText:
+        'Invoice KS-1007\nWe have moved to a new bank.\nIBAN GB33 BUKB 2020 1555 5555 55',
+    });
+    const said = textOf(r);
+    expect(said).toMatch(/^Advice: do not pay this invoice\./);
+    expect(said).toContain('Kalibre Studio Ltd, IBAN GB29 NWBK 6016 1331 9268 19');
+    expect(said).toContain('Countersign cannot stop a bank transfer');
+    expect(r.structuredContent).toMatchObject({
+      verdict: 'mismatch',
+      reason: 'bank_account_mismatch',
+      bankTransfer: true,
+      accountOnFile: 'Kalibre Studio Ltd, IBAN GB29 NWBK 6016 1331 9268 19',
+    });
+    const clean = await call('check_invoice', {
+      orderId: ORDER_ID,
+      invoiceNumber: 'KS-1008',
+      amount: '0.001',
+      bankTransfer: true,
+      invoiceText: 'Invoice KS-1008\nIBAN GB29 NWBK 6016 1331 9268 19',
+    });
+    expect(clean.structuredContent).toMatchObject({ verdict: 'match', bankTransfer: true });
+  });
+
+  it('needs the invoice’s text for advice, and a payment address for a USDC check', async () => {
+    const noText = await call('check_invoice', {
+      orderId: ORDER_ID,
+      invoiceNumber: 'KS-1008',
+      amount: '0.001',
+      bankTransfer: true,
+    });
+    expect(noText.isError).toBe(true);
+    expect(textOf(noText)).toMatch(/invoiceText/);
+    const noAddress = await call('check_invoice', {
+      orderId: ORDER_ID,
+      invoiceNumber: 'INV-0052',
+      amount: '1',
+    });
+    expect(noAddress.isError).toBe(true);
+    expect(textOf(noAddress)).toMatch(/payTo/);
+  });
+
   it('looks up a payment, then a run, then a proposal, by id', async () => {
     expect(textOf(await call('payment_status', { id: '0xrun' }))).toContain(
       'Run of 2: 1 settled, 1 held.',
