@@ -49,6 +49,18 @@ type Doc = {
     };
   };
 };
+/** The supplier's pages, read as an agent would; a passing network blip is tried again. */
+async function page(url: string): Promise<Response> {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      const res = await fetch(url);
+      if (res.ok || attempt >= 3) return res;
+    } catch (e) {
+      if (attempt >= 3) throw e;
+    }
+    await new Promise((r) => setTimeout(r, 1_000 * attempt));
+  }
+}
 async function inBatches<T, R>(items: T[], size: number, work: (t: T, i: number) => Promise<R>) {
   const out: R[] = [];
   for (let i = 0; i < items.length; i += size)
@@ -91,7 +103,7 @@ log(`funded with ${(Number(usdcNeeded) / 1e6).toFixed(4)} USDC`);
 const quoteUrl = (i: number) =>
   `${SITE}/quotes/q-2210?account=${me.account}&run=${tag}q${String(i)}`;
 for (let i = 0; i < ORDERS; i++) {
-  const text = await (await fetch(quoteUrl(i))).text();
+  const text = await (await page(quoteUrl(i))).text();
   const p = await cs.proposeOrder({
     supplier: {
       name: 'Kalibre Studio',
@@ -144,9 +156,9 @@ const plan = [
 ].sort(() => Math.random() - 0.5);
 t = Date.now();
 const invoices = await inBatches(plan, 20, async (id, i) => {
-  const page = `${SITE}/invoices/${id}?account=${me.account}&run=${tag}${String(i)}`;
-  const doc = (await (await fetch(`${page}&format=json`)).json()) as Doc;
-  const html = await (await fetch(page)).text();
+  const url = `${SITE}/invoices/${id}?account=${me.account}&run=${tag}${String(i)}`;
+  const doc = (await (await page(`${url}&format=json`)).json()) as Doc;
+  const html = await (await page(url)).text();
   const expect = doc.case.expect.afterSlice10 ?? doc.case.expect;
   return { id, doc, html, expect: { outcome: expect.outcome, reason: expect.reason ?? null } };
 });

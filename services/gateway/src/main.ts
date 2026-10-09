@@ -47,6 +47,7 @@ const monad = new MonadClient(
   settings.MONAD_WS_URL,
   privateKeyToAccount(relayers[0] as `0x${string}`).address,
 );
+let finalityProbe: () => boolean = () => false;
 const pool = new RelayerPool({
   keys: relayers,
   store,
@@ -56,6 +57,8 @@ const pool = new RelayerPool({
   // A payment is final in about 1.2 s at p95 (Spike 3), but in a run of 200 a wallet's oldest
   // transaction can wait longer behind the burst; 3 s made lanes move for nothing (Slice 16).
   stallMs: 6_000,
+  // Assigned once the tracker exists (it needs the pool).
+  finalityBehind: () => finalityProbe(),
   tickMs: 25,
   onRefused: (hash, error) => {
     console.error(`endpoint refused ${hash}: ${error}`);
@@ -68,6 +71,7 @@ const tracker = new FinalityTracker({
   pool,
   onFinalizedBlock: (blockNumber, logs) => indexer.onBlock(blockNumber, logs),
 });
+finalityProbe = () => tracker.behind();
 const catchUp = () => {
   indexer.catchUp().catch((e: unknown) => {
     console.error(`indexer catch-up: ${e instanceof Error ? e.message : String(e)}`);

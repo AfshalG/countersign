@@ -593,6 +593,17 @@ export class Store {
   }
 
   /** Moves an account's indexed block forward, never back. */
+  /**
+   * Every account indexed up to the block before `block` is now indexed up to `block`, in one write
+   * (Slice 16: one write per account per block fell behind Monad as accounts accumulated).
+   */
+  async advanceIndexed(block: number): Promise<void> {
+    await this.db
+      .update(accounts)
+      .set({ indexedTo: block })
+      .where(eq(accounts.indexedTo, block - 1));
+  }
+
   async setIndexedTo(address: Address, block: number): Promise<void> {
     await this.db
       .update(accounts)
