@@ -32,7 +32,7 @@ The two computed arms are labelled as computed in every chart and in the pitch: 
 
 ## Results
 
-`services/gateway/results/2026-10-xx-benchmark.json` (every invoice, every arm, every reason) and a short table for the pitch and the README. The checker's numbers sit beside the contract's: what the contract alone stops (an address not on file, more than the order, a duplicate) and what only the checker catches (the right supplier billing the wrong amount, D32).
+`apps/agent-runner/results/benchmark-<date>.json` (every invoice, every arm, every reason, and the saved set) and a short table for the pitch and the README. The checker's numbers sit beside the contract's: what the contract alone stops (an address not on file, more than the order, a duplicate) and what only the checker catches (the right supplier billing the wrong amount, D32).
 
 ## Decisions
 
