@@ -116,6 +116,8 @@ export function paymentPage(
   context: {
     agent?: { address: string; agentId: string | null } | null;
     supplierName?: string | null;
+    /** Slice 18: the transaction that wrote this hold or refusal on Monad, once it is final. */
+    decisionTx?: string | null;
   } = {},
 ): string {
   const headline = HEADLINE[r.status] ?? r.status;
@@ -173,6 +175,12 @@ export function paymentPage(
       ? row(
           'On Monad',
           `<a href="${escape(`${explorer}/tx/${r.txHash}`)}" rel="noreferrer">View on the Monad explorer</a>`,
+        )
+      : '',
+    context.decisionTx
+      ? row(
+          r.status === 'refused' ? 'Refusal on Monad' : 'Hold on Monad',
+          `Written with the hash of its evidence: <a href="${escape(`${explorer}/tx/${context.decisionTx}`)}" rel="noreferrer">view on the Monad explorer</a>`,
         )
       : '',
     row('Reference', `<code>${escape(r.id.slice(2, 10).toUpperCase())}</code>`),

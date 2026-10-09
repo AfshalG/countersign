@@ -302,6 +302,9 @@ importers:
         specifier: ^2.57.3
         version: 2.57.3(typescript@6.0.3)(zod@4.6.5)
     devDependencies:
+      '@countersign/chain':
+        specifier: workspace:*
+        version: link:../chain
       '@countersign/shared':
         specifier: workspace:*
         version: link:../shared

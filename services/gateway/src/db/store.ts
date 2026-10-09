@@ -401,6 +401,16 @@ export class Store {
       .limit(limit);
   }
 
+  /** An account's payment requests, newest first (Slice 18: its records). */
+  async requestsOf(account: string, limit = 5_000): Promise<PaymentRequestRow[]> {
+    return this.db
+      .select()
+      .from(paymentRequests)
+      .where(sql`lower(${paymentRequests.account}) = ${account.toLowerCase()}`)
+      .orderBy(desc(paymentRequests.requestedAt))
+      .limit(limit);
+  }
+
   async createRun(id: Hex, account: Address, size: number): Promise<boolean> {
     const inserted = await this.db
       .insert(runs)
@@ -1270,6 +1280,11 @@ export class Store {
       .returning();
     if (!saved) throw new Error('advice not recorded');
     return saved;
+  }
+
+  async adviceById(id: string): Promise<AdviceCheckRow | undefined> {
+    const [row] = await this.db.select().from(adviceChecks).where(eq(adviceChecks.id, id));
+    return row;
   }
 
   async adviceOf(account: Address): Promise<AdviceCheckRow[]> {

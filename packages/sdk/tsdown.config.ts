@@ -5,7 +5,7 @@ import { defineConfig } from 'tsdown';
 // `test-account` and the `countersign-test-account` command are Node only (P-256 from node:crypto);
 // the main entry stays runtime-neutral.
 export default defineConfig({
-  entry: ['src/index.ts', 'src/test-account.ts', 'src/bin.ts'],
+  entry: ['src/index.ts', 'src/test-account.ts', 'src/bin.ts', 'src/verify-bin.ts'],
   format: ['esm'],
   platform: 'neutral',
   dts: { eager: true },

@@ -23,6 +23,7 @@ import type { ProposalDeps } from './owner/proposals.js';
 import type { PauseDeps } from './owner/pause.js';
 import { registerOwnerRoutes } from './api/owner.js';
 import { registerAdviceRoutes } from './api/advice.js';
+import { registerRecordRoutes } from './api/records.js';
 import type { Advisor } from './advice.js';
 import type { DecisionRecorder } from './decisions.js';
 import { registerWhatsAppRoutes, type WhatsAppRouteDeps } from './api/whatsapp.js';
@@ -685,6 +686,13 @@ export function createApp(deps: AppDeps) {
     }),
   );
 
+  registerRecordRoutes(app, {
+    store,
+    chainId: deps.chainId,
+    publicUrl,
+    ...(deps.agents ? { agents: deps.agents } : {}),
+  });
+
   registerAdviceRoutes(app, {
     store,
     chain,
@@ -726,6 +734,13 @@ export function createApp(deps: AppDeps) {
     return c.html(runPage(summary, publicUrl));
   });
 
+  /** The transaction that wrote a decision on Monad, once final and successful (Slice 18). */
+  const finalDecisionTx = async (id: string) => {
+    const kept = await store.decisionRecord(id);
+    const tx = kept?.txHash ? await store.relayerTx(kept.txHash) : undefined;
+    return tx?.finalAt && tx.status === 'success' ? tx.hash : null;
+  };
+
   // A page a person can open from an agent's message; public, like the link in the message.
   app.get('/p/:id', async (c) => {
     const id = c.req.param('id');
@@ -739,6 +754,7 @@ export function createApp(deps: AppDeps) {
               ? null
               : { address: request.agentAddress, agentId: null }),
           supplierName: await supplierNameOf(store, request.account, request.vault),
+          decisionTx: await finalDecisionTx(request.id),
         }),
       );
     const proposal = await store.getProposal(id);
