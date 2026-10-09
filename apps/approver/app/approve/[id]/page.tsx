@@ -140,9 +140,15 @@ export default function Approve() {
       </h1>
       <p className="amount">{s.amountUsdc} USDC</p>
 
-      {view.kind === 'payment' && s.reasonText && (
+      {view.kind === 'payment' && s.reasonText && view.status === 'held' && (
         <p className="note warn">
           <strong>Why it is held: </strong>
+          {s.reasonText}
+        </p>
+      )}
+      {view.kind === 'payment' && s.reasonText && view.status === 'blocked' && (
+        <p className="note bad">
+          <strong>Blocked: </strong>
           {s.reasonText}
         </p>
       )}

@@ -231,6 +231,10 @@ export const accountView = z
 
 export const orderView = z
   .object({
+    supplierName: z
+      .string()
+      .nullable()
+      .openapi({ description: 'The supplier by name, from the approved proposal' }),
     orderId: z.string(),
     vault: z.string(),
     supplierId: z.string(),

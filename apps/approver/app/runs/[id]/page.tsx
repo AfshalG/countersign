@@ -78,6 +78,8 @@ export default function RunBoard() {
   if (!board) return <Problem text={problem} />;
   const held = board.held.reduce((n, g) => n + g.count, 0);
   const blocked = board.blocked.reduce((n, g) => n + g.count, 0);
+  // Refused by the owner, expired before anyone decided, or failed: decided, but none of the above.
+  const other = board.decided - board.settled.count - held - blocked;
   const pct = (n: number) => `${String((n / Math.max(1, board.size)) * 100)}%`;
 
   return (
@@ -99,6 +101,12 @@ export default function RunBoard() {
           <dd>{held}</dd>
           <dt>Blocked</dt>
           <dd>{blocked}</dd>
+          {other > 0 && (
+            <>
+              <dt>Refused or expired</dt>
+              <dd>{other}</dd>
+            </>
+          )}
           <dt>Each paid, request to final</dt>
           <dd>
             median {seconds(board.settled.p50Ms)}, 95% within {seconds(board.settled.p95Ms)}

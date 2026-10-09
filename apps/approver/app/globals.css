@@ -245,6 +245,7 @@ label {
   border: 1px solid var(--rule);
 }
 .kv {
+  margin: 0;
   display: grid;
   grid-template-columns: max-content 1fr;
   gap: 4px 12px;
