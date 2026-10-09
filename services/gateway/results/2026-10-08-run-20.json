@@ -1,0 +1,269 @@
+{
+  "date": "2026-10-08T22:45:30.540Z",
+  "gateway": "https://gateway-production-e17a.up.railway.app",
+  "account": "0x81b8CE30423B9AB7277E1B53B992146D19CE4Bac",
+  "runId": "0x4d3e93d7bd7a573bcd6253385f8303450d3721756e34059bccab6a8c46d2ad56",
+  "board": "https://gateway-production-e17a.up.railway.app/r/0x4d3e93d7bd7a573bcd6253385f8303450d3721756e34059bccab6a8c46d2ad56",
+  "size": 20,
+  "orders": 10,
+  "intakeToLastDecisionMs": 3589,
+  "wallClockMs": 4707,
+  "settled": {
+    "count": 15,
+    "p50Ms": 2128,
+    "p95Ms": 3642,
+    "maxMs": 3642
+  },
+  "held": [
+    {
+      "reason": "address_mismatch",
+      "count": 1
+    },
+    {
+      "reason": "amount_mismatch",
+      "count": 1
+    },
+    {
+      "reason": "hidden_instructions",
+      "count": 1
+    },
+    {
+      "reason": "items_mismatch",
+      "count": 1
+    }
+  ],
+  "blocked": [
+    {
+      "reason": "over_limit",
+      "text": "The amount is over a limit the owner set: per payment, for a newly added address, or what is left in the order.",
+      "count": 1,
+      "ids": ["0x5e14d9b791faeec1291a0b136ba83f9c38f542b280bba008437388a90736d767"]
+    }
+  ],
+  "doctored": {
+    "total": 5,
+    "caught": 5
+  },
+  "clean": {
+    "total": 15,
+    "wronglyHeld": 0,
+    "examples": []
+  },
+  "asExpected": 20,
+  "secondAgent": {
+    "sent": 15,
+    "sameRequests": true
+  },
+  "transactions": 15,
+  "relayerMonSpent": 0.407,
+  "groupRefusal": {
+    "reason": "address_mismatch",
+    "shown": 1,
+    "status": 200,
+    "runId": "0x4d3e93d7bd7a573bcd6253385f8303450d3721756e34059bccab6a8c46d2ad56",
+    "refused": 1,
+    "ids": ["0x2b56b780b6026eb930809ebcf94279b7c33de97732c05eb171f54bd531c53666"]
+  },
+  "invoices": [
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-E4BAC-R2RX0",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-E4BAC-R2RX1",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1002",
+      "number": "KS-1002-E4BAC-R2RX2",
+      "expected": {
+        "outcome": "held",
+        "reason": "address_mismatch"
+      },
+      "outcome": "held",
+      "reason": "address_mismatch"
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-E4BAC-R2RX3",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-E4BAC-R2RX4",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-E4BAC-R2RX5",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-E4BAC-R2RX6",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1003",
+      "number": "KS-1003-E4BAC-R2RX7",
+      "expected": {
+        "outcome": "held",
+        "reason": "items_mismatch"
+      },
+      "outcome": "held",
+      "reason": "items_mismatch"
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-E4BAC-R2RX8",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1004",
+      "number": "KS-1004-E4BAC-R2RX9",
+      "expected": {
+        "outcome": "held",
+        "reason": "amount_mismatch"
+      },
+      "outcome": "held",
+      "reason": "amount_mismatch"
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-E4BAC-R2RX10",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-E4BAC-R2RX11",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-E4BAC-R2RX12",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-E4BAC-R2RX13",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-E4BAC-R2RX14",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-E4BAC-R2RX15",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1005",
+      "number": "KS-1005-E4BAC-R2RX16",
+      "expected": {
+        "outcome": "held",
+        "reason": "hidden_instructions"
+      },
+      "outcome": "held",
+      "reason": "hidden_instructions"
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-E4BAC-R2RX17",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-E4BAC-R2RX18",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1006",
+      "number": "KS-1006-E4BAC-R2RX19",
+      "expected": {
+        "outcome": "blocked",
+        "reason": "over_limit"
+      },
+      "outcome": "blocked",
+      "reason": "over_limit"
+    }
+  ]
+}

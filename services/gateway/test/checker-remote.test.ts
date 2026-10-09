@@ -1,6 +1,13 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { keccak256, stringToHex, type Address, type Hex } from 'viem';
-import { invoiceHash, supplierId, supplierSlug } from '@countersign/shared';
+import {
+  evidenceHash,
+  invoiceHash,
+  OUTCOME,
+  reasonHash,
+  supplierId,
+  supplierSlug,
+} from '@countersign/shared';
 import { Store } from '../src/db/store.js';
 import type { Database } from '../src/db/client.js';
 import type { PaymentRequestRow } from '../src/db/schema.js';
@@ -15,7 +22,6 @@ const VAULT: Address = '0x6c033066C05Eb524119c8C830F937C4bbd17E426';
 const KALIBRE: Address = '0x90f9931B748B26763161a8191C178Fe425C25fEc';
 const KALIBRE_ID = supplierId(supplierSlug('Kalibre Studio'));
 const QUOTE = 'Kalibre Studio — Product photography\nQuote Q-1\nTotal: 0.005 USDC';
-const chain = { addressOnFile: () => Promise.resolve(KALIBRE) };
 
 const row = (document: unknown): PaymentRequestRow =>
   ({
@@ -75,7 +81,7 @@ describe('what the gateway tells the checker about the order (Slice 10)', () => 
       document: QUOTE,
     });
     await store.decideProposal(proposal.id, 'approved');
-    expect(await orderFacts({ store, chain }, row(null))).toEqual({
+    expect(await orderFacts({ store }, row(null))).toEqual({
       supplierId: KALIBRE_ID,
       supplierName: 'Kalibre Studio',
       addressOnFile: KALIBRE,
@@ -83,16 +89,35 @@ describe('what the gateway tells the checker about the order (Slice 10)', () => 
     });
   });
 
+  it('gives a quote the agent read as a web page as HTML, so the checker reads its lines (Slice 16)', async () => {
+    const page = `<!doctype html><html><body><h1>Quote Q-2210</h1><table><tr><td>Product photos</td><td>50</td></tr></table></body></html>`;
+    const documentHash = keccak256(stringToHex(page));
+    await order(documentHash);
+    const { proposal } = await store.createProposal({
+      id: keccak256(stringToHex('proposal html')),
+      account: ACCOUNT,
+      supplierName: 'Kalibre Studio',
+      website: null,
+      payTo: KALIBRE,
+      amount: '5000',
+      expiry: 2_000_000_000,
+      documentHash,
+      document: page,
+    });
+    await store.decideProposal(proposal.id, 'approved');
+    expect((await orderFacts({ store }, row(null)))?.quote).toEqual({ html: page });
+  });
+
   it('gives a judge’s demo order its quote, and no quote for an order opened without one', async () => {
     await order(keccak256(stringToHex(DEMO_QUOTE)));
-    expect((await orderFacts({ store, chain }, row(null)))?.quote).toEqual({ text: DEMO_QUOTE });
+    expect((await orderFacts({ store }, row(null)))?.quote).toEqual({ text: DEMO_QUOTE });
     await truncate(database);
     await order(keccak256(stringToHex('demo order')));
-    expect((await orderFacts({ store, chain }, row(null)))?.quote).toBeNull();
+    expect((await orderFacts({ store }, row(null)))?.quote).toBeNull();
   });
 
   it('knows nothing of an order not yet indexed', async () => {
-    expect(await orderFacts({ store, chain }, row(null))).toBeNull();
+    expect(await orderFacts({ store }, row(null))).toBeNull();
   });
 });
 
@@ -120,12 +145,48 @@ describe('asking the checker service', () => {
     new RemoteChecker({ url: 'https://checker.test', token: 'checker-token', facts, fetchFn });
   const input = (document: unknown) => ({ request: row(document), payment, chainId: 10143 });
 
+  it('keeps a hold’s signed decision only when it is exactly this hold (Slice 18)', async () => {
+    const evidence = {
+      checker: 'countersign-checker/1',
+      findings: [{ check: 'amount', ok: false }],
+    };
+    const decision = {
+      invoiceHash: payment.invoiceHash,
+      outcome: OUTCOME.held,
+      reasonHash: reasonHash('amount_mismatch'),
+      evidenceHash: evidenceHash(evidence),
+      sig: `0x${'ef'.repeat(65)}`,
+    };
+    const hold = (d: unknown) =>
+      checkerWith(
+        answering(200, { verdict: 'hold', reason: 'amount_mismatch', evidence, decision: d }),
+      ).check(input({ text: 'Invoice KS-1' }), () => AbortSignal.timeout(1_000));
+    expect(await hold(decision)).toEqual({
+      verdict: 'hold',
+      reason: 'amount_mismatch',
+      evidence,
+      decision,
+    });
+    // Over other evidence, another reason, another invoice or as a release: dropped, still held.
+    for (const wrong of [
+      { ...decision, evidenceHash: evidenceHash({ other: true }) },
+      { ...decision, reasonHash: reasonHash('items_mismatch') },
+      { ...decision, invoiceHash: invoiceHash(KALIBRE_ID, 'KS-2') },
+      { ...decision, outcome: OUTCOME.refused },
+      { ...decision, sig: '0x12' },
+    ]) {
+      const r = await hold(wrong);
+      expect(r).toMatchObject({ verdict: 'hold', reason: 'amount_mismatch' });
+      expect('decision' in r).toBe(false);
+    }
+  });
+
   it('sends the payment, the order and the invoice as the agent gave it, with its token', async () => {
     const seen: { body?: unknown; auth?: string | null } = {};
     const sig = `0x${'ab'.repeat(65)}`;
     const r = await checkerWith(
       answering(200, { verdict: 'release', checkerSig: sig, evidence: { ok: 1 } }, seen),
-    ).check(input({ text: 'Invoice KS-1' }), AbortSignal.timeout(1_000));
+    ).check(input({ text: 'Invoice KS-1' }), () => AbortSignal.timeout(1_000));
     expect(r).toEqual({ verdict: 'release', checkerSig: sig, evidence: { ok: 1 } });
     expect(seen.auth).toBe('Bearer checker-token');
     expect(seen.body).toMatchObject({
@@ -142,24 +203,49 @@ describe('asking the checker service', () => {
       { verdict: 'hold', reason: 'checker_unsure', evidence: {} },
       seen,
     );
-    await checkerWith(fetchFn).check(input({ html: '<p>x</p>' }), AbortSignal.timeout(1_000));
+    await checkerWith(fetchFn).check(input({ html: '<p>x</p>' }), () => AbortSignal.timeout(1_000));
     expect(seen.body).toMatchObject({ invoice: { html: '<p>x</p>' } });
-    await checkerWith(fetchFn).check(input('plain text'), AbortSignal.timeout(1_000));
+    await checkerWith(fetchFn).check(input('plain text'), () => AbortSignal.timeout(1_000));
     expect(seen.body).toMatchObject({ invoice: { text: 'plain text' } });
-    await checkerWith(fetchFn).check(input({ fields: 1 }), AbortSignal.timeout(1_000));
+    await checkerWith(fetchFn).check(input({ fields: 1 }), () => AbortSignal.timeout(1_000));
     expect(seen.body).toMatchObject({ invoice: { text: '' } });
+  });
+
+  it('starts its time limit only once the order’s facts are read (Slice 16: our own reads queue at volume)', async () => {
+    let started = 0;
+    const slowFacts = new RemoteChecker({
+      url: 'https://checker.test',
+      token: 't',
+      // The gateway's chain reads are paced; at volume they queue behind each other.
+      facts: async () => {
+        await new Promise((r) => setTimeout(r, 120));
+        return {
+          supplierId: KALIBRE_ID,
+          supplierName: 'Kalibre Studio',
+          addressOnFile: KALIBRE,
+          quote: null,
+        };
+      },
+      fetchFn: answering(200, { verdict: 'hold', reason: 'checker_unsure', evidence: {} }),
+    });
+    const r = await slowFacts.check(input(null), () => {
+      started++;
+      return AbortSignal.timeout(50); // shorter than the facts took: it must start after them
+    });
+    expect(r).toMatchObject({ verdict: 'hold', reason: 'checker_unsure' });
+    expect(started).toBe(1);
   });
 
   it('holds what it cannot trust: an unknown reason, a release without a signature, an order not indexed', async () => {
     expect(
       await checkerWith(
         answering(200, { verdict: 'hold', reason: 'nonsense', evidence: {} }),
-      ).check(input(null), AbortSignal.timeout(1_000)),
+      ).check(input(null), () => AbortSignal.timeout(1_000)),
     ).toMatchObject({ verdict: 'hold', reason: 'checker_unsure' });
     expect(
       await checkerWith(
         answering(200, { verdict: 'release', checkerSig: '0x', evidence: {} }),
-      ).check(input(null), AbortSignal.timeout(1_000)),
+      ).check(input(null), () => AbortSignal.timeout(1_000)),
     ).toMatchObject({ verdict: 'hold', reason: 'checker_unsure' });
     const unknown = new RemoteChecker({
       url: 'https://checker.test',
@@ -167,7 +253,7 @@ describe('asking the checker service', () => {
       facts: () => Promise.resolve(null),
       fetchFn: answering(200, {}),
     });
-    expect(await unknown.check(input(null), AbortSignal.timeout(1_000))).toMatchObject({
+    expect(await unknown.check(input(null), () => AbortSignal.timeout(1_000))).toMatchObject({
       verdict: 'hold',
       reason: 'checker_unsure',
     });
@@ -175,10 +261,58 @@ describe('asking the checker service', () => {
 
   it('throws when the checker does not answer properly, which the pipeline holds', async () => {
     await expect(
-      checkerWith(answering(500, { error: 'internal' })).check(
-        input(null),
+      checkerWith(answering(500, { error: 'internal' })).check(input(null), () =>
         AbortSignal.timeout(1_000),
       ),
     ).rejects.toThrow(/500/);
+  });
+});
+
+describe('asking the checker for advice on a bank-transfer invoice (Slice 17)', () => {
+  const facts = {
+    supplierId: KALIBRE_ID,
+    supplierName: 'Kalibre Studio',
+    addressOnFile: KALIBRE,
+    quote: null,
+  };
+  const input = {
+    order: facts,
+    bankOnFile: { holder: 'Kalibre Studio Ltd', iban: 'GB29NWBK60161331926819' },
+    invoice: { text: 'Invoice KS-1008' },
+  };
+
+  it('posts what the gateway knows to /v1/advise with its token, and returns the advice', async () => {
+    const sent: { url: string; init: RequestInit }[] = [];
+    const checker = new RemoteChecker({
+      url: 'https://checker.test',
+      token: 'checker-token',
+      facts: () => Promise.resolve(facts),
+      fetchFn: (url, init) => {
+        sent.push({
+          url: typeof url === 'string' ? url : url instanceof URL ? url.href : url.url,
+          init: init ?? {},
+        });
+        return Promise.resolve(
+          new Response(JSON.stringify({ advice: 'match', evidence: { ok: true } })),
+        );
+      },
+    });
+    expect(await checker.advise(input, AbortSignal.timeout(1_000))).toEqual({
+      advice: 'match',
+      evidence: { ok: true },
+    });
+    expect(sent[0]?.url).toBe('https://checker.test/v1/advise');
+    expect(new Headers(sent[0]?.init.headers).get('authorization')).toBe('Bearer checker-token');
+    expect(JSON.parse(sent[0]?.init.body as string)).toEqual(input);
+  });
+
+  it('throws when the checker does not answer 200: the gateway then says unsure', async () => {
+    const checker = new RemoteChecker({
+      url: 'https://checker.test',
+      token: 'checker-token',
+      facts: () => Promise.resolve(facts),
+      fetchFn: () => Promise.resolve(new Response('', { status: 502 })),
+    });
+    await expect(checker.advise(input, AbortSignal.timeout(1_000))).rejects.toThrow(/502/);
   });
 });

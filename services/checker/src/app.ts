@@ -3,6 +3,7 @@ import { bearerAuth } from 'hono/bearer-auth';
 import { HTTPException } from 'hono/http-exception';
 import type { Address, Hex } from 'viem';
 import { REASONS } from '@countersign/shared';
+import { advise, ADVICE_BUDGET_MS } from './advise.js';
 import { check, CHECKER, BUDGET_MS } from './check.js';
 import type { Model } from './model.js';
 import type { Signer } from './sign.js';
@@ -52,9 +53,60 @@ const checkResponse = z
     checkerSig: z.string().optional().openapi({
       description: "The checker's EIP-712 signature of the vault's Payment ('0x' on a dry run)",
     }),
+    decision: z
+      .object({
+        invoiceHash: bytes32,
+        outcome: z.number().int(),
+        reasonHash: bytes32,
+        evidenceHash: bytes32,
+        sig: z.string(),
+      })
+      .optional()
+      .openapi({
+        description:
+          "A hold as the vault's EIP-712 Decision, signed with the checker key, for recordDecision on Monad (Slice 18). evidenceHash is keccak256 of the evidence as canonical JSON. None on a dry run",
+      }),
     evidence: z.unknown(),
   })
   .openapi('CheckResponse');
+
+const orderFacts = z.object({
+  supplierId: bytes32,
+  supplierName: z.string().max(200).nullable(),
+  addressOnFile: address,
+  quote: page.nullable().openapi({ description: 'The quote the owner approved, if known' }),
+});
+
+/** The supplier's bank account as the owner approved it (Slice 17). */
+const bankOnFile = z
+  .object({
+    holder: z.string().min(1).max(200),
+    iban: z.string().max(42).optional(),
+    bic: z.string().max(11).optional(),
+    sortCode: z.string().max(8).optional(),
+    accountNumber: z.string().max(20).optional(),
+    routingNumber: z.string().max(9).optional(),
+  })
+  .refine((b) => b.iban !== undefined || b.accountNumber !== undefined, {
+    message: 'give an IBAN or an account number',
+  })
+  .openapi('BankOnFile');
+
+const adviseRequest = z
+  .object({
+    order: orderFacts,
+    bankOnFile: bankOnFile.nullable(),
+    invoice: page.openapi({ description: 'The bank-transfer invoice as the agent was given it' }),
+  })
+  .openapi('AdviseRequest');
+
+const adviseResponse = z
+  .object({
+    advice: z.enum(['match', 'mismatch', 'unsure']),
+    reason: z.enum(REASONS).optional(),
+    evidence: z.unknown(),
+  })
+  .openapi('AdviseResponse');
 
 const json = <T extends z.ZodType>(schema: T, description: string) => ({
   content: { 'application/json': { schema } },
@@ -71,6 +123,20 @@ const checkRoute = createRoute({
   request: { body: { content: { 'application/json': { schema: checkRequest } } } },
   responses: {
     200: json(checkResponse, 'The verdict, with its evidence'),
+    400: json(apiError, 'malformed'),
+    401: json(apiError, 'unauthorized'),
+  },
+});
+
+const adviseRoute = createRoute({
+  method: 'post',
+  path: '/v1/advise',
+  summary: 'Advice on an invoice paid by bank transfer',
+  description: `A bank transfer cannot be stopped from outside the bank, so this answers match, mismatch or unsure, with the evidence, and never signs (Slice 17). The invoice's bank account is compared with the one on file in code; the model is asked only when code found nothing definite, within ${String(ADVICE_BUDGET_MS)} ms. Optional for a checker: the gateway's \`/v1/advice\` needs it.`,
+  security: [{ Bearer: [] }],
+  request: { body: { content: { 'application/json': { schema: adviseRequest } } } },
+  responses: {
+    200: json(adviseResponse, 'The advice, with its evidence'),
     400: json(apiError, 'malformed'),
     401: json(apiError, 'unauthorized'),
   },
@@ -150,6 +216,40 @@ export function createApp(deps: { token: string; model: Model; signer: Signer })
         ...(b.dryRun === undefined ? {} : { dryRun: b.dryRun }),
       },
       { model: deps.model, signer: deps.signer },
+    );
+    return c.json(outcome, 200);
+  });
+
+  app.openapi(adviseRoute, async (c) => {
+    const b = c.req.valid('json');
+    const pageOf = (p: { html?: string | undefined; text?: string | undefined }) =>
+      p.html !== undefined ? { html: p.html } : { text: p.text ?? '' };
+    const onFile = b.bankOnFile;
+    const outcome = await advise(
+      {
+        order: {
+          supplierId: b.order.supplierId as Hex,
+          supplierName: b.order.supplierName,
+          addressOnFile: b.order.addressOnFile as Address,
+          quote: b.order.quote ? pageOf(b.order.quote) : null,
+        },
+        bankOnFile: onFile
+          ? {
+              holder: onFile.holder,
+              ...(onFile.iban === undefined ? {} : { iban: onFile.iban }),
+              ...(onFile.bic === undefined ? {} : { bic: onFile.bic }),
+              ...(onFile.sortCode === undefined ? {} : { sortCode: onFile.sortCode }),
+              ...(onFile.accountNumber === undefined
+                ? {}
+                : { accountNumber: onFile.accountNumber }),
+              ...(onFile.routingNumber === undefined
+                ? {}
+                : { routingNumber: onFile.routingNumber }),
+            }
+          : null,
+        invoice: pageOf(b.invoice),
+      },
+      { model: deps.model },
     );
     return c.json(outcome, 200);
   });

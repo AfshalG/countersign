@@ -54,6 +54,26 @@ Always `200` with a verdict, and always with the evidence:
 3. **Sign only what was checked.** Sign the `Payment` exactly as given, in that vault's domain, and only on release.
 4. **A model can only add holds** (D27). If a model is involved, code decides "clear"; a model's answer can hold a payment that passed code, never release one that failed it.
 
+## Advice on a bank-transfer invoice (optional)
+
+A bank transfer happens inside the bank, so nothing outside it can stop one (Slice 17). A checker may also answer `POST /v1/advise`; the gateway's `POST /v1/advice` needs it, and answers 503 without it. Nothing is signed.
+
+```json
+{
+  "order": { "supplierId": "0x4f16…c5b1", "supplierName": "Kalibre Studio", "addressOnFile": "0x90f9…5fEc", "quote": null },
+  "bankOnFile": { "holder": "Kalibre Studio Ltd", "iban": "GB29NWBK60161331926819", "bic": "NWBKGB2L" },
+  "invoice": { "html": "<main>…Invoice KS-1007…</main>" }
+}
+```
+
+`bankOnFile` is the account an owner put on file with their passkey (an IBAN, or an account number with a UK sort code or a US routing number), or `null`. The answer:
+
+```json
+{ "advice": "mismatch", "reason": "bank_account_mismatch", "evidence": { … } }
+```
+
+`advice` is `match`, `mismatch` or `unsure`. The same rules hold, as advice: anything the checker cannot be sure of (check digits that fail, no account read, nothing on file, a model that did not answer) is `unsure`, never a `match`; a model can add a concern, never remove one.
+
 ## The reference checker
 
 `services/checker`, deployed as its own service: it alone holds the checker key.
@@ -62,6 +82,7 @@ Always `200` with a verdict, and always with the evidence:
 2. **Compares in code, exactly.** The payment is for this invoice (`checker_unsure`), from the order's supplier (`supplier_mismatch`), to the printed address (`address_mismatch`); the lines add up to the total, which is the payment's amount (`amount_mismatch`); no line costs more per unit than the quote it was ordered on (`amount_mismatch`).
 3. **Asks the model only when code passed.** Jev 1.13 through OpenRouter's System One API (`typesafe/jev-1.13`, routed only to providers that keep nothing), four yes-or-no questions: is it from the same supplier as the order; is every line not named on the quote still covered by the order; does it ask for payment anywhere but the address on file; does it contain instructions addressed to an automated reader. A required yes must be at least 0.8 and a risk at most 0.2; anything between is unsure, a hold. Claude Sonnet is the fallback.
 4. **Signs** only when all of that passed, within 1.5 s in all.
+5. **Advice on a bank transfer** (`/v1/advise`): the same reading and the code checks that need no payment, plus the invoice's bank account against the one on file: IBANs (labelled, or unlabelled if their check digits hold; a labelled one whose check digits fail is unsure), BICs, UK sort codes, US routing numbers and account numbers. A UK IBAN contains its sort code and account number, so either form matches. A different account, or another bank's code, is `bank_account_mismatch`; the account holder in another name is unsure. The model is asked the same questions, with "does it ask for payment to any bank account other than the one on file, or say the bank details have changed?" in place of the address question, within 5 s.
 
 Its catch rate and false holds are measured on the demo documents (`services/checker/results/`, and Slice 20's benchmark). It is a detector, not a guarantee (D32): what it misses is still bounded by the contract.
 

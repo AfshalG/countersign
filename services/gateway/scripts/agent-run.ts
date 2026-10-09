@@ -226,10 +226,12 @@ async function runCase(path: string, ownerDecision?: 'approve' | 'refuse', again
       firstOf.set(json.id, r.id);
       row.actual = { outcome: r.status, reason: r.reason };
     }
+  } else if (action.kind === 'advise') {
+    // Slice 17: a bank transfer gets advice; the account pays nothing.
+    const a = await cs.advise({ order: action.order, document: { text: action.document } });
+    row.actual = { outcome: 'advised', advice: a.advice, reason: a.reason };
   } else {
-    row.actual = {
-      outcome: action.why === 'bank_transfer' ? 'not_checked' : action.why,
-    };
+    row.actual = { outcome: action.why };
   }
   row.ms = Date.now() - t;
   if ('duplicate' in row.expected) {
@@ -284,7 +286,16 @@ await runCase('/quotes/q-2211', 'refuse');
 await shop();
 await runCase('/invoices/ks-1001');
 await runCase('/invoices/ks-1001', undefined, true);
-for (const id of ['ks-1002', 'ks-1003', 'ks-1004', 'ks-1005', 'nw-77', 'ks-1006', 'ks-1007'])
+for (const id of [
+  'ks-1002',
+  'ks-1003',
+  'ks-1004',
+  'ks-1005',
+  'nw-77',
+  'ks-1006',
+  'ks-1007',
+  'ks-1008',
+])
   await runCase(`/invoices/${id}`);
 await runCase('/shop/fs-checkout');
 await runCase('/shop/fs-checkout-v2');

@@ -1,0 +1,2083 @@
+{
+  "date": "2026-10-08T23:13:33.645Z",
+  "gateway": "https://gateway-production-e17a.up.railway.app",
+  "account": "0xA03C929bC23dbD7a2d6664E4feBF7Ea6Cd9c5756",
+  "runId": "0x52b165bfb0a6fc606bdab578789b3046922fd11c63577c85e7154960046e55b3",
+  "board": "https://gateway-production-e17a.up.railway.app/r/0x52b165bfb0a6fc606bdab578789b3046922fd11c63577c85e7154960046e55b3",
+  "size": 200,
+  "orders": 10,
+  "intakeToLastDecisionMs": 16381,
+  "wallClockMs": 18776,
+  "settled": {
+    "count": 170,
+    "p50Ms": 3779,
+    "p95Ms": 15046,
+    "maxMs": 15658
+  },
+  "held": [
+    {
+      "reason": "address_mismatch",
+      "count": 6
+    },
+    {
+      "reason": "amount_mismatch",
+      "count": 6
+    },
+    {
+      "reason": "hidden_instructions",
+      "count": 6
+    },
+    {
+      "reason": "items_mismatch",
+      "count": 6
+    }
+  ],
+  "blocked": [
+    {
+      "reason": "over_limit",
+      "text": "The amount is over a limit the owner set: per payment, for a newly added address, or what is left in the order.",
+      "count": 6,
+      "ids": [
+        "0x80928dd1ec13ff2f81edf6d0c0a3311e2450aeac403c060373b09e62592e00f0",
+        "0x7023e4b8b39239639110a1fde44d9fa669767dada9c48bb9de3815c6f4d97ea8",
+        "0x8a0f7c7649e5e7f8716cf5668401d950b0ca408269b7aa7936043203ac884571",
+        "0x12a6133b85cd0b68f3dadd173aec67d4e91d69c62fc45e2b7a198c722879c496",
+        "0x3a8cf3b21f700c2f07cb2d77f83634dbb9d351af03a612473d74f2de82d02e5b",
+        "0x3279c7f86abc2ddceb9576e11ef6094d9aff3dc365dc51761d1cb71d952ce304"
+      ]
+    }
+  ],
+  "doctored": {
+    "total": 30,
+    "caught": 30
+  },
+  "clean": {
+    "total": 170,
+    "wronglyHeld": 0,
+    "examples": []
+  },
+  "asExpected": 200,
+  "secondAgent": {
+    "sent": 20,
+    "sameRequests": true
+  },
+  "transactions": 170,
+  "relayerMonSpent": 4.6124,
+  "groupRefusal": {
+    "reason": "address_mismatch",
+    "shown": 6,
+    "status": 200,
+    "runId": "0x52b165bfb0a6fc606bdab578789b3046922fd11c63577c85e7154960046e55b3",
+    "refused": 6,
+    "ids": [
+      "0x4812d6e8c3b808ef71c4187af36cedbd16f7411c53a984d9a0c071a7a635bbe2",
+      "0x49f0f08558094dc3e454940ef94d7f4c701e3b9eb49ddc2f7f4d86cdc5d8a7d2",
+      "0x59019594bcb81dec698c9e1f525b1cd483920920ab644ecabd9c4492c9be6b78",
+      "0x7a1c0860e988bc747a0da5d5da2d5d2544d0896e94c8838a7bb65cd04efe5dbb",
+      "0x8dfc1067b34b4dd3bf3f091f29991b7e6e5f44c97ee26dfe29b8c5baf1219bb9",
+      "0xcd4f0975f5527b665a36ca5fdf42f3cf596c2424c1198709a5ac894bbb9dad1e"
+    ]
+  },
+  "invoices": [
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS0",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS1",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS2",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS3",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS4",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS5",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS6",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS7",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS8",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS9",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS10",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS11",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS12",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS13",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS14",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS15",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS16",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS17",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS18",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS19",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1003",
+      "number": "KS-1003-C5756-ROIS20",
+      "expected": {
+        "outcome": "held",
+        "reason": "items_mismatch"
+      },
+      "outcome": "held",
+      "reason": "items_mismatch"
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS21",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS22",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS23",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS24",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1002",
+      "number": "KS-1002-C5756-ROIS25",
+      "expected": {
+        "outcome": "held",
+        "reason": "address_mismatch"
+      },
+      "outcome": "held",
+      "reason": "address_mismatch"
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS26",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS27",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS28",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1006",
+      "number": "KS-1006-C5756-ROIS29",
+      "expected": {
+        "outcome": "blocked",
+        "reason": "over_limit"
+      },
+      "outcome": "blocked",
+      "reason": "over_limit"
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS30",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS31",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1006",
+      "number": "KS-1006-C5756-ROIS32",
+      "expected": {
+        "outcome": "blocked",
+        "reason": "over_limit"
+      },
+      "outcome": "blocked",
+      "reason": "over_limit"
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS33",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS34",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS35",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS36",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS37",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS38",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS39",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS40",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS41",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS42",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS43",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS44",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1002",
+      "number": "KS-1002-C5756-ROIS45",
+      "expected": {
+        "outcome": "held",
+        "reason": "address_mismatch"
+      },
+      "outcome": "held",
+      "reason": "address_mismatch"
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS46",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS47",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1003",
+      "number": "KS-1003-C5756-ROIS48",
+      "expected": {
+        "outcome": "held",
+        "reason": "items_mismatch"
+      },
+      "outcome": "held",
+      "reason": "items_mismatch"
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS49",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS50",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1006",
+      "number": "KS-1006-C5756-ROIS51",
+      "expected": {
+        "outcome": "blocked",
+        "reason": "over_limit"
+      },
+      "outcome": "blocked",
+      "reason": "over_limit"
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS52",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1006",
+      "number": "KS-1006-C5756-ROIS53",
+      "expected": {
+        "outcome": "blocked",
+        "reason": "over_limit"
+      },
+      "outcome": "blocked",
+      "reason": "over_limit"
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS54",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS55",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS56",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS57",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS58",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1004",
+      "number": "KS-1004-C5756-ROIS59",
+      "expected": {
+        "outcome": "held",
+        "reason": "amount_mismatch"
+      },
+      "outcome": "held",
+      "reason": "amount_mismatch"
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS60",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS61",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1002",
+      "number": "KS-1002-C5756-ROIS62",
+      "expected": {
+        "outcome": "held",
+        "reason": "address_mismatch"
+      },
+      "outcome": "held",
+      "reason": "address_mismatch"
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS63",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1004",
+      "number": "KS-1004-C5756-ROIS64",
+      "expected": {
+        "outcome": "held",
+        "reason": "amount_mismatch"
+      },
+      "outcome": "held",
+      "reason": "amount_mismatch"
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS65",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS66",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS67",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS68",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS69",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS70",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS71",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS72",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1003",
+      "number": "KS-1003-C5756-ROIS73",
+      "expected": {
+        "outcome": "held",
+        "reason": "items_mismatch"
+      },
+      "outcome": "held",
+      "reason": "items_mismatch"
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS74",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS75",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS76",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS77",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS78",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS79",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1005",
+      "number": "KS-1005-C5756-ROIS80",
+      "expected": {
+        "outcome": "held",
+        "reason": "hidden_instructions"
+      },
+      "outcome": "held",
+      "reason": "hidden_instructions"
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS81",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS82",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS83",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS84",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS85",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS86",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS87",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1003",
+      "number": "KS-1003-C5756-ROIS88",
+      "expected": {
+        "outcome": "held",
+        "reason": "items_mismatch"
+      },
+      "outcome": "held",
+      "reason": "items_mismatch"
+    },
+    {
+      "case": "ks-1004",
+      "number": "KS-1004-C5756-ROIS89",
+      "expected": {
+        "outcome": "held",
+        "reason": "amount_mismatch"
+      },
+      "outcome": "held",
+      "reason": "amount_mismatch"
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS90",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS91",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS92",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS93",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS94",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS95",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS96",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS97",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS98",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS99",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS100",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS101",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1003",
+      "number": "KS-1003-C5756-ROIS102",
+      "expected": {
+        "outcome": "held",
+        "reason": "items_mismatch"
+      },
+      "outcome": "held",
+      "reason": "items_mismatch"
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS103",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS104",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS105",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS106",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1002",
+      "number": "KS-1002-C5756-ROIS107",
+      "expected": {
+        "outcome": "held",
+        "reason": "address_mismatch"
+      },
+      "outcome": "held",
+      "reason": "address_mismatch"
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS108",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS109",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS110",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS111",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS112",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS113",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS114",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS115",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS116",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS117",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS118",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS119",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS120",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS121",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS122",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1005",
+      "number": "KS-1005-C5756-ROIS123",
+      "expected": {
+        "outcome": "held",
+        "reason": "hidden_instructions"
+      },
+      "outcome": "held",
+      "reason": "hidden_instructions"
+    },
+    {
+      "case": "ks-1002",
+      "number": "KS-1002-C5756-ROIS124",
+      "expected": {
+        "outcome": "held",
+        "reason": "address_mismatch"
+      },
+      "outcome": "held",
+      "reason": "address_mismatch"
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS125",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1005",
+      "number": "KS-1005-C5756-ROIS126",
+      "expected": {
+        "outcome": "held",
+        "reason": "hidden_instructions"
+      },
+      "outcome": "held",
+      "reason": "hidden_instructions"
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS127",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS128",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS129",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS130",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1005",
+      "number": "KS-1005-C5756-ROIS131",
+      "expected": {
+        "outcome": "held",
+        "reason": "hidden_instructions"
+      },
+      "outcome": "held",
+      "reason": "hidden_instructions"
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS132",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS133",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS134",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1005",
+      "number": "KS-1005-C5756-ROIS135",
+      "expected": {
+        "outcome": "held",
+        "reason": "hidden_instructions"
+      },
+      "outcome": "held",
+      "reason": "hidden_instructions"
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS136",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS137",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS138",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS139",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS140",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1004",
+      "number": "KS-1004-C5756-ROIS141",
+      "expected": {
+        "outcome": "held",
+        "reason": "amount_mismatch"
+      },
+      "outcome": "held",
+      "reason": "amount_mismatch"
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS142",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS143",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS144",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS145",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS146",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS147",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS148",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS149",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS150",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS151",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1006",
+      "number": "KS-1006-C5756-ROIS152",
+      "expected": {
+        "outcome": "blocked",
+        "reason": "over_limit"
+      },
+      "outcome": "blocked",
+      "reason": "over_limit"
+    },
+    {
+      "case": "ks-1005",
+      "number": "KS-1005-C5756-ROIS153",
+      "expected": {
+        "outcome": "held",
+        "reason": "hidden_instructions"
+      },
+      "outcome": "held",
+      "reason": "hidden_instructions"
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS154",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1004",
+      "number": "KS-1004-C5756-ROIS155",
+      "expected": {
+        "outcome": "held",
+        "reason": "amount_mismatch"
+      },
+      "outcome": "held",
+      "reason": "amount_mismatch"
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS156",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS157",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1006",
+      "number": "KS-1006-C5756-ROIS158",
+      "expected": {
+        "outcome": "blocked",
+        "reason": "over_limit"
+      },
+      "outcome": "blocked",
+      "reason": "over_limit"
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS159",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS160",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS161",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS162",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1003",
+      "number": "KS-1003-C5756-ROIS163",
+      "expected": {
+        "outcome": "held",
+        "reason": "items_mismatch"
+      },
+      "outcome": "held",
+      "reason": "items_mismatch"
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS164",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS165",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1004",
+      "number": "KS-1004-C5756-ROIS166",
+      "expected": {
+        "outcome": "held",
+        "reason": "amount_mismatch"
+      },
+      "outcome": "held",
+      "reason": "amount_mismatch"
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS167",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS168",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS169",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS170",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS171",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS172",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1002",
+      "number": "KS-1002-C5756-ROIS173",
+      "expected": {
+        "outcome": "held",
+        "reason": "address_mismatch"
+      },
+      "outcome": "held",
+      "reason": "address_mismatch"
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS174",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS175",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS176",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS177",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS178",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS179",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS180",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS181",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS182",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS183",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS184",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS185",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS186",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS187",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS188",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS189",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS190",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS191",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS192",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS193",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS194",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS195",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS196",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS197",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS198",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-C5756-ROIS199",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    }
+  ]
+}

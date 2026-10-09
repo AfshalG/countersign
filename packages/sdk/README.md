@@ -3,7 +3,8 @@
 Give an AI agent a Countersign account. The account is a contract on Monad that pays only the suppliers the owner approved, at their addresses on file, within approved orders. Your agent pays inside those rules with no click; anything else is held for the owner, with the reason in plain words and a link.
 
 ```bash
-npm i https://github.com/AfshalG/countersign/releases/download/sdk-v0.1.1/countersign-sdk-0.1.1.tgz
+npm i https://github.com/AfshalG/countersign/releases/download/sdk-v0.3.0/countersign-sdk-0.3.0.tgz
+npx countersign-test-account > .env   # your own testnet account, agent key and token (Node)
 ```
 
 Works with npm, pnpm, yarn and bun; Node 22+, Bun, Deno and edge runtimes. One dependency: viem.
@@ -13,9 +14,9 @@ import { Countersign } from '@countersign/sdk';
 
 const cs = new Countersign({
   gateway: 'https://gateway-production-e17a.up.railway.app',
-  token: process.env.COUNTERSIGN_TOKEN!, // the gateway's service token
-  account: '0x…', // your Countersign account
-  agentKey: process.env.AGENT_PRIVATE_KEY!, // signs here; never sent anywhere
+  token: process.env.COUNTERSIGN_TOKEN!, // your account's token (cs_…)
+  account: process.env.COUNTERSIGN_ACCOUNT! as `0x${string}`, // your Countersign account
+  agentKey: process.env.COUNTERSIGN_AGENT_KEY! as `0x${string}`, // signs here; never sent anywhere
 });
 
 const [order] = await cs.orders(); // what is approved, and what is left
@@ -38,8 +39,19 @@ if (result.status === 'held') console.log(result.reasonText, result.statusUrl);
 | `status(id)`, `run(id)`, `proposal(id)`                | Look one up                                                                                                              |
 | `proposeOrder({ supplier, amount, expiry, document })` | Proposes a supplier and an order; nothing changes until the owner signs with their passkey                               |
 | `register({ fromBlock })`                              | Has the gateway index your account's orders                                                                              |
+| `advise({ order, document })`                          | Advice on an invoice paid by bank transfer: `match`, `mismatch` or `unsure`. Countersign cannot stop a bank transfer     |
+| `record(id)`                                           | A payment's record: the document, the checks and their evidence hash, who decided, and the transactions on Monad         |
+| `verifyRecord(record)`                                 | Checks a record against Monad's own RPC, without trusting Countersign                                                    |
 
 Every failure is a `CountersignError` with a `code` (`malformed`, `unauthorized`, `unknown_order`, `chain_unavailable`, `network`, …) and, for bad input, the fields. Amounts are decimal strings (`'12.50'`) or bigints of USDC base units, never floats.
+
+**Check a payment's record yourself.** A held payment and an owner's refusal are written on Monad with the hash of their evidence. Download a record with `record(id)` (or `GET /v1/payments/{id}/record`) and check it:
+
+```bash
+npx countersign-verify countersign-record-0x….json
+```
+
+It recomputes the evidence and document hashes and reads the decision's `DecisionRecorded` and the settlement's `PaymentExecuted` from Monad.
 
 **What the account guarantees, and what it does not.** The contract makes paying the wrong party impossible: a look-alike address, a supplier not on file, more than the order, an invoice paid before. A checker also compares each invoice with its order, to catch the right supplier billing the wrong amount; it can hold a payment but never release one. Testnet only.
 

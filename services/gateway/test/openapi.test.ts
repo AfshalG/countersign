@@ -52,11 +52,20 @@ describe('the API reference', () => {
         '/v1/payments/{id}/approve',
         '/v1/payments/{id}/refuse',
         '/v1/checks',
+        '/v1/advice',
+        '/v1/advice/{id}',
+        '/v1/payments/{id}/record',
+        '/v1/accounts/{account}/records.csv',
         '/v1/accounts',
+        '/v1/accounts/{account}/banks',
+        '/v1/owner/{account}/banks',
+        '/v1/owner/{account}/banks/preview',
         '/v1/accounts/{account}/orders',
+        '/v1/accounts/{account}/runs',
         '/v1/proposals',
         '/v1/proposals/{id}',
         '/v1/approvals/{id}',
+        '/v1/approvals/runs/{runId}',
         '/v1/runs',
         '/v1/runs/{id}',
       ].sort(),
@@ -64,8 +73,8 @@ describe('the API reference', () => {
     expect(doc.components.securitySchemes.Bearer).toMatchObject({ type: 'http', scheme: 'bearer' });
     for (const [path, ops] of Object.entries(doc.paths))
       for (const op of Object.values(ops))
-        // The approvals routes are the exception: the owner's passkey authorises them.
-        if (path.startsWith('/v1') && !path.startsWith('/v1/approvals'))
+        // The approvals and owner routes are the exception: the owner's passkey authorises them.
+        if (path.startsWith('/v1') && !/^\/v1\/(approvals|owner)\//.test(path))
           expect(op.security, path).toEqual([{ Bearer: [] }]);
   });
 
@@ -82,7 +91,7 @@ describe('the API reference', () => {
     const text = await res.text();
     expect(text).toMatch(/^# Countersign\n\n> /);
     expect(text).toContain(
-      'npm i https://github.com/AfshalG/countersign/releases/download/sdk-v0.1.1/countersign-sdk-0.1.1.tgz',
+      'npm i https://github.com/AfshalG/countersign/releases/download/sdk-v0.3.0/countersign-sdk-0.3.0.tgz',
     );
     expect(text).toContain('/openapi.json');
     expect(text).toContain('https://countersign-mcp.vercel.app/api/mcp');

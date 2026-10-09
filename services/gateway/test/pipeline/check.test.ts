@@ -6,6 +6,7 @@ import { Store } from '../../src/db/store.js';
 import type { Database } from '../../src/db/client.js';
 import { requestId } from '../../src/ids.js';
 import { checkOne } from '../../src/pipeline/check.js';
+import { sendOne } from '../../src/pipeline/send.js';
 import { TestChecker, type Checker } from '../../src/checker.js';
 import { freshDatabase, truncate } from '../db/helpers.js';
 import { ACCOUNT, AGENT_SIG, FakeChain, SUPPLIER, VAULT } from '../fakes.js';
@@ -55,6 +56,59 @@ describe('the check step', () => {
     expect(row?.decidedBy).toBe('checker');
     expect(row?.checkerSig).toMatch(/^0x[0-9a-f]{130}$/);
     expect(row?.checkedAt).toBeInstanceOf(Date);
+  });
+
+  it('reads the chain once to check a payment; the send step simulates it once more, just before signing (Slice 16)', async () => {
+    const request = await submit('INV-one-read');
+    const before = chain.simulations;
+    await run(new TestChecker(checkerKey, CHAIN_ID), request);
+    expect(chain.simulations - before).toBe(1);
+  });
+
+  it('asks the checker once more when it did not answer in time, before holding for a person (Slice 16)', async () => {
+    const real = new TestChecker(checkerKey, CHAIN_ID);
+    let calls = 0;
+    // The model missed its budget once (a passing slow moment at volume), then answered.
+    const flaky: Checker = {
+      check: (input, startTimer) =>
+        ++calls === 1
+          ? Promise.resolve({
+              verdict: 'hold',
+              reason: 'checker_unavailable',
+              evidence: { error: 'Request was aborted.' },
+            })
+          : real.check(input, startTimer),
+    };
+    const request = await submit('INV-slow-once');
+    await run(flaky, request);
+    expect(calls).toBe(2);
+    expect((await store.get(request.id))?.status).toBe('released');
+  });
+
+  it('still holds when the checker fails twice, and never re-asks a judgement', async () => {
+    let calls = 0;
+    const down: Checker = {
+      check: () => {
+        calls++;
+        return Promise.reject(new Error('model provider down'));
+      },
+    };
+    const a = await submit('INV-down');
+    await run(down, a);
+    expect(calls).toBe(2);
+    expect((await store.get(a.id))?.reason).toBe('checker_unavailable');
+
+    let asked = 0;
+    const unsure: Checker = {
+      check: () => {
+        asked++;
+        return Promise.resolve({ verdict: 'hold', reason: 'checker_unsure', evidence: {} });
+      },
+    };
+    const b = await submit('INV-unsure');
+    await run(unsure, b);
+    expect(asked).toBe(1);
+    expect((await store.get(b.id))?.reason).toBe('checker_unsure');
   });
 
   it('signs the vault-domain payment digest with the checker key', async () => {
@@ -130,9 +184,9 @@ describe('the check step', () => {
   it('holds when the checker errors or runs out of time (fail closed)', async () => {
     const broken: Checker = { check: () => Promise.reject(new Error('model provider down')) };
     const slow: Checker = {
-      check: (_input, signal) =>
+      check: (_input, startTimer) =>
         new Promise((_resolve, reject) => {
-          signal.addEventListener('abort', () => {
+          startTimer().addEventListener('abort', () => {
             reject(new Error('aborted'));
           });
         }),
@@ -148,10 +202,15 @@ describe('the check step', () => {
     }
   });
 
-  it('holds when the contract would not accept the checker signature after all', async () => {
+  it('holds, unsent, when the contract would not accept the checker signature after all (at the send step)', async () => {
     chain.rule = (_p, call) => (call.kind === 'pay' ? 'InvalidCheckerSignature' : undefined);
     const request = await submit('INV-badsig');
     await run(new TestChecker(checkerKey, CHAIN_ID), request);
+    const released = await store.get(request.id);
+    expect(released?.status).toBe('released');
+    if (!released) throw new Error('no row');
+    // The pool is never reached: nothing is signed for a payment the contract refuses.
+    await sendOne({ store, chain, pool: {} as never }, released);
     const row = await store.get(request.id);
     expect(row?.status).toBe('held');
     expect(row?.reason).toBe('checker_unavailable');

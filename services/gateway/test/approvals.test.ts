@@ -1,12 +1,26 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { hashTypedData, keccak256, stringToHex, toHex, type Hex } from 'viem';
-import { generatePrivateKey } from 'viem/accounts';
-import { decisionTypes, OUTCOME, paymentTypes, vaultDomain } from '@countersign/shared';
+import {
+  hashTypedData,
+  keccak256,
+  recoverTypedDataAddress,
+  stringToHex,
+  toHex,
+  type Hex,
+} from 'viem';
+import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
+import {
+  decisionTypes,
+  evidenceHash,
+  OUTCOME,
+  paymentTypes,
+  vaultDomain,
+} from '@countersign/shared';
 import { Store } from '../src/db/store.js';
 import type { Database } from '../src/db/client.js';
 import { createApp } from '../src/app.js';
 import { TestChecker } from '../src/checker.js';
 import { checkOne } from '../src/pipeline/check.js';
+import type { DecisionToRecord } from '../src/decisions.js';
 import { SoftPasskey } from '../scripts/passkey.js';
 import { freshDatabase, truncate } from './db/helpers.js';
 import { ACCOUNT, AGENT_SIG, FakeChain, SUPPLIER, VAULT } from './fakes.js';
@@ -47,7 +61,11 @@ beforeEach(async () => {
 const deadline = 1_791_400_000;
 
 /** Submits a payment to SUPPLIER and runs the check once, as the gateway would. */
-async function submitted(invoice: string, holder: TestChecker) {
+async function submitted(
+  invoice: string,
+  holder: TestChecker,
+  decisions?: { record: (d: DecisionToRecord) => Promise<void> },
+) {
   const res = await app.request('/v1/payments', {
     method: 'POST',
     headers: { authorization: `Bearer ${TOKEN}`, 'content-type': 'application/json' },
@@ -67,7 +85,14 @@ async function submitted(invoice: string, holder: TestChecker) {
   const row = await store.get(request.id);
   if (!row) throw new Error('no row');
   await checkOne(
-    { store, chain, checker: holder, chainId: CHAIN_ID, checkerTimeoutMs: 2_000 },
+    {
+      store,
+      chain,
+      checker: holder,
+      chainId: CHAIN_ID,
+      checkerTimeoutMs: 2_000,
+      ...(decisions ? { decisions } : {}),
+    },
     row,
   );
   return request.id;
@@ -136,6 +161,8 @@ describe('GET /v1/approvals/{id} (what the phone shows and signs)', () => {
     // The vault pays only the address on file, even for the owner's passkey: no pay_once to offer.
     expect(Object.keys(v.actions)).toEqual(['refuse']);
     expect(v.summary.payOnce).toBe('address_not_on_file');
+    // Slice 18: the refusal names the hold's own evidence by its hash, as it goes on Monad.
+    const stored = await store.get(id);
     expect(v.actions.refuse?.challenge).toBe(
       hashTypedData({
         domain: vaultDomain(CHAIN_ID, VAULT),
@@ -145,7 +172,7 @@ describe('GET /v1/approvals/{id} (what the phone shows and signs)', () => {
           invoiceHash: keccak256(toHex('INV-0045')),
           outcome: OUTCOME.refused,
           reasonHash: keccak256(stringToHex('refused by the owner')),
-          evidenceHash: id,
+          evidenceHash: evidenceHash(stored?.evidence),
         },
       }),
     );
@@ -331,5 +358,108 @@ describe('several approvers (D36): a held payment needs the release threshold', 
     expect(res.status).toBe(422);
     expect(await res.json()).toMatchObject({ error: 'invalid_passkey' });
     expect(signaturesOf(await view(id), 'pay_once')).toEqual({ need: 2, signed: [] });
+  });
+});
+
+describe('decisions written on Monad (Slice 18)', () => {
+  /** A recorder that keeps what it was asked to record. */
+  const recorder = () => {
+    const calls: DecisionToRecord[] = [];
+    return {
+      calls,
+      record: (d: DecisionToRecord) => {
+        calls.push(d);
+        return Promise.resolve();
+      },
+    };
+  };
+
+  it('records a checker’s hold with the checker’s signature over the evidence it gave', async () => {
+    const key = generatePrivateKey();
+    const holder = new TestChecker(key, CHAIN_ID, () => 'amount_mismatch');
+    const rec = recorder();
+    chain.onFile = SUPPLIER;
+    const id = await submitted('INV-1801', holder, rec);
+    const d = rec.calls[0];
+    if (d?.decidedBy !== 'checker') throw new Error('no checker decision');
+    const stored = await store.get(id);
+    expect(stored?.status).toBe('held');
+    expect(d.decision).toEqual({
+      invoiceHash: keccak256(toHex('INV-1801')),
+      outcome: OUTCOME.held,
+      reasonHash: keccak256(stringToHex('amount_mismatch')),
+      evidenceHash: evidenceHash(stored?.evidence),
+    });
+    expect(
+      await recoverTypedDataAddress({
+        domain: vaultDomain(CHAIN_ID, VAULT),
+        types: decisionTypes,
+        primaryType: 'Decision',
+        message: d.decision,
+        signature: d.checkerSig,
+      }),
+    ).toBe(privateKeyToAccount(key).address);
+  });
+
+  it('records nothing nobody signed: a hold by the contract’s own rules', async () => {
+    const rec = recorder();
+    chain.rule = (_p, call) =>
+      call.kind === 'pay' && call.checkerSig === '0x' ? 'PayToNotOnFile' : undefined;
+    chain.onFile = ON_FILE;
+    const res = await app.request('/v1/payments', {
+      method: 'POST',
+      headers: { authorization: `Bearer ${TOKEN}`, 'content-type': 'application/json' },
+      body: JSON.stringify({
+        account: ACCOUNT,
+        vault: VAULT,
+        payment: {
+          amount: '1000',
+          invoiceHash: keccak256(toHex('INV-1802')),
+          payTo: SUPPLIER,
+          deadline,
+        },
+        agentSig: AGENT_SIG,
+      }),
+    });
+    const { request } = (await res.json()) as { request: { id: Hex } };
+    const row = await store.get(request.id);
+    if (!row) throw new Error('no row');
+    await checkOne(
+      { store, chain, checker, chainId: CHAIN_ID, checkerTimeoutMs: 2_000, decisions: rec },
+      row,
+    );
+    expect((await store.get(request.id))?.status).toBe('held');
+    expect(rec.calls).toEqual([]);
+  });
+
+  it('records an owner’s refusal with the passkey’s signature over the hold’s evidence', async () => {
+    const rec = recorder();
+    app = createApp({
+      store,
+      chain,
+      checker,
+      chainId: CHAIN_ID,
+      checkerTimeoutMs: 2_000,
+      token: TOKEN,
+      publicUrl: 'https://gateway.test',
+      health: () => Promise.resolve({}),
+      decisions: rec,
+    });
+    const id = await held('INV-1803');
+    const res = await submit(id, {
+      action: 'refuse',
+      assertion: browser((await view(id)).actions.refuse?.challenge as Hex),
+    });
+    expect(res.status).toBe(200);
+    const d = rec.calls[0];
+    if (d?.decidedBy !== 'owner') throw new Error('no owner decision');
+    const stored = await store.get(id);
+    expect(d.decision).toEqual({
+      invoiceHash: keccak256(toHex('INV-1803')),
+      outcome: OUTCOME.refused,
+      reasonHash: keccak256(stringToHex('refused by the owner')),
+      evidenceHash: evidenceHash(stored?.evidence),
+    });
+    expect(d.ownerSigs).toHaveLength(1);
   });
 });

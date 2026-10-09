@@ -1,6 +1,6 @@
 import { OpenAPIHono, createRoute, z } from '@hono/zod-openapi';
 import { Scalar } from '@scalar/hono-api-reference';
-import { bearerAuth } from 'hono/bearer-auth';
+import type { Context } from 'hono';
 import { except } from 'hono/combine';
 import { cors } from 'hono/cors';
 import { HTTPException } from 'hono/http-exception';
@@ -12,22 +12,30 @@ import type { Chain, WebAuthnAuth } from './chain/types.js';
 import type { Checker } from './checker.js';
 import { evaluate, SimulationUnavailable } from './pipeline/check.js';
 import { registerOrderRoutes, type Indexing } from './api/orders.js';
-import { paymentPage, proposalPage } from './api/status-page.js';
+import { paymentPage, proposalPage, runPage } from './api/status-page.js';
+import { runSummary } from './runs.js';
 import { llmsFullTxt, llmsTxt } from './api/llms.js';
 import { payOnce, refuseHeld, registerApprovalRoutes } from './api/approvals.js';
 import { registerDemoRoutes } from './api/demo.js';
+import { mayUse, requireToken, wrongAccount } from './api/account-tokens.js';
 import type { DemoDeps } from './demo/accounts.js';
 import type { ProposalDeps } from './owner/proposals.js';
 import type { PauseDeps } from './owner/pause.js';
 import { registerOwnerRoutes } from './api/owner.js';
+import { registerAdviceRoutes } from './api/advice.js';
+import { registerRecordRoutes } from './api/records.js';
+import type { Advisor } from './advice.js';
+import type { DecisionRecorder } from './decisions.js';
 import { registerWhatsAppRoutes, type WhatsAppRouteDeps } from './api/whatsapp.js';
 import { recoverAgent, type AgentDirectory } from './agents/identity.js';
 import { supplierNameOf } from './suppliers.js';
 import { registerAgentRoutes } from './api/agents.js';
 import type { PaymentRequestRow } from './db/schema.js';
+import type { WebsiteProofs } from './proofs/website.js';
 import type { StatusChange, Store } from './db/store.js';
 import { requestId, runId } from './ids.js';
 import {
+  accountParam,
   address,
   apiError,
   bytes32,
@@ -53,9 +61,13 @@ export type AppDeps = {
   publicUrl?: string;
   /** The checker and its time limit, for checks with no payment (POST /v1/checks). */
   checker: Checker;
+  /** Advice on bank-transfer invoices (Slice 17); without it POST /v1/advice answers 503. */
+  advisor?: Advisor;
+  /** Slice 18: owners' refusals written on Monad; without it they stay off chain. */
+  decisions?: Pick<DecisionRecorder, 'record'>;
   chainId: number;
   checkerTimeoutMs: number;
-  /** The service token the MCP server and the apps send (per-account sign-in comes in Slice 13). */
+  /** The service token the MCP server and the apps send; developers' accounts use account tokens. */
   token: string;
   /** Extra health details: relayer balances, the finality socket. */
   health: () => Promise<Record<string, unknown>>;
@@ -69,6 +81,8 @@ export type AppDeps = {
   agents?: AgentDirectory;
   /** WhatsApp (Slice 14); without it its routes do not exist and nothing is sent. */
   whatsapp?: WhatsAppRouteDeps;
+  /** Slice 15: suppliers' websites, shown on changed-address holds and checked on payments (D21). */
+  websites?: Pick<WebsiteProofs, 'siteOnFile' | 'check' | 'websiteChanged'>;
 };
 
 // ---------- views ----------
@@ -135,7 +149,11 @@ const json = <T extends z.ZodType>(schema: T, description: string) => ({
 });
 const errors = {
   400: json(apiError, 'Malformed: the issues name each field'),
-  401: json(apiError, 'Missing or wrong service token'),
+  401: json(apiError, 'Missing or wrong token'),
+  403: json(
+    apiError,
+    'An account token for another account (wrong_account), or on a route it may not call',
+  ),
 };
 const secured = [{ Bearer: [] }];
 
@@ -217,6 +235,32 @@ const getRun = createRoute({
   responses: { 200: json(runView, 'The run'), 404: json(apiError, 'unknown_run'), ...errors },
 });
 
+const listRuns = createRoute({
+  method: 'get',
+  path: '/v1/accounts/{account}/runs',
+  tags: ['Payments'],
+  summary: 'An account’s runs, newest first, each with its run board',
+  security: secured,
+  request: { params: accountParam },
+  responses: {
+    200: json(
+      z.object({
+        account: z.string(),
+        runs: z.array(
+          z.object({
+            runId: z.string(),
+            size: z.number(),
+            submittedAt: z.string(),
+            board: z.string().openapi({ description: 'The read-only run page' }),
+          }),
+        ),
+      }),
+      'The runs',
+    ),
+    ...errors,
+  },
+});
+
 const approve = createRoute({
   method: 'post',
   path: '/v1/payments/{id}/approve',
@@ -287,6 +331,11 @@ export function createApp(deps: AppDeps) {
   const { store, chain } = deps;
   const publicUrl = (deps.publicUrl ?? 'http://localhost:8787').replace(/\/$/, '');
   const view = (row: PaymentRequestRow) => viewOf(row, publicUrl, deps.agents);
+  /** False when an account token asks about another account's request (it then looks unknown). */
+  const ownRequest = async (c: Context, id: string) => {
+    const row = await store.get(id);
+    return !row || mayUse(c, row.account);
+  };
   // The agent behind a payment, recovered once when it arrives (Slice 19).
   const agentOf = (
     vault: Address,
@@ -334,7 +383,8 @@ export function createApp(deps: AppDeps) {
   app.openAPIRegistry.registerComponent('securitySchemes', 'Bearer', {
     type: 'http',
     scheme: 'bearer',
-    description: 'The service token (per-account sign-in arrives in Slice 13)',
+    description:
+      'The service token, or an account token (`cs_…`, from POST /v1/demo/accounts/{account}/token) that reaches only its own account',
   });
 
   app.openapi(health, async (c) => {
@@ -357,21 +407,21 @@ export function createApp(deps: AppDeps) {
   });
   app.use('/v1/approvals/*', browserCors);
   if (deps.demo) app.use('/v1/demo/*', browserCors);
-  if (deps.pause) app.use('/v1/owner/*', browserCors);
+  // The owner's routes: the stop button's, and the bank accounts on file (Slice 17).
+  app.use('/v1/owner/*', browserCors);
   if (deps.whatsapp) app.use('/v1/whatsapp/*', browserCors);
-  const requireToken = bearerAuth({
-    token: deps.token,
-    noAuthenticationHeader: { message: { error: 'unauthorized' } },
-    invalidAuthenticationHeader: { message: { error: 'unauthorized' } },
-    invalidToken: { message: { error: 'unauthorized' } },
-  });
+  // The service token, or an account token limited to its own account (Slice 12 part 2).
   app.use(
     '/v1/*',
-    except(['/v1/approvals/*', '/v1/demo/*', '/v1/owner/*', '/v1/whatsapp/*'], requireToken),
+    except(
+      ['/v1/approvals/*', '/v1/demo/*', '/v1/owner/*', '/v1/whatsapp/*'],
+      requireToken(deps.token, store),
+    ),
   );
 
   app.openapi(submitPayment, async (c) => {
     const body = c.req.valid('json');
+    if (!mayUse(c, body.account)) return c.json(wrongAccount, 403);
     const { request, created: isNew } = await store.createRequest({
       id: requestId(body.account, body.vault, body.payment.invoiceHash as Hex),
       account: body.account,
@@ -390,6 +440,7 @@ export function createApp(deps: AppDeps) {
 
   app.openapi(submitRun, async (c) => {
     const { account, payments } = c.req.valid('json');
+    if (!mayUse(c, account)) return c.json(wrongAccount, 403);
     const ids = payments.map((p) => requestId(account, p.vault, p.payment.invoiceHash as Hex));
     const id = runId(account, ids);
     await store.createRun(id, account, payments.length);
@@ -410,11 +461,13 @@ export function createApp(deps: AppDeps) {
       });
       requests.push({ id: request.id, status: request.status });
     }
+    await store.addToRun(id, ids);
     return c.json({ runId: id, requests }, 201);
   });
 
   app.openapi(checkPayment, async (c) => {
     const body = c.req.valid('json');
+    if (!mayUse(c, body.account)) return c.json(wrongAccount, 403);
     const now = new Date();
     // The same row shape a stored request has, so the check runs exactly as it would for real.
     const row: PaymentRequestRow = {
@@ -476,20 +529,59 @@ export function createApp(deps: AppDeps) {
 
   app.openapi(getPayment, async (c) => {
     const row = await store.get(c.req.valid('param').id);
-    return row ? c.json(view(row), 200) : c.json({ error: 'unknown_request' }, 404);
+    // Another account's request looks unknown to an account token.
+    return row && mayUse(c, row.account)
+      ? c.json(view(row), 200)
+      : c.json({ error: 'unknown_request' }, 404);
   });
 
   app.openapi(getRun, async (c) => {
     const id = c.req.valid('param').id;
     const rows = await store.listRun(id);
-    if (rows.length === 0) return c.json({ error: 'unknown_run' }, 404);
+    if (rows.length === 0 || !mayUse(c, rows[0]?.account ?? ''))
+      return c.json({ error: 'unknown_run' }, 404);
     const byStatus = Object.fromEntries(
       PAYMENT_STATUSES.map((s) => [s, rows.filter((r) => r.status === s).length]),
     );
-    return c.json({ runId: id, size: rows.length, byStatus, requests: rows.map(view) }, 200);
+    const run = (await store.getRun(id)) ?? {
+      id,
+      account: rows[0]?.account ?? '',
+      size: rows.length,
+      createdAt: rows[0]?.requestedAt ?? new Date(),
+    };
+    return c.json(
+      {
+        runId: id,
+        size: rows.length,
+        byStatus,
+        summary: runSummary(run, rows, new Date()),
+        requests: rows.map(view),
+      },
+      200,
+    );
+  });
+
+  app.openapi(listRuns, async (c) => {
+    const { account } = c.req.valid('param');
+    if (!mayUse(c, account)) return c.json(wrongAccount, 403);
+    const runs = await store.runsOf(account);
+    return c.json(
+      {
+        account,
+        runs: runs.map((r) => ({
+          runId: r.id,
+          size: r.size,
+          submittedAt: r.createdAt.toISOString(),
+          board: `${publicUrl}/r/${r.id}`,
+        })),
+      },
+      200,
+    );
   });
 
   app.openapi(approve, async (c) => {
+    if (!(await ownRequest(c, c.req.valid('param').id)))
+      return c.json({ error: 'unknown_request' }, 404);
     const result = await payOnce(
       { store, chain, chainId: deps.chainId },
       c.req.valid('param').id,
@@ -510,9 +602,16 @@ export function createApp(deps: AppDeps) {
 
   /** A person's refusal ends the agent's run (money rule 7). */
   app.openapi(refuse, async (c) => {
+    if (!(await ownRequest(c, c.req.valid('param').id)))
+      return c.json({ error: 'unknown_request' }, 404);
     const body = c.req.valid('json');
     const result = await refuseHeld(
-      { store, chain, chainId: deps.chainId },
+      {
+        store,
+        chain,
+        chainId: deps.chainId,
+        ...(deps.decisions ? { decisions: deps.decisions } : {}),
+      },
       c.req.valid('param').id,
       toAuth(body.ownerAuth),
       {
@@ -552,6 +651,7 @@ export function createApp(deps: AppDeps) {
       const queue: StatusChange[] = [];
       let wake: (() => void) | undefined;
       const unsubscribe = store.onChange((change) => {
+        if (!mayUse(c, change.account)) return; // an account token sees its own account only
         queue.push(change);
         wake?.();
       });
@@ -586,18 +686,63 @@ export function createApp(deps: AppDeps) {
     }),
   );
 
-  registerOrderRoutes(app, { store, chain, indexing: deps.indexing, publicUrl });
+  registerRecordRoutes(app, {
+    store,
+    chainId: deps.chainId,
+    publicUrl,
+    ...(deps.agents ? { agents: deps.agents } : {}),
+  });
+
+  registerAdviceRoutes(app, {
+    store,
+    chain,
+    chainId: deps.chainId,
+    ...(deps.advisor ? { advisor: deps.advisor } : {}),
+  });
+
+  registerOrderRoutes(app, {
+    store,
+    chain,
+    indexing: deps.indexing,
+    publicUrl,
+    checksWebsites: deps.websites !== undefined,
+  });
   registerApprovalRoutes(app, {
     store,
     chain,
     chainId: deps.chainId,
     publicUrl,
+    ...(deps.decisions ? { decisions: deps.decisions } : {}),
     ...(deps.proposals ? { proposals: deps.proposals } : {}),
+    ...(deps.websites ? { websites: deps.websites } : {}),
   });
   if (deps.demo) registerDemoRoutes(app, deps.demo, { token: deps.token, publicUrl });
   if (deps.pause) registerOwnerRoutes(app, deps.pause);
   if (deps.agents) registerAgentRoutes(app, { store, agents: deps.agents });
   if (deps.whatsapp) registerWhatsAppRoutes(app, deps.whatsapp);
+
+  // A run's page (Slice 16): public like the status pages (the run id is an unguessable hash),
+  // read-only, refreshing itself; Sophie's run board replaces it. `?format=json` for the board.
+  app.get('/r/:id', async (c) => {
+    const id = c.req.param('id');
+    const rows = await store.listRun(id);
+    const run = await store.getRun(id);
+    if (!run || rows.length === 0)
+      return c.html('<!doctype html><title>Not found</title><p>No run with that id.</p>', 404);
+    const summary = runSummary(run, rows, new Date());
+    if (c.req.query('format') === 'json') return c.json(summary, 200);
+    return c.html(runPage(summary, publicUrl));
+  });
+
+  /** The transactions that wrote a payment's decisions on Monad, once final (Slice 18). */
+  const finalDecisionTxs = async (id: string) => {
+    const out: { by: 'checker' | 'owner'; hash: string }[] = [];
+    for (const k of await store.decisionRecords(id)) {
+      const tx = k.txHash ? await store.relayerTx(k.txHash) : undefined;
+      if (tx?.finalAt && tx.status === 'success') out.push({ by: k.decidedBy, hash: tx.hash });
+    }
+    return out;
+  };
 
   // A page a person can open from an agent's message; public, like the link in the message.
   app.get('/p/:id', async (c) => {
@@ -612,6 +757,7 @@ export function createApp(deps: AppDeps) {
               ? null
               : { address: request.agentAddress, agentId: null }),
           supplierName: await supplierNameOf(store, request.account, request.vault),
+          decisionTxs: await finalDecisionTxs(request.id),
         }),
       );
     const proposal = await store.getProposal(id);

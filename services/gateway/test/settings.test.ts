@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { generatePrivateKey, privateKeyToAddress } from 'viem/accounts';
-import { checkerMode, judgeMode, loadSettings, whatsappMode } from '../src/settings.js';
+import { checkerMode, judgeMode, loadSettings, primusKeys, whatsappMode } from '../src/settings.js';
 
 const base = {
   DATABASE_URL: 'postgres://localhost:5432/gateway',
@@ -112,5 +112,38 @@ describe('WhatsApp settings (Slice 14)', () => {
     expect(() =>
       loadSettings({ ...base, ...whatsapp, WHATSAPP_NUMBER: '+1 555 078 3881' }),
     ).toThrow();
+  });
+});
+
+describe('Primus settings (Slice 15)', () => {
+  const keys = {
+    PRIMUS_APP_ID: '0x1234567890abcdef',
+    PRIMUS_APP_SECRET: '0xsecret-value-for-tests',
+  };
+
+  it('is off without keys: every website check then says it could not be proven', () => {
+    expect(primusKeys(loadSettings(base))).toBeUndefined();
+  });
+
+  it('is on with both', () => {
+    expect(primusKeys(loadSettings({ ...base, ...keys }))).toEqual({
+      appId: keys.PRIMUS_APP_ID,
+      appSecret: keys.PRIMUS_APP_SECRET,
+    });
+  });
+
+  it('refuses to start with one of the two', () => {
+    expect(() => primusKeys(loadSettings({ ...base, PRIMUS_APP_ID: keys.PRIMUS_APP_ID }))).toThrow(
+      /PRIMUS_APP_ID and PRIMUS_APP_SECRET together/,
+    );
+  });
+});
+
+describe('check concurrency (Slice 16, D16)', () => {
+  it('is unset by default, and refuses nonsense', () => {
+    expect(loadSettings(base).CHECK_CONCURRENCY).toBeUndefined();
+    expect(loadSettings({ ...base, CHECK_CONCURRENCY: '16' }).CHECK_CONCURRENCY).toBe(16);
+    expect(() => loadSettings({ ...base, CHECK_CONCURRENCY: '0' })).toThrow();
+    expect(() => loadSettings({ ...base, CHECK_CONCURRENCY: 'many' })).toThrow();
   });
 });

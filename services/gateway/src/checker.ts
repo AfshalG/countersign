@@ -1,6 +1,14 @@
 import type { Address, Hex } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
-import type { Reason } from '@countersign/shared';
+import {
+  decisionTypes,
+  evidenceHash,
+  OUTCOME,
+  reasonHash,
+  vaultDomain,
+  type Reason,
+} from '@countersign/shared';
+import type { Decision } from './chain/types.js';
 import type { PaymentRequestRow } from './db/schema.js';
 import { paymentTypedData, type Payment } from './payment.js';
 
@@ -12,17 +20,25 @@ export type CheckInput = {
   dryRun?: boolean;
 };
 
+/** A hold as the vault's `Decision`, signed by the checker for `recordDecision` (Slice 18). */
+export type SignedDecision = Decision & { sig: Hex };
+
 export type CheckResult =
   | { verdict: 'release'; checkerSig: Hex; evidence: unknown }
-  | { verdict: 'hold'; reason: Reason; evidence: unknown };
+  | { verdict: 'hold'; reason: Reason; evidence: unknown; decision?: SignedDecision };
 
 /**
  * The checker, seen from the gateway. The real one is a separate service with its own key
- * (Slice 10); the gateway never holds the checker key. It must answer within the signal's
+ * (Slice 10); the gateway never holds the checker key. It must answer within the timer's
  * time limit; an error or a timeout is a hold.
  */
 export interface Checker {
-  check(input: CheckInput, signal: AbortSignal): Promise<CheckResult>;
+  /**
+   * `startTimer` starts the checker's time limit and returns its signal. A checker calls it when it
+   * starts waiting on the checking itself, after anything the gateway reads for it (Slice 16: at
+   * volume the gateway's own paced chain reads queue, and must not eat the checker's time).
+   */
+  check(input: CheckInput, startTimer: () => AbortSignal): Promise<CheckResult>;
 }
 
 /**
@@ -40,12 +56,28 @@ export class TestChecker implements Checker {
     private readonly holdIf?: (input: CheckInput) => Reason | undefined,
   ) {}
 
-  async check(input: CheckInput, signal: AbortSignal): Promise<CheckResult> {
+  async check(input: CheckInput, startTimer: () => AbortSignal): Promise<CheckResult> {
     this.calls++;
-    signal.throwIfAborted();
+    startTimer().throwIfAborted();
     const reason = this.holdIf?.(input);
-    if (reason !== undefined)
-      return { verdict: 'hold', reason, evidence: { checker: 'test', reason } };
+    if (reason !== undefined) {
+      const evidence = { checker: 'test', reason };
+      if (input.dryRun === true) return { verdict: 'hold', reason, evidence };
+      // Signed as the real checker signs a hold (Slice 18), so it can be recorded on Monad.
+      const decision = {
+        invoiceHash: input.payment.invoiceHash,
+        outcome: OUTCOME.held,
+        reasonHash: reasonHash(reason),
+        evidenceHash: evidenceHash(evidence),
+      };
+      const sig = await privateKeyToAccount(this.key).signTypedData({
+        domain: vaultDomain(this.chainId, input.request.vault as Address),
+        types: decisionTypes,
+        primaryType: 'Decision',
+        message: decision,
+      });
+      return { verdict: 'hold', reason, evidence, decision: { ...decision, sig } };
+    }
     if (input.dryRun === true)
       return { verdict: 'release', checkerSig: '0x', evidence: { checker: 'test', dryRun: true } };
     const account = privateKeyToAccount(this.key);

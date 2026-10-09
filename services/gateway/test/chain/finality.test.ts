@@ -122,6 +122,47 @@ describe('finality', () => {
     expect((await store.get(b.id))?.status).toBe('settled');
   });
 
+  it('keeps up with a backlog: reads the next blocks’ receipts while one is applied, in order (Slice 16)', async () => {
+    const rows = [];
+    for (let i = 0; i < 6; i++) rows.push(await settling(`INV-backlog-${String(i)}`));
+    rows.forEach((r, i) => receipts.set(400 + i, [{ transactionHash: r.hash, status: 'success' }]));
+    let inFlight = 0;
+    let most = 0;
+    const slow: Receipts = {
+      blockReceipts: async (n) => {
+        most = Math.max(most, ++inFlight);
+        await new Promise((r) => setTimeout(r, 30));
+        inFlight--;
+        return receipts.get(n) ?? [];
+      },
+      latestFinalized: () => Promise.resolve(405),
+    };
+    const order: string[] = [];
+    const backlog = new FinalityTracker({
+      store,
+      receipts: slow,
+      pool,
+      onChange: (id) => order.push(id),
+    });
+    await backlog.onHead(head(399, '0xb399', 'Finalized', 1));
+    await backlog.onHead(head(405, '0xb405', 'Finalized', 2));
+    expect(most).toBeGreaterThan(1); // receipts read ahead
+    expect(order).toEqual(rows.map((r) => r.id)); // applied in block order
+  });
+
+  it('marks every payment in a busy block (Slice 16: they are written together)', async () => {
+    const rows = [];
+    for (let i = 0; i < 20; i++) rows.push(await settling(`INV-busy-${String(i)}`));
+    receipts.set(
+      500,
+      rows.map((r) => ({ transactionHash: r.hash, status: 'success' as const })),
+    );
+    await tracker.onHead(head(500, '0xb500', 'Finalized', 1));
+    const after = await Promise.all(rows.map((r) => store.get(r.id)));
+    expect(after.every((r) => r?.status === 'settled')).toBe(true);
+    expect(settled).toHaveLength(20);
+  });
+
   it('tells whoever waits on a transaction that is not a payment once it is final (judge setup)', async () => {
     const hash = keccak256(toHex('createAccount for a judge'));
     let included: Hex | undefined;

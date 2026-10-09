@@ -492,18 +492,18 @@ AGENT DOOR:
              connected in Spike 4) and on WhatsApp                    WHATSAPP BUILT, FIRST REAL AGENT)
 
 DEPTH AND PROOF:
-  Slice 15:  Supplier address attestation wired in, or the fallback   TODO
-  Slice 16:  Payment run: 200 invoices in parallel, run board         TODO
-  Slice 17:  Advice-only check for bank-transfer invoices             TODO
-  Slice 18:  Audit record export                                      TODO
+  Slice 15:  Supplier address attestation wired in, or the fallback   DONE (WEBSITE PROOFS LIVE)
+  Slice 16:  Payment run: 200 invoices in parallel, run board         DONE (RUNS OF 200 AND 100 LIVE)
+  Slice 17:  Advice-only check for bank-transfer invoices             DONE (LIVE THROUGH MCP)
+  Slice 18:  Audit record export                                      DONE (HOLDS AND REFUSALS ON MONAD)
   Slice 19:  ERC-8004 agent identity; built right after Slice 12      DONE (ERC-8004 IDENTITY, A2A DOOR)
              (D33: the track names the registry)
              (+ an A2A door; agentWallet = the policy's agent key, no
              redeploy: the A2A and ERC-8004 research)
-  Slice 20:  Benchmark: four arms and the false-alarm rate            TODO
+  Slice 20:  Benchmark: four arms and the false-alarm rate            BUILT (MODEL ARM WAITS ON CREDIT)
 
 SHIP:
-  Slice 21:  Developer docs and evidence pack: README, quickstart,     TODO
+  Slice 21:  Developer docs and evidence pack: README, quickstart,     DONE
              limits, deployed list
              (done early: README security model, quickstart, llms.txt)
   Slice 22:  Demo, pitch story, video, another team integrating,      TODO

@@ -5,13 +5,18 @@
   "type": "module",
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "run-agents": "tsx src/run.ts"
+    "run-agents": "tsx src/run.ts",
+    "benchmark": "tsx src/benchmark/run.ts"
   },
   "dependencies": {
     "@ai-sdk/mcp": "2.0.67",
+    "@countersign/chain": "workspace:*",
     "@countersign/scripted-agent": "workspace:*",
+    "@countersign/sdk": "workspace:*",
+    "@countersign/shared": "workspace:*",
     "@openrouter/ai-sdk-provider": "3.1.0",
     "ai": "7.0.128",
+    "viem": "^2.57.3",
     "zod": "4.6.5"
   },
   "devDependencies": {

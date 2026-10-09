@@ -1,4 +1,18 @@
-import { and, asc, count, eq, gt, gte, inArray, isNotNull, isNull, lt, sql } from 'drizzle-orm';
+import {
+  and,
+  asc,
+  count,
+  desc,
+  eq,
+  gt,
+  gte,
+  inArray,
+  isNotNull,
+  isNull,
+  lt,
+  or,
+  sql,
+} from 'drizzle-orm';
 import type { Address, Hex } from 'viem';
 import {
   canTransition,
@@ -10,6 +24,7 @@ import type { Db } from './client.js';
 import {
   accounts,
   agents,
+  apiTokens,
   demoAccounts,
   orders,
   ownerSignatures,
@@ -17,7 +32,16 @@ import {
   relayerTxs,
   paymentRequests,
   proposals,
+  runRequests,
   runs,
+  supplierWebsites,
+  supplierBanks,
+  decisionRecords,
+  type DecisionRecordRow,
+  adviceChecks,
+  type SupplierBankRow,
+  type AdviceCheckRow,
+  websiteProofs,
   whatsappContacts,
   whatsappLinks,
   whatsappMessages,
@@ -28,8 +52,11 @@ import {
   type OrderRow,
   type OwnerSignatureRow,
   type RelayerTxRow,
+  type RunRow,
   type PaymentRequestRow,
+  type ProofError,
   type ProposalRow,
+  type WebsiteProofRow,
   type WhatsappContactRow,
   type WhatsappMessageRow,
 } from './schema.js';
@@ -81,6 +108,8 @@ export class TransitionNotAllowed extends Error {
 export type StatusChange = {
   requestId: string;
   runId: string | null;
+  /** Whose request: the feed shows an account token only its own account (Slice 12 part 2). */
+  account: string;
   from: PaymentStatus | null;
   to: PaymentStatus;
   reason: Reason | null;
@@ -160,6 +189,7 @@ export class Store {
       this.emit({
         requestId: result.request.id,
         runId: result.request.runId,
+        account: result.request.account,
         from: null,
         to: 'requested',
         reason: null,
@@ -212,7 +242,11 @@ export class Store {
           updatedAt: new Date(),
         })
         .where(and(eq(paymentRequests.id, id), eq(paymentRequests.status, from)))
-        .returning({ id: paymentRequests.id, runId: paymentRequests.runId });
+        .returning({
+          id: paymentRequests.id,
+          runId: paymentRequests.runId,
+          account: paymentRequests.account,
+        });
       const row = updated[0];
       if (!row) return undefined;
       await tx.insert(paymentEvents).values({
@@ -222,10 +256,17 @@ export class Store {
         reason: reason ?? null,
         detail: detail ?? null,
       });
-      return { runId: row.runId };
+      return { runId: row.runId, account: row.account };
     });
     if (moved === undefined) return false;
-    this.emit({ requestId: id, runId: moved.runId, from, to, reason: reason ?? null });
+    this.emit({
+      requestId: id,
+      runId: moved.runId,
+      account: moved.account,
+      from,
+      to,
+      reason: reason ?? null,
+    });
     return true;
   }
 
@@ -325,12 +366,49 @@ export class Store {
       );
   }
 
+  /** Every request a run sent, including ones another run sent first (Slice 16). */
   async listRun(runId: string): Promise<PaymentRequestRow[]> {
+    const rows = await this.db
+      .select({ request: paymentRequests })
+      .from(runRequests)
+      .innerJoin(paymentRequests, eq(paymentRequests.id, runRequests.requestId))
+      .where(eq(runRequests.runId, runId))
+      .orderBy(asc(paymentRequests.requestedAt));
+    return rows.map((r) => r.request);
+  }
+
+  /** Records the requests a run sent (the same request can be in several runs). */
+  async addToRun(runId: string, requestIds: string[]): Promise<void> {
+    if (requestIds.length === 0) return;
+    await this.db
+      .insert(runRequests)
+      .values(requestIds.map((requestId) => ({ runId, requestId })))
+      .onConflictDoNothing();
+  }
+
+  async getRun(id: string): Promise<RunRow | undefined> {
+    const [row] = await this.db.select().from(runs).where(eq(runs.id, id));
+    return row;
+  }
+
+  /** An account's runs, newest first (Slice 16's run board). */
+  async runsOf(account: string, limit = 20): Promise<RunRow[]> {
+    return this.db
+      .select()
+      .from(runs)
+      .where(sql`lower(${runs.account}) = ${account.toLowerCase()}`)
+      .orderBy(desc(runs.createdAt))
+      .limit(limit);
+  }
+
+  /** An account's payment requests, newest first (Slice 18: its records). */
+  async requestsOf(account: string, limit = 5_000): Promise<PaymentRequestRow[]> {
     return this.db
       .select()
       .from(paymentRequests)
-      .where(eq(paymentRequests.runId, runId))
-      .orderBy(asc(paymentRequests.requestedAt));
+      .where(sql`lower(${paymentRequests.account}) = ${account.toLowerCase()}`)
+      .orderBy(desc(paymentRequests.requestedAt))
+      .limit(limit);
   }
 
   async createRun(id: Hex, account: Address, size: number): Promise<boolean> {
@@ -461,11 +539,94 @@ export class Store {
       .where(and(inArray(sql`lower(${relayerTxs.hash})`, hashes), isNull(relayerTxs.finalAt)));
   }
 
-  async markRelayerTxFinal(hash: string, status: 'success' | 'reverted'): Promise<void> {
+  async markRelayerTxFinal(
+    hash: string,
+    status: 'success' | 'reverted',
+    blockNumber?: number,
+  ): Promise<void> {
     await this.db
       .update(relayerTxs)
-      .set({ finalAt: new Date(), status })
+      .set({ finalAt: new Date(), status, ...(blockNumber === undefined ? {} : { blockNumber }) })
       .where(and(eq(relayerTxs.hash, hash), isNull(relayerTxs.finalAt)));
+  }
+
+  /** The latest transaction for this purpose, final or not. */
+  async relayerTxFor(purpose: string): Promise<RelayerTxRow | undefined> {
+    const [row] = await this.db
+      .select()
+      .from(relayerTxs)
+      .where(eq(relayerTxs.purpose, purpose))
+      .orderBy(sql`${relayerTxs.createdAt} desc`)
+      .limit(1);
+    return row;
+  }
+
+  async relayerTx(hash: string): Promise<RelayerTxRow | undefined> {
+    const [row] = await this.db
+      .select()
+      .from(relayerTxs)
+      .where(sql`lower(${relayerTxs.hash}) = ${hash.toLowerCase()}`);
+    return row;
+  }
+
+  // ---------- decisions recorded on Monad (Slice 18) ----------
+
+  /** A decision to record; the same request's second decision by the same party changes nothing. */
+  async addDecisionRecord(row: Omit<DecisionRecordRow, 'createdAt' | 'txHash'>): Promise<boolean> {
+    const added = await this.db
+      .insert(decisionRecords)
+      .values(row)
+      .onConflictDoNothing()
+      .returning({ id: decisionRecords.requestId });
+    return added.length > 0;
+  }
+
+  async decisionRecord(
+    requestId: string,
+    decidedBy: 'checker' | 'owner',
+  ): Promise<DecisionRecordRow | undefined> {
+    const [row] = await this.db
+      .select()
+      .from(decisionRecords)
+      .where(
+        and(eq(decisionRecords.requestId, requestId), eq(decisionRecords.decidedBy, decidedBy)),
+      );
+    return row;
+  }
+
+  /** A payment's decisions to record, first first: the checker's hold, then the owner's refusal. */
+  async decisionRecords(requestId: string): Promise<DecisionRecordRow[]> {
+    return this.db
+      .select()
+      .from(decisionRecords)
+      .where(eq(decisionRecords.requestId, requestId))
+      .orderBy(asc(decisionRecords.createdAt));
+  }
+
+  async setDecisionTx(
+    requestId: string,
+    decidedBy: 'checker' | 'owner',
+    txHash: string,
+  ): Promise<void> {
+    await this.db
+      .update(decisionRecords)
+      .set({ txHash })
+      .where(
+        and(
+          eq(decisionRecords.requestId, requestId),
+          eq(decisionRecords.decidedBy, decidedBy),
+          isNull(decisionRecords.txHash),
+        ),
+      );
+  }
+
+  /** Decisions whose transaction was never signed (a restart, or recording switched off then). */
+  async unsentDecisionRecords(): Promise<DecisionRecordRow[]> {
+    return this.db
+      .select()
+      .from(decisionRecords)
+      .where(isNull(decisionRecords.txHash))
+      .orderBy(asc(decisionRecords.createdAt));
   }
 
   // ---------- judge mode's demo accounts (Slice 9 part 4) ----------
@@ -531,6 +692,17 @@ export class Store {
   }
 
   /** Moves an account's indexed block forward, never back. */
+  /**
+   * Every account indexed up to the block before `block` is now indexed up to `block`, in one write
+   * (Slice 16: one write per account per block fell behind Monad as accounts accumulated).
+   */
+  async advanceIndexed(block: number): Promise<void> {
+    await this.db
+      .update(accounts)
+      .set({ indexedTo: block })
+      .where(eq(accounts.indexedTo, block - 1));
+  }
+
   async setIndexedTo(address: Address, block: number): Promise<void> {
     await this.db
       .update(accounts)
@@ -541,6 +713,23 @@ export class Store {
   /** From an OrderApproved event; applying the same event twice changes nothing. */
   async upsertOrder(order: Omit<OrderRow, 'closed'>): Promise<void> {
     await this.db.insert(orders).values(order).onConflictDoNothing();
+  }
+
+  /**
+   * What a vault has sent or paid, by the gateway's own count (Slice 16): every payment from a vault
+   * goes through this gateway, so its order's room is its amount less this.
+   */
+  async vaultCommitted(vault: string): Promise<bigint> {
+    const [row] = await this.db
+      .select({ total: sql<string | null>`sum(${paymentRequests.amount})` })
+      .from(paymentRequests)
+      .where(
+        and(
+          eq(paymentRequests.vault, vault),
+          inArray(paymentRequests.status, ['settling', 'settled']),
+        ),
+      );
+    return BigInt(row?.total ?? '0');
   }
 
   async orderByVault(vault: string): Promise<OrderRow | undefined> {
@@ -598,7 +787,17 @@ export class Store {
 
   /** The same (account, document) is one proposal: the second call returns the first. */
   async createProposal(
-    p: Omit<ProposalRow, 'status' | 'createdAt' | 'decidedAt'>,
+    p: Omit<
+      ProposalRow,
+      | 'status'
+      | 'createdAt'
+      | 'decidedAt'
+      | 'proofStatus'
+      | 'proofUrl'
+      | 'proofSource'
+      | 'proofId'
+      | 'proofError'
+    > & { proofStatus?: 'checking' },
   ): Promise<{ proposal: ProposalRow; created: boolean }> {
     const inserted = await this.db
       .insert(proposals)
@@ -879,5 +1078,268 @@ export class Store {
       .from(whatsappMessages)
       .where(eq(whatsappMessages.subject, subject))
       .orderBy(asc(whatsappMessages.createdAt));
+  }
+
+  // ---------- account tokens (Slice 12 part 2) ----------
+
+  /** The generation the account's next token gets: how many it has had. */
+  async nextTokenGeneration(account: Address): Promise<number> {
+    const [row] = await this.db
+      .select({ n: count() })
+      .from(apiTokens)
+      .where(eq(apiTokens.account, account.toLowerCase()));
+    return row?.n ?? 0;
+  }
+
+  /**
+   * Stores a new token (its hash) and revokes the account's earlier ones, in one transaction.
+   * False if this generation already has a token: the signature that asked for it was used.
+   */
+  async issueApiToken(account: Address, tokenHash: string, generation: number): Promise<boolean> {
+    const owner = account.toLowerCase();
+    return this.db.transaction(async (tx) => {
+      const inserted = await tx
+        .insert(apiTokens)
+        .values({ tokenHash, account: owner, generation })
+        .onConflictDoNothing()
+        .returning({ tokenHash: apiTokens.tokenHash });
+      if (inserted.length === 0) return false;
+      await tx
+        .update(apiTokens)
+        .set({ revokedAt: new Date() })
+        .where(
+          and(
+            eq(apiTokens.account, owner),
+            isNull(apiTokens.revokedAt),
+            lt(apiTokens.generation, generation),
+          ),
+        );
+      return true;
+    });
+  }
+
+  /** The account a live token belongs to (lower case), or null. */
+  async apiTokenAccount(tokenHash: string): Promise<string | null> {
+    const [row] = await this.db
+      .select({ account: apiTokens.account })
+      .from(apiTokens)
+      .where(and(eq(apiTokens.tokenHash, tokenHash), isNull(apiTokens.revokedAt)));
+    return row?.account ?? null;
+  }
+
+  // ---------- website proofs (Slice 15) ----------
+
+  async addWebsiteProof(row: {
+    url: string;
+    listed?: string | null;
+    signedAt?: Date | null;
+    proofHash?: string | null;
+    txHash?: string | null;
+    error?: ProofError | null;
+    createdAt: Date;
+  }): Promise<WebsiteProofRow> {
+    const [added] = await this.db.insert(websiteProofs).values(row).returning();
+    if (!added) throw new Error('website proof not stored');
+    return added;
+  }
+
+  /** The newest check of a file URL. */
+  async latestWebsiteProof(url: string): Promise<WebsiteProofRow | undefined> {
+    const [row] = await this.db
+      .select()
+      .from(websiteProofs)
+      .where(eq(websiteProofs.url, url))
+      .orderBy(desc(websiteProofs.createdAt), desc(websiteProofs.id))
+      .limit(1);
+    return row;
+  }
+
+  /** The newest proven check of a file URL (a proof Primus signed and the registry recorded). */
+  async latestProvenWebsiteProof(url: string): Promise<WebsiteProofRow | undefined> {
+    const [row] = await this.db
+      .select()
+      .from(websiteProofs)
+      .where(and(eq(websiteProofs.url, url), isNotNull(websiteProofs.proofHash)))
+      .orderBy(desc(websiteProofs.createdAt), desc(websiteProofs.id))
+      .limit(1);
+    return row;
+  }
+
+  /** Whether a proven check of `url` before `before` showed it listing `address`. */
+  async websiteListedBefore(url: string, address: string, before: Date): Promise<boolean> {
+    const rows = await this.db
+      .select({ listed: websiteProofs.listed })
+      .from(websiteProofs)
+      .where(
+        and(
+          eq(websiteProofs.url, url),
+          isNotNull(websiteProofs.proofHash),
+          lt(websiteProofs.createdAt, before),
+        ),
+      );
+    return rows.some((r) => r.listed?.toLowerCase() === address.toLowerCase());
+  }
+
+  /** Every supplier website on file, once each. */
+  async supplierWebsiteUrls(): Promise<string[]> {
+    const rows = await this.db.selectDistinct({ url: supplierWebsites.url }).from(supplierWebsites);
+    return rows.map((r) => r.url);
+  }
+
+  async websiteProof(id: number): Promise<WebsiteProofRow | undefined> {
+    const [row] = await this.db.select().from(websiteProofs).where(eq(websiteProofs.id, id));
+    return row;
+  }
+
+  /** A proposal's website check has started, on this file. */
+  async startProposalCheck(
+    id: string,
+    check: { url: string; source: 'on_file' | 'proposal' },
+  ): Promise<void> {
+    await this.db
+      .update(proposals)
+      .set({ proofStatus: 'checking', proofUrl: check.url, proofSource: check.source })
+      .where(eq(proposals.id, id));
+  }
+
+  /**
+   * A proposal's website check has ended: its proof, or why there is none. Only the first ending
+   * counts (a late result after a timeout changes nothing), so the challenge stays fixed.
+   */
+  async finishProposalCheck(
+    id: string,
+    result: {
+      proofId?: number;
+      error?: ProofError;
+      url?: string | null;
+      source?: 'on_file' | 'proposal' | null;
+    },
+  ): Promise<boolean> {
+    const updated = await this.db
+      .update(proposals)
+      .set({
+        proofStatus: 'done',
+        proofId: result.proofId ?? null,
+        proofError: result.error ?? null,
+        ...(result.url !== undefined ? { proofUrl: result.url } : {}),
+        ...(result.source !== undefined ? { proofSource: result.source } : {}),
+      })
+      .where(
+        and(
+          eq(proposals.id, id),
+          or(isNull(proposals.proofStatus), eq(proposals.proofStatus, 'checking')),
+        ),
+      )
+      .returning({ id: proposals.id });
+    return updated.length > 0;
+  }
+
+  // ---------- bank accounts on file and advice (Slice 17) ----------
+
+  /** Whether the account has an order (open or not) with this supplier. */
+  async hasSupplier(account: Address, supplier: Hex): Promise<boolean> {
+    const [row] = await this.db
+      .select({ vault: orders.vault })
+      .from(orders)
+      .where(
+        and(
+          sql`lower(${orders.account}) = ${account.toLowerCase()}`,
+          sql`lower(${orders.supplierId}) = ${supplier.toLowerCase()}`,
+        ),
+      )
+      .limit(1);
+    return row !== undefined;
+  }
+
+  /** An owner put (or replaced) a supplier's bank account on file. */
+  async setSupplierBank(row: Omit<SupplierBankRow, 'updatedAt'>): Promise<void> {
+    const values = {
+      ...row,
+      account: row.account.toLowerCase(),
+      supplierId: row.supplierId.toLowerCase(),
+    };
+    await this.db
+      .insert(supplierBanks)
+      .values(values)
+      .onConflictDoUpdate({
+        target: [supplierBanks.account, supplierBanks.supplierId],
+        set: { ...values, updatedAt: new Date() },
+      });
+  }
+
+  async supplierBank(account: Address, supplierId: Hex): Promise<SupplierBankRow | undefined> {
+    const [row] = await this.db
+      .select()
+      .from(supplierBanks)
+      .where(
+        and(
+          eq(supplierBanks.account, account.toLowerCase()),
+          eq(supplierBanks.supplierId, supplierId.toLowerCase()),
+        ),
+      );
+    return row;
+  }
+
+  async supplierBanksOf(account: Address): Promise<SupplierBankRow[]> {
+    return this.db
+      .select()
+      .from(supplierBanks)
+      .where(eq(supplierBanks.account, account.toLowerCase()));
+  }
+
+  /** The same invoice advised on twice is one record, updated with the latest advice. */
+  async recordAdvice(row: Omit<AdviceCheckRow, 'createdAt'>): Promise<AdviceCheckRow> {
+    const [saved] = await this.db
+      .insert(adviceChecks)
+      .values(row)
+      .onConflictDoUpdate({
+        target: adviceChecks.id,
+        set: {
+          advice: row.advice,
+          reason: row.reason,
+          evidence: row.evidence,
+          createdAt: new Date(),
+        },
+      })
+      .returning();
+    if (!saved) throw new Error('advice not recorded');
+    return saved;
+  }
+
+  async adviceById(id: string): Promise<AdviceCheckRow | undefined> {
+    const [row] = await this.db.select().from(adviceChecks).where(eq(adviceChecks.id, id));
+    return row;
+  }
+
+  async adviceOf(account: Address): Promise<AdviceCheckRow[]> {
+    return this.db
+      .select()
+      .from(adviceChecks)
+      .where(eq(adviceChecks.account, account.toLowerCase()))
+      .orderBy(desc(adviceChecks.createdAt));
+  }
+
+  /** The website a supplier was approved with on this account (S15-4). */
+  async supplierWebsite(account: Address, supplierId: Hex): Promise<string | undefined> {
+    const [row] = await this.db
+      .select({ url: supplierWebsites.url })
+      .from(supplierWebsites)
+      .where(
+        and(
+          eq(supplierWebsites.account, account.toLowerCase()),
+          eq(supplierWebsites.supplierId, supplierId.toLowerCase()),
+        ),
+      );
+    return row?.url;
+  }
+
+  async setSupplierWebsite(account: Address, supplierId: Hex, url: string): Promise<void> {
+    await this.db
+      .insert(supplierWebsites)
+      .values({ account: account.toLowerCase(), supplierId: supplierId.toLowerCase(), url })
+      .onConflictDoUpdate({
+        target: [supplierWebsites.account, supplierWebsites.supplierId],
+        set: { url, updatedAt: new Date() },
+      });
   }
 }

@@ -1,8 +1,10 @@
 import type { Address, Hex } from 'viem';
+import type { WebsiteProofs } from '../proofs/website.js';
 import type { Reason } from '@countersign/shared';
 import type { Chain, PaymentCall } from '../chain/types.js';
 import type { DecodedRefusal } from '../chain/refusals.js';
-import type { Checker, CheckResult } from '../checker.js';
+import type { Checker, CheckResult, SignedDecision } from '../checker.js';
+import type { DecisionRecorder } from '../decisions.js';
 import type { PaymentRequestRow } from '../db/schema.js';
 import type { Store } from '../db/store.js';
 import { paymentOf, type Payment } from '../payment.js';
@@ -13,10 +15,14 @@ export type EvaluateDeps = {
   checker: Checker;
   chainId: number;
   checkerTimeoutMs: number;
+  /** Slice 15 (D21): whether the supplier's website stopped listing the address on file. */
+  websites?: Pick<WebsiteProofs, 'websiteChanged'>;
 };
 
 export type CheckDeps = EvaluateDeps & {
   store: Store;
+  /** Writes a checker's hold on Monad (Slice 18); without it, holds stay off chain. */
+  decisions?: Pick<DecisionRecorder, 'record'>;
   /** How long a request taken for checking stays claimed; another worker re-checks it after that. */
   leaseMs?: number;
 };
@@ -30,6 +36,8 @@ export type Outcome =
       decidedBy: 'rule' | 'checker';
       evidence: unknown;
       detail?: unknown;
+      /** The checker's signed hold, to record on Monad (Slice 18). */
+      decision?: SignedDecision;
     };
 
 /** A simulation the RPC could not answer: the request stays in `checking` and is tried again. */
@@ -77,12 +85,16 @@ async function evidenceOf(deps: EvaluateDeps, row: PaymentRequestRow, contract: 
  *    "would every hard rule pass?": the expected refusal is InvalidCheckerSignature. Any other
  *    refusal blocks or holds the request with the contract's reason.
  * 2. The checker, within its time limit. An error or a timeout is a hold (money rule 1).
- * 3. If the checker releases it, the payment is simulated again with the checker's signature;
- *    only a payment the contract would accept is released.
+ * 3. If the checker releases it, the send step simulates it with the checker's signature just
+ *    before signing a transaction (src/pipeline/send.ts): nothing the contract would refuse is
+ *    sent. (Until Slice 16 it was also simulated here; one read fewer per payment at volume.)
  *
- * With `dryRun` (POST /v1/checks) the checker is told not to sign and step 3 is skipped: a check
- * must never hand anyone a signature that, with the agent's, could pay.
+ * With `dryRun` (POST /v1/checks) the checker is told not to sign: a check must never hand anyone
+ * a signature that, with the agent's, could pay.
  */
+/** Times the checker is asked when it does not answer in time (Slice 16). */
+const CHECK_ATTEMPTS = 2;
+
 export async function evaluate(
   deps: EvaluateDeps,
   row: PaymentRequestRow,
@@ -112,14 +124,43 @@ export async function evaluate(
     };
   }
 
-  let result: CheckResult;
-  try {
-    result = await deps.checker.check(
-      { request: row, payment, chainId: deps.chainId, dryRun: options.dryRun === true },
-      AbortSignal.timeout(deps.checkerTimeoutMs),
-    );
-  } catch (e) {
-    const message = e instanceof Error ? e.message : String(e);
+  // Evidence that expires (D21): the supplier's own website no longer lists the address on file.
+  // A failure to look never holds a payment; only a proven change does.
+  const changed = await deps.websites?.websiteChanged(row).catch((e: unknown) => {
+    console.error(`website evidence ${row.id}: ${e instanceof Error ? e.message : String(e)}`);
+    return null;
+  });
+  if (changed)
+    return {
+      status: 'held',
+      reason: 'website_changed',
+      decidedBy: 'rule',
+      evidence: { website: changed },
+      detail: { website: changed.url },
+    };
+
+  // A checker that did not answer in time (or erred) is asked once more before the payment waits
+  // for a person (Slice 16): at volume the model's latency has a tail, and a passing slow moment
+  // should cost a second, not a false hold. A judgement (a mismatch, an unsure answer) is never
+  // asked again, and a second failure still holds (money rule 1).
+  let result: CheckResult | undefined;
+  let failure: string | undefined;
+  for (let attempt = 1; attempt <= CHECK_ATTEMPTS; attempt++) {
+    try {
+      result = await deps.checker.check(
+        { request: row, payment, chainId: deps.chainId, dryRun: options.dryRun === true },
+        () => AbortSignal.timeout(deps.checkerTimeoutMs),
+      );
+      failure = undefined;
+      if (result.verdict === 'hold' && result.reason === 'checker_unavailable') continue;
+      break;
+    } catch (e) {
+      result = undefined;
+      failure = e instanceof Error ? e.message : String(e);
+    }
+  }
+  if (result === undefined) {
+    const message = failure ?? 'the checker did not answer';
     return {
       status: 'held',
       reason: 'checker_unavailable',
@@ -134,6 +175,7 @@ export async function evaluate(
       reason: result.reason,
       decidedBy: 'checker',
       evidence: result.evidence,
+      ...(result.decision ? { decision: result.decision } : {}),
     };
   }
   if (options.dryRun === true) {
@@ -145,20 +187,9 @@ export async function evaluate(
     };
   }
 
-  const signed = await simulate(deps.chain, vault, payment, {
-    kind: 'pay',
-    agentSig,
-    checkerSig: result.checkerSig,
-  });
-  if (signed !== undefined) {
-    return {
-      status: signed.status,
-      reason: signed.reason,
-      decidedBy: 'rule',
-      evidence: { contract: signed.error, checker: result.evidence },
-      detail: { contract: signed.error },
-    };
-  }
+  // No second simulation here (Slice 16): the send step simulates the payment with the checker's
+  // signature just before signing it, and one chain read fewer per payment matters at volume. A
+  // payment the contract no longer accepts then (the order closed meanwhile) fails there, unsent.
   return {
     status: 'released',
     decidedBy: 'checker',
@@ -197,11 +228,22 @@ export async function checkOne(deps: CheckDeps, row: PaymentRequestRow): Promise
     });
     return;
   }
-  await store.transition(row.id, 'checking', outcome.status, {
+  const moved = await store.transition(row.id, 'checking', outcome.status, {
     checkedAt,
     reason: outcome.reason,
     decidedBy: outcome.decidedBy,
     evidence: outcome.evidence,
     ...(outcome.detail === undefined ? {} : { detail: outcome.detail }),
   });
+  // After the hold is stored, never before: recording follows the decision and cannot change it.
+  if (moved && outcome.decision && deps.decisions) {
+    const { sig, ...decision } = outcome.decision;
+    await deps.decisions.record({
+      requestId: row.id as Hex,
+      vault: row.vault as Address,
+      decidedBy: 'checker',
+      decision,
+      checkerSig: sig,
+    });
+  }
 }

@@ -201,15 +201,27 @@ importers:
       '@ai-sdk/mcp':
         specifier: 2.0.67
         version: 2.0.67(zod@4.6.5)
+      '@countersign/chain':
+        specifier: workspace:*
+        version: link:../../packages/chain
       '@countersign/scripted-agent':
         specifier: workspace:*
         version: link:../scripted-agent
+      '@countersign/sdk':
+        specifier: workspace:*
+        version: link:../../packages/sdk
+      '@countersign/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
       '@openrouter/ai-sdk-provider':
         specifier: 3.1.0
         version: 3.1.0(ai@7.0.128(zod@4.6.5))(zod@4.6.5)
       ai:
         specifier: 7.0.128
         version: 7.0.128(zod@4.6.5)
+      viem:
+        specifier: ^2.57.3
+        version: 2.57.3(typescript@6.0.3)(zod@4.6.5)
       zod:
         specifier: 4.6.5
         version: 4.6.5
@@ -302,6 +314,9 @@ importers:
         specifier: ^2.57.3
         version: 2.57.3(typescript@6.0.3)(zod@4.6.5)
     devDependencies:
+      '@countersign/chain':
+        specifier: workspace:*
+        version: link:../chain
       '@countersign/shared':
         specifier: workspace:*
         version: link:../shared
@@ -366,6 +381,9 @@ importers:
       '@hono/zod-validator':
         specifier: 0.9.1
         version: 0.9.1(hono@4.13.13)(zod@4.6.5)
+      '@primuslabs/zktls-core-sdk':
+        specifier: 0.3.7
+        version: 0.3.7
       '@scalar/hono-api-reference':
         specifier: 0.12.10
         version: 0.12.10(hono@4.13.13)

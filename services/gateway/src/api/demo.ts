@@ -6,8 +6,10 @@ import {
   createDemoAccount,
   DemoError,
   demoView,
+  issueAccountToken,
   publicKeyOf,
   setUpDemoAccount,
+  tokenAsk,
   type DemoDeps,
 } from '../demo/accounts.js';
 
@@ -36,6 +38,10 @@ export const demoAccountView = z
   .object({
     account: address,
     status: z.enum(['creating', 'awaiting_passkey', 'setting_up', 'ready']),
+    agent: z.object({ address, hosted: z.boolean() }).openapi({
+      description:
+        'The agent key the policy names: the hosted demo agent, or the developer’s own (`hosted: false`), which pays the account’s invoices itself',
+    }),
     waitingPeriodSeconds: z.number().int().openapi({
       description: 'Demo accounts have none, so a judge can pay at once (real accounts: 48 hours)',
     }),
@@ -75,7 +81,7 @@ const createAccountRoute = createRoute({
   tags: ['Judge mode'],
   summary: 'Create a testnet account for a new passkey, funded with 0.01 USDC',
   description:
-    'Give the public key from navigator.credentials.create: `{ x, y }` as hex, or `{ spki }` (base64url, as response.getPublicKey() returns it). The same passkey always gets the same account. The answer lists the three setup actions to sign with that passkey.',
+    'Give the public key from navigator.credentials.create: `{ x, y }` as hex, or `{ spki }` (base64url, as response.getPublicKey() returns it). The same passkey always gets the same account. The answer lists the three setup actions to sign with that passkey. A developer adds `agent`, their own agent key’s address: the policy then names it, and it is a separate account for that passkey and agent (a test account; then get a token with POST …/token).',
   request: {
     body: {
       content: {
@@ -85,6 +91,9 @@ const createAccountRoute = createRoute({
               x: z.string().optional(),
               y: z.string().optional(),
               spki: z.string().optional(),
+            }),
+            agent: address.optional().openapi({
+              description: 'Your own agent key’s address (a developer’s test account)',
             }),
           }),
         },
@@ -175,8 +184,60 @@ const invoiceRoute = createRoute({
     404: json(demoError, 'unknown_account'),
     409: json(
       demoError,
-      'not_ready (set the account up first), order_not_indexed (just set up: try again in a few seconds) or order_used_up',
+      'not_ready (set the account up first), not_hosted (the account names your own agent: it pays), order_not_indexed (just set up: try again in a few seconds) or order_used_up',
     ),
+  },
+});
+
+const tokenAskRoute = createRoute({
+  method: 'get',
+  path: '/v1/demo/accounts/{account}/token',
+  tags: ['Judge mode'],
+  summary: 'What an owner’s passkey signs to get an API token for this account',
+  request: { params: accountParam },
+  responses: {
+    200: json(
+      z
+        .object({
+          account: address,
+          generation: z.number().int(),
+          challenge: z.string().openapi({ description: 'Sign it as the WebAuthn challenge' }),
+          summary: z.string(),
+        })
+        .openapi('TokenChallenge'),
+      'The challenge for the next token',
+    ),
+    404: json(demoError, 'unknown_account'),
+  },
+});
+
+const tokenRoute = createRoute({
+  method: 'post',
+  path: '/v1/demo/accounts/{account}/token',
+  tags: ['Judge mode'],
+  summary: 'Get an API token that reaches only this account',
+  description:
+    'One owner’s passkey signs the challenge from GET. The token is shown once and stored only as a hash; it can call this account’s payments, checks, runs, orders, proposals and feed, and nothing else. A new token revokes the previous one.',
+  request: {
+    params: accountParam,
+    body: { content: { 'application/json': { schema: z.object({ assertion: z.unknown() }) } } },
+  },
+  responses: {
+    200: json(
+      z
+        .object({
+          account: address,
+          token: z.string().openapi({ example: 'cs_…' }),
+          generation: z.number().int(),
+          note: z.string(),
+        })
+        .openapi('AccountToken'),
+      'The token, shown once',
+    ),
+    400: json(demoError, 'malformed_assertion'),
+    404: json(demoError, 'unknown_account'),
+    409: json(demoError, 'not_created or token_used'),
+    422: json(demoError, 'challenge_mismatch or invalid_passkey'),
   },
 });
 
@@ -204,7 +265,12 @@ export function registerDemoRoutes(
 
   app.openapi(createAccountRoute, async (c) => {
     try {
-      const view = await createDemoAccount(deps, publicKeyOf(c.req.valid('json').publicKey));
+      const body = c.req.valid('json');
+      const view = await createDemoAccount(
+        deps,
+        publicKeyOf(body.publicKey),
+        body.agent as Address | undefined,
+      );
       return c.json(view, 200);
     } catch (e) {
       if (!(e instanceof DemoError)) throw e;
@@ -233,6 +299,15 @@ export function registerDemoRoutes(
       );
     const kind = c.req.valid('json').kind;
     const plan = demoPlan.fromJson(row.plan as Parameters<typeof demoPlan.fromJson>[0]);
+    if (plan.ownAgent)
+      return c.json(
+        {
+          error: 'not_hosted',
+          message:
+            'this account names your own agent: pay the supplier site’s invoices with it (the demo agent’s key is not on the policy)',
+        },
+        409,
+      );
     const paid = await agent.pay(
       account,
       demoInvoice(kind, plan.supplier.payTo),
@@ -279,6 +354,31 @@ export function registerDemoRoutes(
       if (!(e instanceof DemoError)) throw e;
       if (e.status === 429) throw e;
       return c.json(refusal(e), e.status);
+    }
+  });
+
+  app.openapi(tokenAskRoute, async (c) => {
+    try {
+      return c.json(await tokenAsk(deps, c.req.valid('param').account as Address), 200);
+    } catch (e) {
+      if (e instanceof DemoError && e.status === 404) return c.json(refusal(e), 404);
+      throw e;
+    }
+  });
+
+  app.openapi(tokenRoute, async (c) => {
+    try {
+      const issued = await issueAccountToken(
+        deps,
+        c.req.valid('param').account as Address,
+        c.req.valid('json').assertion,
+      );
+      return c.json(issued, 200);
+    } catch (e) {
+      if (!(e instanceof DemoError)) throw e;
+      if (e.status === 400 || e.status === 404 || e.status === 409 || e.status === 422)
+        return c.json(refusal(e), e.status);
+      throw e;
     }
   });
 }

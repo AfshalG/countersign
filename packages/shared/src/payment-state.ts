@@ -31,7 +31,11 @@ export const REASON_TEXT: Record<Reason, string> = {
   supplier_unknown: 'The supplier is not on file.',
   supplier_inactive: 'The owner has switched this supplier off.',
   address_mismatch: "The invoice's payment address is not the supplier's address on file.",
+  bank_account_mismatch:
+    "The invoice's bank account is not the supplier's account on file. Advice only: do not pay it until the supplier confirms the account by phone, on a number you already have.",
   address_not_yet_active: "The supplier's address on file is new and still in its waiting period.",
+  website_changed:
+    "The supplier's own website no longer lists the address on file, so payments to it wait for the owner.",
   supplier_mismatch: "The invoice is from a different supplier than the order's.",
   items_mismatch: "The invoice's items differ from the order's.",
   amount_mismatch: "The invoice's amount differs from what the order allows.",
@@ -66,7 +70,10 @@ export const REASONS = [
   'supplier_unknown',
   'supplier_inactive',
   'address_mismatch',
+  // Advice only (Slice 17): a bank-transfer invoice's account is not the one on file.
+  'bank_account_mismatch',
   'address_not_yet_active',
+  'website_changed',
   'supplier_mismatch',
   'items_mismatch',
   'amount_mismatch',
@@ -93,8 +100,9 @@ const TRANSITIONS: Record<PaymentStatus, readonly PaymentStatus[]> = {
   // A hard limit can also surface while checking (the contract's own simulation).
   checking: ['held', 'released', 'blocked'],
   held: ['released', 'refused', 'expired'],
-  // A released payment the chain will no longer accept (order closed meanwhile) fails.
-  released: ['settling', 'failed'],
+  // A released payment the chain will no longer accept fails (order closed meanwhile), or goes
+  // back to the owner when the contract's refusal is a hold (Slice 16: checked just before sending).
+  released: ['settling', 'failed', 'held'],
   settling: ['settled', 'failed'],
   settled: [],
   blocked: [],

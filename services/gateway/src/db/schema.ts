@@ -10,8 +10,21 @@ import {
   primaryKey,
   text,
   timestamp,
+  uniqueIndex,
 } from 'drizzle-orm/pg-core';
 import type { DecidedBy, PaymentStatus, Reason } from '@countersign/shared';
+
+/** Why a website check has no proof (Slice 15). */
+export const PROOF_ERRORS = [
+  'no_website', // nothing to check: no website given or on file
+  'no_file', // the site has no /.well-known/countersign.json
+  'bad_file', // the file does not list one address as {"payTo":"0x…"}
+  'not_configured', // this gateway has no Primus keys
+  'primus_failed', // Primus could not prove it
+  'record_failed', // proven, but the registry on Monad did not record it
+  'timeout',
+] as const;
+export type ProofError = (typeof PROOF_ERRORS)[number];
 
 const at = (name: string) => timestamp(name, { withTimezone: true, mode: 'date' });
 
@@ -95,6 +108,25 @@ export const runs = pgTable('runs', {
   createdAt: at('created_at').notNull().defaultNow(),
 });
 
+export type RunRow = typeof runs.$inferSelect;
+
+/**
+ * Every invoice each run sent (Slice 16). A request pays its invoice once and keeps the run that
+ * first sent it (`payment_requests.run_id`); when two agents send the same invoice in different
+ * runs at once, each run still lists it here.
+ */
+export const runRequests = pgTable(
+  'run_requests',
+  {
+    runId: text('run_id').notNull(),
+    requestId: text('request_id').notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.runId, t.requestId] }),
+    index('run_requests_request_idx').on(t.requestId),
+  ],
+);
+
 /** The next nonce each relayer will use, so a restart resumes where it stopped. */
 export const relayerNonces = pgTable('relayer_nonces', {
   address: text('address').primaryKey(),
@@ -115,6 +147,8 @@ export const relayerTxs = pgTable('relayer_txs', {
   createdAt: at('created_at').notNull().defaultNow(),
   finalAt: at('final_at'),
   status: text('status').$type<'success' | 'reverted'>(),
+  /** The block it was final in (Slice 18: the payment record names it). */
+  blockNumber: integer('block_number'),
 });
 
 /**
@@ -172,6 +206,14 @@ export const proposals = pgTable('proposals', {
   status: text('status').$type<ProposalStatus>().notNull(),
   createdAt: at('created_at').notNull().defaultNow(),
   decidedAt: at('decided_at'),
+  // Slice 15: the website check this proposal is shown and signed with. Fixed once it ends, so
+  // every owner signs the same challenge (D36). `proofUrl` is the file checked, `proofSource`
+  // whether it is the supplier's site on file or the one the proposal gave.
+  proofStatus: text('proof_status').$type<'checking' | 'done'>(),
+  proofUrl: text('proof_url'),
+  proofSource: text('proof_source').$type<'on_file' | 'proposal'>(),
+  proofId: bigint('proof_id', { mode: 'number' }),
+  proofError: text('proof_error').$type<ProofError>(),
 });
 
 /**
@@ -299,3 +341,129 @@ export const whatsappMessages = pgTable(
 
 export type WhatsappContactRow = typeof whatsappContacts.$inferSelect;
 export type WhatsappMessageRow = typeof whatsappMessages.$inferSelect;
+
+/**
+ * Account tokens (Slice 12 part 2): a developer's test account calls the API with its own token,
+ * which is allowed only that account's routes. Only the SHA-256 is kept. `generation` counts the
+ * account's tokens and is in the challenge its owner signs, so one signature makes one token.
+ */
+export const apiTokens = pgTable(
+  'api_tokens',
+  {
+    tokenHash: text('token_hash').primaryKey(),
+    account: text('account').notNull(),
+    generation: integer('generation').notNull(),
+    createdAt: at('created_at').notNull().defaultNow(),
+    revokedAt: at('revoked_at'),
+  },
+  (t) => [uniqueIndex('api_tokens_generation_idx').on(t.account, t.generation)],
+);
+
+/**
+ * What a supplier's website listed (Slice 15): one row per check of a file URL. With a proof,
+ * `proofHash` is the record in the SupplierProofs registry on Monad and `txHash` the transaction
+ * that recorded it; without one, `error` says why. `listed` is the address the file listed, read
+ * from Primus's proof (or from the file itself when the proof failed after reading it).
+ */
+export const websiteProofs = pgTable(
+  'website_proofs',
+  {
+    id: bigserial('id', { mode: 'number' }).primaryKey(),
+    url: text('url').notNull(),
+    listed: text('listed'),
+    signedAt: at('signed_at'),
+    proofHash: text('proof_hash'),
+    txHash: text('tx_hash'),
+    error: text('error').$type<ProofError>(),
+    createdAt: at('created_at').notNull().defaultNow(),
+  },
+  (t) => [index('website_proofs_url_idx').on(t.url, t.createdAt)],
+);
+
+/**
+ * The website each supplier was approved with (S15-4): a changed address is checked against this
+ * site, never against one a new proposal gives.
+ */
+export const supplierWebsites = pgTable(
+  'supplier_websites',
+  {
+    account: text('account').notNull(),
+    supplierId: text('supplier_id').notNull(),
+    url: text('url').notNull(),
+    updatedAt: at('updated_at').notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.account, t.supplierId] })],
+);
+
+export type WebsiteProofRow = typeof websiteProofs.$inferSelect;
+
+/**
+ * A supplier's bank account as an owner put it on file with their passkey (Slice 17): what a
+ * bank-transfer invoice's account is compared with. Off chain: the contract pays only USDC, and a
+ * bank transfer cannot be stopped from outside the bank, so this backs advice, not enforcement.
+ */
+export const supplierBanks = pgTable(
+  'supplier_banks',
+  {
+    account: text('account').notNull(),
+    supplierId: text('supplier_id').notNull(),
+    holder: text('holder').notNull(),
+    iban: text('iban'),
+    bic: text('bic'),
+    sortCode: text('sort_code'),
+    accountNumber: text('account_number'),
+    routingNumber: text('routing_number'),
+    /** The owner's signature over exactly these details (bank_challenge), kept as evidence. */
+    ownerAuth: jsonb('owner_auth').notNull(),
+    updatedAt: at('updated_at').notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.account, t.supplierId] })],
+);
+
+/** Each piece of advice given on a bank-transfer invoice (Slice 17), for the payment record. */
+export const adviceChecks = pgTable(
+  'advice_checks',
+  {
+    id: text('id').primaryKey(),
+    account: text('account').notNull(),
+    vault: text('vault').notNull(),
+    supplierId: text('supplier_id').notNull(),
+    advice: text('advice').$type<'match' | 'mismatch' | 'unsure'>().notNull(),
+    reason: text('reason').$type<Reason>(),
+    invoiceNumber: text('invoice_number'),
+    documentHash: text('document_hash').notNull(),
+    evidence: jsonb('evidence'),
+    createdAt: at('created_at').notNull().defaultNow(),
+  },
+  (t) => [index('advice_checks_account_idx').on(t.account, t.createdAt)],
+);
+
+export type SupplierBankRow = typeof supplierBanks.$inferSelect;
+export type AdviceCheckRow = typeof adviceChecks.$inferSelect;
+
+/**
+ * A decision to be written on Monad with its evidence hash (Slice 18): a checker's hold
+ * (`recordDecision`, the checker's signature) or an owner's refusal (`recordDecisionByOwner`, the
+ * passkey's). Kept until its transaction is signed, so a restart sends what was not sent; its
+ * finality is the relayer transaction's (`relayer_txs`, purpose `decision:<request id>:<by>`).
+ */
+export const decisionRecords = pgTable(
+  'decision_records',
+  {
+    requestId: text('request_id')
+      .notNull()
+      .references(() => paymentRequests.id),
+    vault: text('vault').notNull(),
+    decidedBy: text('decided_by').$type<'checker' | 'owner'>().notNull(),
+    /** The vault's `Decision`: invoiceHash, outcome, reasonHash, evidenceHash. */
+    decision: jsonb('decision').notNull(),
+    /** The checker's signature (hex), or the owners' (as stored by storedSigs). */
+    sigs: jsonb('sigs').notNull(),
+    txHash: text('tx_hash'),
+    createdAt: at('created_at').notNull().defaultNow(),
+  },
+  // A payment can be decided twice: the checker holds it, then the owner refuses it. One each.
+  (t) => [primaryKey({ columns: [t.requestId, t.decidedBy] })],
+);
+
+export type DecisionRecordRow = typeof decisionRecords.$inferSelect;

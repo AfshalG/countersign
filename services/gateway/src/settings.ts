@@ -19,7 +19,7 @@ export function loadSettings(source?: Record<string, string | undefined>) {
         .string()
         .transform((v) => v.split(',').map((k) => k.trim()))
         .pipe(z.array(privateKey).min(1)),
-      // Sent by the MCP server and the apps; per-account sign-in replaces it in Slice 13.
+      // Sent by the MCP server and the apps; developers' accounts use account tokens instead.
       GATEWAY_SERVICE_TOKEN: z
         .string()
         .min(24)
@@ -70,6 +70,19 @@ export function loadSettings(source?: Record<string, string | undefined>) {
       WHATSAPP_TEMPLATE_LANGUAGE: z
         .string()
         .regex(/^[a-z]{2}(_[A-Z]{2})?$/)
+        .optional(),
+      // Primus's Core SDK keys (Slice 15), both or none: suppliers' websites are proven with them.
+      PRIMUS_APP_ID: z.string().min(1).optional(),
+      PRIMUS_APP_SECRET: z.string().min(1).optional(),
+      // Slice 18 (S18-4): write checker holds and owner refusals on Monad (each costs testnet MON).
+      // On unless set to "false"; off, decisions are kept and sent once it is on again.
+      RECORD_DECISIONS: z.enum(['true', 'false']).optional(),
+      // How many payments are checked at once (D16): sized from a measured burst (Slice 16).
+      CHECK_CONCURRENCY: z
+        .string()
+        .regex(/^\d{1,3}$/)
+        .transform(Number)
+        .pipe(z.number().int().min(1).max(64))
         .optional(),
       // New demo accounts per UTC day; each costs about 0.09 MON to set up.
       DEMO_ACCOUNTS_PER_DAY: z
@@ -152,4 +165,13 @@ export function whatsappMode(settings: ReturnType<typeof loadSettings>) {
           },
         }),
   };
+}
+
+/** Primus's keys when website proofs are on (Slice 15); without them every check is unproven. */
+export function primusKeys(settings: ReturnType<typeof loadSettings>) {
+  const { PRIMUS_APP_ID: appId, PRIMUS_APP_SECRET: appSecret } = settings;
+  if (appId === undefined && appSecret === undefined) return undefined;
+  if (appId === undefined || appSecret === undefined)
+    throw new Error('Set PRIMUS_APP_ID and PRIMUS_APP_SECRET together, or none');
+  return { appId, appSecret };
 }

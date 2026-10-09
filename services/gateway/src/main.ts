@@ -1,7 +1,7 @@
 import { serve } from '@hono/node-server';
 import { formatEther, type Address } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
-import { deployments, ENDPOINTS } from '@countersign/chain';
+import { deployments, ENDPOINTS, GAS_LIMITS } from '@countersign/chain';
 import { IDENTITY_REGISTRY_TESTNET, REASONS, type Reason } from '@countersign/shared';
 import { createApp } from './app.js';
 import { TestChecker, type Checker } from './checker.js';
@@ -14,11 +14,15 @@ import { Store } from './db/store.js';
 import { RelayerPool } from './relay/pool.js';
 import { WalletFunder } from './demo/funder.js';
 import { AgentDirectory } from './agents/identity.js';
-import { checkerMode, judgeMode, loadSettings, whatsappMode } from './settings.js';
+import { DecisionRecorder } from './decisions.js';
+import { checkerMode, judgeMode, loadSettings, primusKeys, whatsappMode } from './settings.js';
 import { supplierNameOf } from './suppliers.js';
 import { WhatsAppApi } from './notify/whatsapp-api.js';
 import { WhatsAppNotifier } from './notify/whatsapp.js';
 import { Workers } from './workers.js';
+import { KALIBRE_FILE, WebsiteProofs } from './proofs/website.js';
+import { KALIBRE } from './demo/plan.js';
+import { PrimusProver, registryRecorder } from './proofs/primus.js';
 
 const settings = loadSettings();
 const chainId = settings.MONAD_CHAIN_ID;
@@ -44,13 +48,18 @@ const monad = new MonadClient(
   settings.MONAD_WS_URL,
   privateKeyToAccount(relayers[0] as `0x${string}`).address,
 );
+let finalityProbe: () => boolean = () => false;
 const pool = new RelayerPool({
   keys: relayers,
   store,
   sender: monad,
   chainId,
   endpoints: ENDPOINTS.length,
-  stallMs: 3_000, // a payment is final in about 1.2 s at p95 (Spike 3)
+  // A payment is final in about 1.2 s at p95 (Spike 3), but in a run of 200 a wallet's oldest
+  // transaction can wait longer behind the burst; 3 s made lanes move for nothing (Slice 16).
+  stallMs: 6_000,
+  // Assigned once the tracker exists (it needs the pool).
+  finalityBehind: () => finalityProbe(),
   tickMs: 25,
   onRefused: (hash, error) => {
     console.error(`endpoint refused ${hash}: ${error}`);
@@ -63,6 +72,7 @@ const tracker = new FinalityTracker({
   pool,
   onFinalizedBlock: (blockNumber, logs) => indexer.onBlock(blockNumber, logs),
 });
+finalityProbe = () => tracker.behind();
 const catchUp = () => {
   indexer.catchUp().catch((e: unknown) => {
     console.error(`indexer catch-up: ${e instanceof Error ? e.message : String(e)}`);
@@ -73,10 +83,56 @@ const checker: Checker =
     ? new RemoteChecker({
         url: checking.url,
         token: checking.token,
-        facts: (row) => orderFacts({ store, chain: monad }, row),
+        facts: (row) => orderFacts({ store }, row),
       })
     : new TestChecker(checking.key, chainId, (input) => testHold(input.request.document));
+// Suppliers' websites (Slice 15): what a site lists, proven by Primus and recorded on Monad, shown
+// on each proposal's approval page and named by the supplier record the owner signs. Without
+// Primus keys every check says it could not be proven, and the owner confirms by hand.
+const primus = primusKeys(settings);
+const websites = new WebsiteProofs({
+  store,
+  prover: primus
+    ? new PrimusProver({ ...primus, recipient: deployments.supplierProofs })
+    : undefined,
+  recorder: registryRecorder(
+    { store, pool, finality: tracker, chain: monad },
+    deployments.supplierProofs,
+  ),
+  onFile: async (account, id) => (await monad.supplierOf(account, id)) !== null,
+});
+store.onProposal((proposal) => {
+  void websites.checkProposal(proposal).catch((e: unknown) => {
+    console.error(`website check ${proposal.id}: ${e instanceof Error ? e.message : String(e)}`);
+  });
+});
+// A changed-address hold shows what the supplier's website on file lists: start that check at once,
+// so the owner's page has it when they open it (part 2).
+store.onChange((change) => {
+  if (change.to !== 'held' || change.reason !== 'address_mismatch') return;
+  void (async () => {
+    const row = await store.get(change.requestId);
+    const order = row ? await store.orderByVault(row.vault) : undefined;
+    const url =
+      row && order
+        ? await websites.siteOnFile(row.account as Address, order.supplierId as `0x${string}`)
+        : null;
+    if (url) await websites.check(url);
+  })().catch((e: unknown) => {
+    console.error(
+      `hold website ${change.requestId}: ${e instanceof Error ? e.message : String(e)}`,
+    );
+  });
+});
+console.log(`website proofs ${primus ? 'on' : 'off (no Primus keys)'}`);
+
 const CHECKER_TIMEOUT_MS = 2_000;
+// Slice 18: checker holds and owner refusals written on Monad with their evidence hashes.
+const decisions = new DecisionRecorder({
+  store,
+  pool,
+  enabled: settings.RECORD_DECISIONS !== 'false',
+});
 const workers = new Workers({
   store,
   chain: monad,
@@ -84,14 +140,19 @@ const workers = new Workers({
   pool,
   chainId,
   checkerTimeoutMs: CHECKER_TIMEOUT_MS,
+  websites,
+  decisions,
   leaseMs: 30_000,
-  checkConcurrency: 8,
+  checkConcurrency: settings.CHECK_CONCURRENCY ?? 8,
   sendConcurrency: 8,
   tickMs: 50,
 });
 
 await pool.start();
 const recovered = await workers.recover();
+// Decisions kept but never signed (a restart, or recording off then); again every minute.
+await decisions.resume();
+setInterval(() => void decisions.resume(), 60_000).unref();
 console.log(
   `recovered: ${String(recovered.settled)} settled from receipts, ${String(recovered.resent)} re-sent`,
 );
@@ -99,6 +160,15 @@ workers.start();
 // Accounts behind (just registered, or the gateway was down) are brought up to date in windows.
 catchUp();
 const catchUpTimer = setInterval(catchUp, 15_000);
+// Approved suppliers' websites, checked again once a day (Slice 15, D21): hourly, each site whose
+// last check is over a day old.
+const recheckSites = () => {
+  websites.recheck().catch((e: unknown) => {
+    console.error(`website recheck: ${e instanceof Error ? e.message : String(e)}`);
+  });
+};
+const recheckTimer = setInterval(recheckSites, 3_600_000);
+setTimeout(recheckSites, 60_000).unref();
 const heads = monad.subscribeHeads((head) => {
   void tracker.onHead(head);
 });
@@ -117,6 +187,7 @@ const demo = judge && {
   checkerKey: checking.address,
   perDay: judge.perDay,
   agentPrivateKey: judge.agentKey,
+  kalibreProof: () => websites.freshListing(KALIBRE_FILE, KALIBRE.payTo),
 };
 
 // The owner's passkey actions: approving proposals (Slice 9 part 2) and the stop button (part 3).
@@ -173,6 +244,7 @@ console.log(
 
 const app = createApp({
   agents,
+  websites,
   ...(demo ? { demo } : {}),
   proposals: owner,
   pause: owner,
@@ -182,6 +254,9 @@ const app = createApp({
   store,
   chain: monad,
   checker,
+  decisions,
+  // Advice on bank-transfer invoices (Slice 17): only the checker service gives it.
+  ...(checker instanceof RemoteChecker ? { advisor: checker } : {}),
   chainId,
   checkerTimeoutMs: CHECKER_TIMEOUT_MS,
   indexing: { latestFinalized: () => monad.latestFinalized(), catchUp: () => indexer.catchUp() },
@@ -189,7 +264,7 @@ const app = createApp({
   token: settings.GATEWAY_SERVICE_TOKEN,
   health: async () => ({
     chainId,
-    finality: monad.socketState(),
+    finality: { ...monad.socketState(), behindBlocks: tracker.lag() },
     relayers: await Promise.all(
       pool.relayers.map(async (address: Address) => ({
         address,
@@ -197,12 +272,18 @@ const app = createApp({
       })),
     ),
     moves: pool.moves().length,
+    // Slice 16: each wallet's lane (a stuck one shows its head nonce and why).
+    lanes: pool.lanesView(),
     // Wallets a node refused for low balance; their payments wait until they are topped up.
     starved: pool.starved(),
+    // How many payments the wallets can still pay gas for (Slice 18): 0 means payments wait.
+    funds: { paymentsLeft: await pool.affordable(GAS_LIMITS.pay) },
     // Which checker decides: the service (Slice 10) or the stand-in.
     checker: { kind: checking.kind, signer: checking.address },
     // WhatsApp (Slice 14): on or off, and the template used outside the 24-hour window.
     whatsapp: wa ? { template: wa.template?.name ?? null } : null,
+    // Suppliers' website proofs (Slice 15): Primus on or off, and the registry on Monad.
+    proofs: { primus: primus !== undefined, registry: deployments.supplierProofs },
   }),
 });
 const server = serve({ fetch: app.fetch, port: settings.PORT }, (info) => {
@@ -220,6 +301,7 @@ function shutdown(signal: string) {
   pool.stop();
   tracker.stopPolling();
   clearInterval(catchUpTimer);
+  clearInterval(recheckTimer);
   heads.close();
   server.close(() => {
     database.pool

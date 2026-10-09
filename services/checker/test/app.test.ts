@@ -78,3 +78,40 @@ describe('the checker over HTTP (the spec, D33)', () => {
     expect((await app.request('/openapi.json')).status).toBe(200);
   });
 });
+
+describe('advice on a bank-transfer invoice over HTTP (Slice 17)', () => {
+  const advise = (id: 'ks-1007' | 'ks-1008', bankOnFile: unknown = KALIBRE.bank, token = TOKEN) =>
+    app.request('/v1/advise', {
+      method: 'POST',
+      headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+      body: JSON.stringify({
+        order: body.order,
+        bankOnFile,
+        invoice: { html: render(documentFor(id, ACCOUNT)) },
+      }),
+    });
+
+  it('answers match for the account on file, mismatch for a new one, and never signs', async () => {
+    const ok = (await (await advise('ks-1008')).json()) as Record<string, unknown>;
+    expect(ok).toMatchObject({ advice: 'match' });
+    expect(ok.checkerSig).toBeUndefined();
+    const res = await advise('ks-1007');
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({
+      advice: 'mismatch',
+      reason: 'bank_account_mismatch',
+      evidence: { onFile: 'IBAN GB29 NWBK 6016 1331 9268 19' },
+    });
+  });
+
+  it('is unsure with no account on file, and refuses a malformed account or a wrong token', async () => {
+    expect(await (await advise('ks-1008', null)).json()).toMatchObject({ advice: 'unsure' });
+    expect((await advise('ks-1008', { holder: 'Kalibre Studio Ltd' })).status).toBe(400);
+    expect((await advise('ks-1008', { holder: '', iban: 'GB29NWBK60161331926819' })).status).toBe(
+      400,
+    );
+    expect((await advise('ks-1008', KALIBRE.bank, 'wrong-token-0123456789abcdef')).status).toBe(
+      401,
+    );
+  });
+});

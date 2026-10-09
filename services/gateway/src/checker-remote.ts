@@ -1,7 +1,7 @@
-import { keccak256, stringToHex, type Address, type Hex } from 'viem';
-import { REASONS, type Reason } from '@countersign/shared';
-import type { Chain } from './chain/types.js';
-import type { CheckInput, CheckResult, Checker } from './checker.js';
+import { getAddress, keccak256, stringToHex, type Address, type Hex } from 'viem';
+import { evidenceHash, OUTCOME, REASONS, reasonHash, type Reason } from '@countersign/shared';
+import type { AdviceInput, AdviceResult, Advisor } from './advice.js';
+import type { CheckInput, CheckResult, Checker, SignedDecision } from './checker.js';
 import type { PaymentRequestRow } from './db/schema.js';
 import type { Store } from './db/store.js';
 import { DEMO_QUOTE } from './demo/invoices.js';
@@ -18,10 +18,21 @@ export type OrderFacts = {
   supplierId: Hex;
   supplierName: string | null;
   addressOnFile: Address;
-  quote: { text: string } | null;
+  /** The quote as the agent read it: a web page as HTML, anything else as text. */
+  quote: { html: string } | { text: string } | null;
 };
 
 const DEMO_QUOTE_HASH = keccak256(stringToHex(DEMO_QUOTE));
+
+/**
+ * A quote stored as a web page is read as one (Slice 16): an agent proposes from the quote's page,
+ * and read as plain text its lines and prices would be lost, so nothing would be compared.
+ */
+function quoteOf(document: string): { html: string } | { text: string } {
+  return /^\s*<(!doctype|html|body|table|div|main)\b/i.test(document)
+    ? { html: document }
+    : { text: document };
+}
 
 /**
  * The order a payment is against, as the checker needs it. The quote is the document the owner
@@ -29,34 +40,34 @@ const DEMO_QUOTE_HASH = keccak256(stringToHex(DEMO_QUOTE));
  * quote. An order opened without one (a label for a hash) has no quote, and the checker says so.
  */
 export async function orderFacts(
-  deps: {
-    store: Pick<Store, 'orderByVault' | 'approvedQuote'>;
-    chain: Pick<Chain, 'addressOnFile'>;
-  },
-  row: PaymentRequestRow,
+  deps: { store: Pick<Store, 'orderByVault' | 'approvedQuote'> },
+  row: Pick<PaymentRequestRow, 'vault' | 'account' | 'payTo'>,
 ): Promise<OrderFacts | null> {
   const order = await deps.store.orderByVault(row.vault);
   if (!order) return null;
-  const [addressOnFile, approved] = await Promise.all([
-    deps.chain.addressOnFile(row.account as Address, row.vault as Address),
-    deps.store.approvedQuote(row.account, order.orderHash),
-  ]);
+  // The checker is asked only after the contract's own rules passed by simulation, which proved
+  // the payment's address is the one on file (else PayToNotOnFile): no chain read needed for it
+  // (Slice 16: one paced read fewer per payment at volume).
+  const addressOnFile = getAddress(row.payTo);
+  const approved = await deps.store.approvedQuote(row.account, order.orderHash);
   const quote =
     typeof approved?.document === 'string'
-      ? { text: approved.document }
+      ? quoteOf(approved.document)
       : order.orderHash.toLowerCase() === DEMO_QUOTE_HASH
         ? { text: DEMO_QUOTE }
         : null;
   return {
     supplierId: order.supplierId as Hex,
-    supplierName: approved?.supplierName ?? (quote?.text === DEMO_QUOTE ? 'Kalibre Studio' : null),
+    supplierName:
+      approved?.supplierName ??
+      (quote && 'text' in quote && quote.text === DEMO_QUOTE ? 'Kalibre Studio' : null),
     addressOnFile,
     quote,
   };
 }
 
 /** The invoice as the agent passed it: a page, its text, or nothing the checker can read. */
-function pageOf(document: unknown): { html: string } | { text: string } {
+export function pageOf(document: unknown): { html: string } | { text: string } {
   if (typeof document === 'string') return { text: document };
   if (typeof document === 'object' && document !== null) {
     const d = document as { html?: unknown; text?: unknown };
@@ -66,7 +77,10 @@ function pageOf(document: unknown): { html: string } | { text: string } {
   return { text: '' };
 }
 
-export class RemoteChecker implements Checker {
+/** Reading an order's facts (the index and the address on file) may take this long at volume. */
+const FACTS_TIMEOUT_MS = 10_000;
+
+export class RemoteChecker implements Checker, Advisor {
   constructor(
     private readonly options: {
       url: string;
@@ -76,8 +90,33 @@ export class RemoteChecker implements Checker {
     },
   ) {}
 
-  async check(input: CheckInput, signal: AbortSignal): Promise<CheckResult> {
-    const facts = await this.options.facts(input.request);
+  /** Advice on a bank-transfer invoice (Slice 17): the checker's `/v1/advise`, which never signs. */
+  async advise(input: AdviceInput, signal: AbortSignal): Promise<AdviceResult> {
+    const res = await (this.options.fetchFn ?? fetch)(`${this.options.url}/v1/advise`, {
+      method: 'POST',
+      signal,
+      headers: {
+        authorization: `Bearer ${this.options.token}`,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify(input),
+    });
+    if (!res.ok) throw new Error(`the checker answered ${String(res.status)}`);
+    return (await res.json()) as AdviceResult;
+  }
+
+  async check(input: CheckInput, startTimer: () => AbortSignal): Promise<CheckResult> {
+    // Our own reads first (the database and the chain, paced at volume), with their own limit;
+    // the checker's time starts only when we ask it.
+    const facts = await Promise.race([
+      this.options.facts(input.request),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => {
+          reject(new Error('the order’s facts were not read in time'));
+        }, FACTS_TIMEOUT_MS).unref(),
+      ),
+    ]);
+    const signal = startTimer();
     if (!facts)
       return {
         verdict: 'hold',
@@ -111,6 +150,7 @@ export class RemoteChecker implements Checker {
       reason?: unknown;
       checkerSig?: unknown;
       evidence?: unknown;
+      decision?: unknown;
     };
     const evidence = out.evidence ?? null;
     // Trust only a well-formed answer: anything else is a hold (money rule 1).
@@ -126,6 +166,47 @@ export class RemoteChecker implements Checker {
     const reason = (REASONS as readonly unknown[]).includes(out.reason)
       ? (out.reason as Reason)
       : 'checker_unsure';
-    return { verdict: 'hold', reason, evidence };
+    const decision = decisionOf(out.decision, input, out.reason, evidence);
+    return { verdict: 'hold', reason, evidence, ...(decision ? { decision } : {}) };
   }
+}
+
+const HEX32 = /^0x[0-9a-fA-F]{64}$/;
+
+/**
+ * The checker's signed hold, kept only if it is exactly this hold (Slice 18): this payment's
+ * invoice, outcome held, the reason given and the hash of the evidence given. Anything else is
+ * dropped (the hold stands, unrecorded): the vault would accept a signature over other values, and
+ * the record must match its evidence. The signature itself is checked by the vault.
+ */
+function decisionOf(
+  raw: unknown,
+  input: CheckInput,
+  reason: unknown,
+  evidence: unknown,
+): SignedDecision | undefined {
+  if (typeof raw !== 'object' || raw === null || typeof reason !== 'string') return undefined;
+  const d = raw as Record<string, unknown>;
+  const ok =
+    typeof d.invoiceHash === 'string' &&
+    d.invoiceHash.toLowerCase() === input.payment.invoiceHash.toLowerCase() &&
+    d.outcome === OUTCOME.held &&
+    d.reasonHash === reasonHash(reason) &&
+    d.evidenceHash === evidenceHash(evidence) &&
+    typeof d.sig === 'string' &&
+    /^0x[0-9a-fA-F]{130}$/.test(d.sig) &&
+    HEX32.test(d.invoiceHash) &&
+    HEX32.test(d.reasonHash) &&
+    HEX32.test(d.evidenceHash);
+  if (!ok) {
+    console.error(`checker: a hold's signed decision did not match the hold; not recorded`);
+    return undefined;
+  }
+  return {
+    invoiceHash: d.invoiceHash as Hex,
+    outcome: OUTCOME.held,
+    reasonHash: d.reasonHash as Hex,
+    evidenceHash: d.evidenceHash as Hex,
+    sig: d.sig as Hex,
+  };
 }

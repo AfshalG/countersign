@@ -173,6 +173,33 @@ Gated commits, merged into `development` after CI passes.
 
 Slice 19: ERC-8004 agent identity (D33 build order), then Slice 7. Before the demo: another Metropolis team integrates (the quickstart and the release are ready).
 
+## Part 2 (8 Oct): a test account a developer makes alone
+
+**Why.** Another team integrating is 20% of the score, and on 8 Oct a developer still could not get an account without us: the quickstart said "message us", judge mode (Slice 9 part 4) sets accounts up only for our hosted demo agent, and the gateway has one service token, which cannot be handed out. Found while drafting the integration offer.
+
+**What.** One call on the developer's machine gives a working testnet account:
+
+1. `POST /v1/demo/accounts` takes an optional `agent` address. The policy then names the developer's own agent key (not the hosted demo agent), and the account is a separate one for that passkey and agent (salt `keccak256(abi.encode(DEMO_SALT, agent))`), so a judge account for the same passkey is untouched. The demo agent's invoices are refused for it (`409 not_hosted`): its own agent pays.
+2. `POST /v1/demo/accounts/{account}/token`: any one owner's passkey signs `keccak256(abi.encode("Countersign: API token", chainId, account, generation))` and gets an **account token** (`cs_` and 32 random bytes), shown once and stored only as its SHA-256. A new token revokes the previous one, and the generation in the challenge means a used signature can't mint another.
+3. The gateway accepts the service token as before, or an account token, which is allowed **only its own account's routes**: pay, pay a run, check, the account's orders, its payments, runs and proposals, propose, and the feed filtered to its account (feed events now carry `account`). Every other route refuses it (default deny); another account's payment or proposal answers 404, as if unknown.
+4. The SDK gets `createTestAccount()` at `@countersign/sdk/test-account` (Node only: P-256 from `node:crypto`). It makes an owner key and an agent key locally, creates and sets up the account, gets the token, and returns everything for a `.env`; `decide()` pays a hold once or refuses it with the test owner key through the approvals API. A `countersign-test-account` command prints the `.env` block.
+
+**Limits, stated.** The test owner is a key in a file, not a passkey on a phone: test accounts only, on testnet. Test accounts share judge mode's daily limit (10 a day, about 0.09 MON each; raised to 30 by Afshal on 8 Oct, relayers topped up to 1 MON each). The hosted MCP server still pays from the shared demo account; an MCP client on its own account is a later step.
+
+**Tests first.** Creating with an agent (the policy names it, a different account from the judge's, `not_hosted` on demo invoices); the token route (wrong passkey, wrong challenge, rotation revokes, a replayed signature refused); scoping on every route (own account allowed, another account 403 or 404, a gateway-wide route 403, an unknown token 401, the feed filtered); the SDK end to end against the in-process gateway (create, set up, token, pay, hold, decide).
+
+**Results (8 Oct, Monad testnet).** Built test-first (24 new tests; 521 in the repo pass). SDK 0.2.0 released as `sdk-v0.2.0` (14 kB). Run from an empty folder with the published tarball, as an outside developer would:
+
+| Step | Result |
+|---|---|
+| `npm run account` (`countersign-test-account`) | Account `0xb786EA615545D92994Fc088990CD052b608F096c` made, set up and its order indexed in 16 s; `.env` written |
+| `npm start`: Kalibre Studio's clean invoice, read from the supplier's page | Settled in 2.5 s, checker included ([transaction](https://testnet.monadexplorer.com/tx/0xb597fb9d12e067bdac6bbd3021cafa9ea2e73cf894d178a1911672c69826bbb8)) |
+| The changed-address invoice (`ks-1002`) | Held, `address_mismatch`; refused with `decide()` and the test owner key |
+| The account token on the main demo account | `403 wrong_account` |
+| The account token on a gateway-wide route (`/v1/agents`) | `403 not_for_account_tokens` |
+
+**Found on the way:** the old example paid with no invoice to read, which the real checker (Slice 10) holds; the example now reads the supplier's own page and passes it, as an agent would. A plain `cp` of this file over the workspace copy dropped the workspace's footer; restored.
+
 ## Decisions (made 7 Oct)
 
 | # | Decision | Decided |
@@ -186,4 +213,6 @@ Slice 19: ERC-8004 agent identity (D33 build order), then Slice 7. Before the de
 | S12-7 | Approval link | A read-only status page on the gateway until the approver app (Slices 9 and 11) |
 | S12-8 | Pay-tool prompts | No `requiresUserInteraction` on pay tools (changes Slice 4's plan): the contract is the boundary (D32); `destructiveHint` and `idempotentHint` set |
 | S12-9 | MCP sign-in | Bearer token now; OAuth in Slice 13 |
-
+| S12-10 | A developer's own test account (8 Oct) | Judge mode with an `agent` address: one account per passkey and agent, the developer's key named in the policy |
+| S12-11 | Account tokens (8 Oct) | `cs_` + 32 random bytes, stored as SHA-256, one live per account, issued by an owner's passkey over a challenge with a generation; allowed only the account's own routes (default deny) |
+| S12-12 | Test accounts in the SDK (8 Oct) | `@countersign/sdk/test-account`, Node only (`node:crypto` P-256, no new dependency), plus a `countersign-test-account` command |

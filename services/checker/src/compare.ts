@@ -21,9 +21,14 @@ const same = (a: string, b: string) =>
   a.toLowerCase().replace(/\s+/g, ' ').trim() === b.toLowerCase().replace(/\s+/g, ' ').trim();
 const usd = (units: bigint) => `${formatUsdc(units)} USDC`;
 
+/**
+ * `payment` is null for advice on a bank-transfer invoice (Slice 17): there is no USDC payment to
+ * compare, so its checks (the invoice id, the amount) are skipped, and a printed USDC address is
+ * compared with the address on file instead.
+ */
 export function codeChecks(
   invoice: ReadInvoice,
-  payment: PaymentFacts,
+  payment: PaymentFacts | null,
   order: OrderFacts,
 ): CodeResult {
   const findings: Finding[] = [];
@@ -34,9 +39,9 @@ export function codeChecks(
   const missing = [
     invoice.number === null && 'number',
     invoice.sender === null && 'sender',
-    invoice.total === null && 'total',
-    invoice.payTo === null && 'payment address',
-    invoice.lines.length === 0 && 'lines',
+    payment !== null && invoice.total === null && 'total',
+    payment !== null && invoice.payTo === null && 'payment address',
+    payment !== null && invoice.lines.length === 0 && 'lines',
   ].filter((m): m is string => m !== false);
   add(
     'read',
@@ -55,7 +60,7 @@ export function codeChecks(
     'hidden_instructions',
   );
 
-  if (invoice.number !== null) {
+  if (invoice.number !== null && payment !== null) {
     // 3. The payment is for this document: its invoice hash is the order's supplier and this number.
     const ok = invoiceHash(order.supplierId, invoice.number) === payment.invoiceHash;
     add(
@@ -84,14 +89,18 @@ export function codeChecks(
     );
   }
   if (invoice.payTo !== null) {
-    // 5. The payment goes where the invoice says (the contract keeps it to the address on file).
-    const ok = invoice.payTo === payment.payTo;
+    // 5. The payment goes where the invoice says (the contract keeps it to the address on file);
+    // with no payment (advice), the printed USDC address is the one on file.
+    const to = payment?.payTo ?? order.addressOnFile;
+    const ok = invoice.payTo === to;
     add(
       'address',
       ok,
       ok
         ? `pays the printed address ${invoice.payTo}`
-        : `the invoice prints ${invoice.payTo}; the payment goes to ${payment.payTo}`,
+        : payment
+          ? `the invoice prints ${invoice.payTo}; the payment goes to ${payment.payTo}`
+          : `the invoice prints ${invoice.payTo}; the address on file is ${order.addressOnFile}`,
       'address_mismatch',
     );
   }
@@ -111,7 +120,7 @@ export function codeChecks(
       'amount_mismatch',
     );
   }
-  if (invoice.total !== null) {
+  if (invoice.total !== null && payment !== null) {
     // 7. The payment's amount is the invoice's total.
     const ok = invoice.total === payment.amount;
     add(

@@ -3,7 +3,6 @@ import {
   encodeFunctionData,
   hashTypedData,
   keccak256,
-  zeroHash,
   type Address,
   type Hex,
 } from 'viem';
@@ -22,6 +21,7 @@ import type { OwnerSig, WebAuthnAuth } from '../chain/types.js';
 import { ownerSigOf } from './signers.js';
 import { collect, progress, type Collected } from './collect.js';
 import { OwnerActionError, sendAndWait, type OwnerSendDeps } from './send.js';
+import { bindingProof, websiteProofView } from '../proofs/view.js';
 
 /**
  * Approving a proposed supplier and order (Slice 9 part 2). An agent can only propose: it read a
@@ -52,7 +52,13 @@ export interface ProposalChain {
 export type ProposalDeps = OwnerSendDeps & {
   store: Pick<
     Store,
-    'getProposal' | 'decideProposal' | 'pendingRelayerTx' | 'addOwnerSignature' | 'ownerSignatures'
+    | 'getProposal'
+    | 'decideProposal'
+    | 'pendingRelayerTx'
+    | 'addOwnerSignature'
+    | 'ownerSignatures'
+    | 'websiteProof'
+    | 'setSupplierWebsite'
   >;
   chain: ProposalChain;
   chainId: number;
@@ -91,11 +97,12 @@ const strings = (o: Record<string, unknown>) =>
 async function planOf(deps: ProposalDeps, p: ProposalRow) {
   const account = p.account as Address;
   const id = supplierId(supplierSlug(p.supplierName));
-  const [onFile, nonce, usdc, waiting] = await Promise.all([
+  const [onFile, nonce, usdc, waiting, proof] = await Promise.all([
     deps.chain.supplierOf(account, id),
     deps.chain.ownerNonce(account),
     deps.chain.usdcBalance(account),
     deps.chain.effectiveWaitingPeriod(account),
+    p.proofId === null ? Promise.resolve(undefined) : deps.store.websiteProof(p.proofId),
   ]);
   const payTo = p.payTo as Address;
   const amount = BigInt(p.amount);
@@ -103,7 +110,20 @@ async function planOf(deps: ProposalDeps, p: ProposalRow) {
   const needsSupplier = !(sameAddress && onFile.active);
   const deadline = BigInt(Math.floor(p.createdAt.getTime() / 1000) + SIGN_WITHIN);
   const domain = accountDomain(deps.chainId, account);
-  const supplier = { supplierId: id, payTo, active: true, proofHash: zeroHash };
+  // Slice 15: the supplier record names the website proof it was approved on, when the site lists
+  // this address; the proof is fixed once the check ends, so every owner signs the same (D36).
+  const proofHash = bindingProof(proof, payTo);
+  const website = websiteProofView({
+    url: p.proofUrl,
+    source: p.proofSource,
+    state: p.proofStatus,
+    error: p.proofError,
+    proof,
+    payTo,
+    startedAt: p.createdAt,
+    now: Date.now(),
+  });
+  const supplier = { supplierId: id, payTo, active: true, proofHash };
   const order = {
     orderId: keccak256(p.id as Hex),
     supplierId: id,
@@ -138,7 +158,7 @@ async function planOf(deps: ProposalDeps, p: ProposalRow) {
         encodeFunctionData({
           abi: countersignAccountAbi,
           functionName: 'setSupplier',
-          args: [id, payTo, true, zeroHash, nonce, deadline, sigs],
+          args: [id, payTo, true, proofHash, nonce, deadline, sigs],
         }),
       gas: 'setSupplier',
     });
@@ -190,6 +210,7 @@ async function planOf(deps: ProposalDeps, p: ProposalRow) {
     deadline,
     order,
     steps,
+    website,
   };
 }
 
@@ -209,7 +230,13 @@ export async function proposalApprovalView(deps: ProposalDeps, p: ProposalRow) {
   const plan = await planOf(deps, p);
   const now = Math.floor(Date.now() / 1000);
   const open = p.status === 'pending';
-  const approvable = open && plan.enoughFunds && p.expiry > now && Number(plan.deadline) > now;
+  // The approval waits while the website is being checked (S15-5), at most a minute.
+  const approvable =
+    open &&
+    plan.enoughFunds &&
+    p.expiry > now &&
+    Number(plan.deadline) > now &&
+    plan.website?.status !== 'checking';
   const refuse = refuseChallenge(deps.chainId, plan.account, p.id as Hex);
   const actionsOf = (): Record<string, ProposalAction> => {
     if (!open) return {};
@@ -246,6 +273,7 @@ export async function proposalApprovalView(deps: ProposalDeps, p: ProposalRow) {
     summary: {
       supplierName: p.supplierName,
       website: p.website,
+      websiteProof: plan.website,
       payTo: p.payTo,
       amount: p.amount,
       amountUsdc: formatUsdc(plan.amount),
@@ -310,6 +338,12 @@ export async function approveProposal(
     );
   if (p.expiry <= Math.floor(Date.now() / 1000))
     throw new OwnerActionError(409, 'expired', 'the proposed order has already expired');
+  if (plan.website?.status === 'checking')
+    throw new OwnerActionError(
+      409,
+      'website_checking',
+      'the supplier’s website is still being checked; try again in a few seconds',
+    );
   const signed = plan.steps.map((s) => ({
     step: s,
     auth: checked(assertions[s.key], s.challenge, s.key),
@@ -352,6 +386,9 @@ export async function approveProposal(
       ownerGas(step.gas, sigs.length),
       `proposal ${id} ${step.key}`,
     );
+    // The supplier is now on file with this website: a later address change is checked there.
+    if (step.key === 'set_supplier' && p.proofUrl !== null)
+      await deps.store.setSupplierWebsite(plan.account, plan.id, p.proofUrl);
   }
   const decided = await deps.store.decideProposal(id, 'approved');
   return proposalApprovalView(deps, decided ?? p);

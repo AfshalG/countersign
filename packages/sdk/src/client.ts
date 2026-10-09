@@ -20,6 +20,7 @@ import {
 import { CountersignError, type Issue } from './errors.js';
 import { parseEvents } from './feed.js';
 import type {
+  Advice,
   CheckVerdict,
   Invoice,
   Order,
@@ -31,11 +32,12 @@ import type {
   RunView,
   StatusChange,
 } from './types.js';
+import type { PaymentRecord } from './verify.js';
 
 export type CountersignOptions = {
   /** The gateway's URL, e.g. https://gateway-production-e17a.up.railway.app */
   gateway: string;
-  /** The gateway's service token (per-account sign-in replaces it in a later release). */
+  /** Your account's token (`cs_…`, from `countersign-test-account`), or the gateway's service token. */
   token: string;
   /** The Countersign account (the contract that holds the money). */
   account: Address;
@@ -135,6 +137,15 @@ export class Countersign {
     return { ...run, requests: run.requests.map(withText) };
   }
 
+  /**
+   * A payment's record (Slice 18): one file with the payment, the document, the checks and their
+   * evidence hash, the decision and where it is on Monad, and the settlement. Check it with
+   * `verifyRecord`, or `npx countersign-verify <file>`.
+   */
+  async record(id: string): Promise<PaymentRecord> {
+    return this.request('GET', `/v1/payments/${id}/record`);
+  }
+
   async proposal(id: string): Promise<Proposal> {
     return this.request('GET', `/v1/proposals/${id}`);
   }
@@ -166,6 +177,24 @@ export class Countersign {
       ...(await this.submission(input)),
     });
     return { ...verdict, reasonText: reasonText(verdict.reason) };
+  }
+
+  /**
+   * Advice on an invoice paid by bank transfer (Slice 17): its bank account against the one on
+   * file for the order's supplier, and the same checks as a USDC invoice. Countersign cannot stop
+   * a bank transfer, so nothing is paid: on `mismatch`, do not pay it; on `unsure`, confirm the
+   * account with the supplier by phone, on a number you already have. Needs no agent key.
+   */
+  async advise(input: {
+    order: Order | Hex;
+    document: string | { html: string } | { text: string };
+  }): Promise<Advice> {
+    const order = await this.resolve(input.order);
+    return this.request('POST', '/v1/advice', {
+      account: this.account,
+      vault: order.vault,
+      document: input.document,
+    });
   }
 
   /** A run of up to 500 invoices; follow it with `run(id)` or `watch({ runId })`. */

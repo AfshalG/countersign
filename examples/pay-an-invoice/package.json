@@ -3,9 +3,10 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "start": "node index.mjs"
+    "account": "countersign-test-account > .env",
+    "start": "node --env-file=.env index.mjs"
   },
   "dependencies": {
-    "@countersign/sdk": "https://github.com/AfshalG/countersign/releases/download/sdk-v0.1.1/countersign-sdk-0.1.1.tgz"
+    "@countersign/sdk": "https://github.com/AfshalG/countersign/releases/download/sdk-v0.3.0/countersign-sdk-0.3.0.tgz"
   }
 }

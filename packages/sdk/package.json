@@ -1,6 +1,6 @@
 {
   "name": "@countersign/sdk",
-  "version": "0.1.1",
+  "version": "0.3.0",
   "description": "Give an AI agent a Countersign account: it pays approved suppliers, within approved orders, on Monad; anything else waits for the owner.",
   "license": "MIT",
   "type": "module",
@@ -18,7 +18,12 @@
     "mcp"
   ],
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./test-account": "./src/test-account.ts"
+  },
+  "bin": {
+    "countersign-test-account": "./dist/bin.js",
+    "countersign-verify": "./dist/verify-bin.js"
   },
   "files": [
     "dist",
@@ -30,6 +35,10 @@
       ".": {
         "types": "./dist/index.d.ts",
         "import": "./dist/index.js"
+      },
+      "./test-account": {
+        "types": "./dist/test-account.d.ts",
+        "import": "./dist/test-account.js"
       }
     },
     "types": "./dist/index.d.ts"
@@ -46,6 +55,7 @@
   },
   "devDependencies": {
     "@countersign/shared": "workspace:*",
-    "tsdown": "0.23.0"
+    "tsdown": "0.23.0",
+    "@countersign/chain": "workspace:*"
   }
 }

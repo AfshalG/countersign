@@ -18,6 +18,7 @@ describe('payment request states', () => {
     expect(canTransition('held', 'refused')).toBe(true);
     expect(canTransition('held', 'expired')).toBe(true);
     expect(canTransition('released', 'settling')).toBe(true);
+    expect(canTransition('released', 'held')).toBe(true); // refused as a hold just before sending
     expect(canTransition('settling', 'settled')).toBe(true);
     expect(canTransition('settling', 'failed')).toBe(true);
   });

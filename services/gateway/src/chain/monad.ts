@@ -40,6 +40,12 @@ const sleep = (ms: number) =>
   });
 
 const ALREADY_IN = /already known|known transaction|already imported|nonce too low/i;
+/**
+ * A node asking to slow down inside a JSON-RPC answer (Monad: -32007 "50/second request limit
+ * reached", -32011 "requests limited to 15/sec"): a reason to wait and try again, never a refusal
+ * (Slice 16: treated as one, it abandoned a wallet's lowest transaction and stuck its lane).
+ */
+const RATE_LIMITED = /request limit|requests limited|rate limit|too many requests/i;
 
 /** The account events the order indexer reads: OrderApproved and OrderClosed. */
 const ORDER_EVENTS: Hex[] = (['OrderApproved', 'OrderClosed'] as const).map(
@@ -55,7 +61,16 @@ const ORDER_EVENTS: Hex[] = (['OrderApproved', 'OrderClosed'] as const).map(
 export class MonadClient
   implements Chain, Sender, Receipts, LogSource, DemoChain, ProposalChain, PauseChain, IdentityChain
 {
+  /** Everything but payment simulations: receipts, blocks, nonces, an owner's dry runs. */
   private readonly reads: Pacer;
+  /**
+   * Payment simulations, the bulk of a run (Slice 16): their own share of each endpoint's budget,
+   * so a burst of checks never starves the finality tracker (in the first fast run of 200, 149
+   * payments sat sent but not marked final until the checks were done).
+   */
+  private readonly simulations: Pacer;
+  /** When each endpoint can take its next send (Slice 16: sends were not paced at all). */
+  private readonly nextSend: number[];
   private readonly started = Date.now();
   private socketOpen = false;
   private lastHeadAt = 0;
@@ -66,19 +81,43 @@ export class MonadClient
     /** The address eth_call simulates from; any address works (signatures carry the authority). */
     private readonly simulator: Address,
   ) {
-    this.reads = new Pacer(endpoints.map((e) => e.readsPerSecond));
+    // A quarter of each endpoint's read budget (at least 2 a second) for everything but payment
+    // simulations; the rest for those.
+    const kept = endpoints.map((e) => Math.max(2, Math.round(e.readsPerSecond / 4)));
+    this.reads = new Pacer(kept);
+    this.simulations = new Pacer(
+      endpoints.map((e, i) => Math.max(1, e.readsPerSecond - (kept[i] as number))),
+    );
+    this.nextSend = endpoints.map(() => 0);
   }
 
-  private async read<T>(method: string, params: unknown[]): Promise<T> {
+  /**
+   * One read, paced. With `tried`, the endpoints already asked (for this read) are skipped and the
+   * one used is added: the first try takes whichever endpoint is free.
+   */
+  private async read<T>(
+    method: string,
+    params: unknown[],
+    pacer = this.reads,
+    tried?: Set<number>,
+  ): Promise<T> {
     for (let attempt = 1; ; attempt++) {
-      const slot = this.reads.take(Date.now() - this.started);
+      const now = Date.now() - this.started;
+      const untried = this.endpoints.findIndex((_, i) => !tried?.has(i));
+      // Every endpoint tried (a rate-limited retry on the last one): any free one again.
+      const slot =
+        tried === undefined || tried.size === 0 || untried < 0
+          ? pacer.take(now)
+          : pacer.takeOn(untried, now);
+      tried?.add(slot.index);
       await sleep(slot.at - (Date.now() - this.started));
       const endpoint = this.endpoints[slot.index] ?? this.endpoints[0];
       if (!endpoint) throw new Error('no endpoints configured');
       try {
         return await rpc<T>(endpoint.url, method, params);
       } catch (e) {
-        if (!(e instanceof RpcError) || e.kind === 'rpc' || attempt >= 5) throw e;
+        const slowDown = e instanceof RpcError && e.kind === 'rpc' && RATE_LIMITED.test(e.message);
+        if (!(e instanceof RpcError) || (e.kind === 'rpc' && !slowDown) || attempt >= 5) throw e;
         await sleep(150 * attempt);
       }
     }
@@ -104,7 +143,11 @@ export class MonadClient
             args: [payment, call.ownerSigs],
           });
     try {
-      await this.read('eth_call', [{ from: this.simulator, to: vault, data }, 'latest']);
+      await this.read(
+        'eth_call',
+        [{ from: this.simulator, to: vault, data }, 'latest'],
+        this.simulations,
+      );
       return undefined;
     } catch (e) {
       if (e instanceof RpcError && e.kind === 'rpc' && e.data !== undefined)
@@ -331,13 +374,23 @@ export class MonadClient
   async send(endpoint: number, raw: Hex): Promise<SendOutcome> {
     const target = this.endpoints[endpoint];
     if (!target) return { error: `no endpoint ${String(endpoint)}`, retry: false };
+    // Each endpoint's sends are paced to its budget, which leaves room for the reads under its limit.
+    const now = Date.now() - this.started;
+    const at = Math.max(now, this.nextSend[endpoint] ?? 0);
+    this.nextSend[endpoint] = at + 1000 / target.sendsPerSecond;
+    await sleep(at - now);
     try {
       await rpc<Hex>(target.url, 'eth_sendRawTransaction', [raw]);
       return 'accepted';
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
-      if (e instanceof RpcError && e.kind === 'rpc')
-        return ALREADY_IN.test(message) ? 'known' : { error: message, retry: false };
+      if (e instanceof RpcError && e.kind === 'rate')
+        return { error: message, retry: true, rateLimited: true };
+      if (e instanceof RpcError && e.kind === 'rpc') {
+        if (ALREADY_IN.test(message)) return 'known';
+        if (RATE_LIMITED.test(message)) return { error: message, retry: true, rateLimited: true };
+        return { error: message, retry: false };
+      }
       return { error: message, retry: true };
     }
   }
@@ -363,15 +416,30 @@ export class MonadClient
 
   // ---------- Receipts ----------
 
+  /**
+   * A finalized block's receipts, from whichever endpoint is free, then each other endpoint at once
+   * if that one has not seen the block yet (Slice 16: an endpoint a block or two behind answered
+   * null, and the tracker backed off for seconds while every payment waited to be marked final).
+   * Pinning every read to Monad's own endpoint instead left it too few reads a second.
+   */
   async blockReceipts(blockNumber: number): Promise<BlockReceipt[] | null> {
-    const receipts = await this.read<
-      | {
-          transactionHash: Hex;
-          status: Hex;
-          logs?: { address: Address; topics: Hex[]; data: Hex }[];
-        }[]
-      | null
-    >('eth_getBlockReceipts', [toHex(blockNumber)]);
+    type Raw = {
+      transactionHash: Hex;
+      status: Hex;
+      logs?: { address: Address; topics: Hex[]; data: Hex }[];
+    }[];
+    let receipts: Raw | null = null;
+    const tried = new Set<number>();
+    while (receipts === null && tried.size < this.endpoints.length)
+      receipts = await this.read<Raw | null>(
+        'eth_getBlockReceipts',
+        [toHex(blockNumber)],
+        this.reads,
+        tried,
+      ).catch((e: unknown) => {
+        if (tried.size >= this.endpoints.length) throw e;
+        return null; // this endpoint could not answer: the next one may
+      });
     return receipts === null
       ? null
       : receipts.map((r) => ({

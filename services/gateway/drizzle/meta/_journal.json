@@ -50,6 +50,48 @@
       "when": 1791443750212,
       "tag": "0006_whatsapp",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1791489718063,
+      "tag": "0007_api_tokens",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1791491966325,
+      "tag": "0008_website_proofs",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1791497726666,
+      "tag": "0009_run_requests",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1791514950572,
+      "tag": "0010_bank_advice",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1791517811687,
+      "tag": "0011_decision_records",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1791519021364,
+      "tag": "0012_decision_per_decider",
+      "breakpoints": true
     }
   ]
 }

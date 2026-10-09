@@ -1,11 +1,20 @@
 import { createRoute, z, type OpenAPIHono } from '@hono/zod-openapi';
-import { hashTypedData, keccak256, stringToHex, type Address, type Hex } from 'viem';
+import {
+  encodeAbiParameters,
+  hashTypedData,
+  keccak256,
+  stringToHex,
+  type Address,
+  type Hex,
+} from 'viem';
 import {
   decisionTypes,
+  evidenceHash,
   formatUsdc,
   OUTCOME,
   paymentTypes,
   REASON_TEXT,
+  REASONS,
   vaultDomain,
 } from '@countersign/shared';
 import type { Chain, Decision, WebAuthnAuth } from '../chain/types.js';
@@ -23,6 +32,9 @@ import {
   type ProposalDeps,
 } from '../owner/proposals.js';
 import { OwnerActionError } from '../owner/send.js';
+import type { WebsiteProofs } from '../proofs/website.js';
+import type { DecisionRecorder } from '../decisions.js';
+import { holdWebsiteView } from '../proofs/view.js';
 
 /**
  * The owner's decisions on held payments (Slice 9, D35). The same checks back the service-token
@@ -35,6 +47,10 @@ export type DecisionDeps = {
   store: Store;
   chain: Pick<Chain, 'simulate' | 'verifyOwnerDecision' | 'ownership'>;
   chainId: number;
+  /** Slice 15: suppliers' websites, shown on a changed-address hold. */
+  websites?: Pick<WebsiteProofs, 'siteOnFile' | 'check'>;
+  /** Slice 18: writes an owner's refusal on Monad; without it, refusals stay off chain. */
+  decisions?: Pick<DecisionRecorder, 'record'>;
 };
 
 type Refused = {
@@ -141,6 +157,14 @@ export async function refuseHeld(
     detail: { decision },
   });
   if (!moved) return { ok: false, status: 409, body: { error: 'not_held' } };
+  // On Monad with its evidence hash (Slice 18), after the refusal is stored.
+  await deps.decisions?.record({
+    requestId: row.id as Hex,
+    vault: row.vault as Address,
+    decidedBy: 'owner',
+    decision: signed,
+    ownerSigs: [sig],
+  });
   return after(deps.store, row.id);
 }
 
@@ -148,9 +172,13 @@ export async function refuseHeld(
 
 /** The refusal the approvals routes record: fixed, so the challenge shown is the one checked. */
 export const REFUSED_BY_OWNER = keccak256(stringToHex('refused by the owner'));
-const refusalOf = (row: PaymentRequestRow) => ({
+/**
+ * What the owner refuses: the hold's own evidence, by its hash (Slice 18), so the refusal on
+ * Monad names exactly what the owner saw. (Before Slice 18 this was the request's id.)
+ */
+export const refusalOf = (row: PaymentRequestRow) => ({
   reasonHash: REFUSED_BY_OWNER,
-  evidenceHash: row.id as Hex,
+  evidenceHash: evidenceHash(row.evidence),
 });
 
 const typedAction = z.object({
@@ -273,6 +301,32 @@ export function paymentApproval(
 }
 
 /**
+ * What the supplier's website on file lists, for a changed-address hold (Slice 15 part 2). The
+ * latest proof is shown; when there is none from the last few minutes, a check starts (one per site
+ * at a time), and the page shows it once done.
+ */
+async function holdWebsite(
+  store: Store,
+  websites: Pick<WebsiteProofs, 'siteOnFile' | 'check'>,
+  row: PaymentRequestRow,
+  onFile: string,
+) {
+  const order = await store.orderByVault(row.vault);
+  const url = order
+    ? await websites.siteOnFile(row.account as Address, order.supplierId as Hex)
+    : null;
+  const proof = url === null ? undefined : await store.latestWebsiteProof(url);
+  const now = Date.now();
+  if (url !== null && (!proof || now - proof.createdAt.getTime() > HOLD_RECHECK_MS))
+    websites.check(url).catch((e: unknown) => {
+      console.error(`website check ${url}: ${e instanceof Error ? e.message : String(e)}`);
+    });
+  return holdWebsiteView({ url, proof, onFile, invoice: row.payTo, now });
+}
+/** A hold's website proof is checked again when it is older than this. */
+const HOLD_RECHECK_MS = 10 * 60_000;
+
+/**
  * The payment's view with what each action still needs (D36): pay once needs the release
  * threshold, refusing any one owner. If the chain cannot be read, the view goes without it.
  */
@@ -282,6 +336,21 @@ export async function paymentApprovalView(
   publicUrl: string,
 ): Promise<z.infer<typeof approvalView>> {
   const v = paymentApproval(row, deps.chainId, publicUrl);
+  // A changed address, or (D21) a supplier whose own site stopped listing the address on file:
+  // there, the invoice pays the address on file, so that is the one to compare with.
+  const onFile =
+    row.reason === 'website_changed' ? row.payTo : (v.summary.addressOnFile as string | null);
+  if (
+    deps.websites &&
+    row.status === 'held' &&
+    typeof onFile === 'string' &&
+    (onFile !== row.payTo || row.reason === 'website_changed')
+  )
+    try {
+      v.summary.websiteProof = await holdWebsite(deps.store, deps.websites, row, onFile);
+    } catch (e) {
+      console.error(`hold website: ${e instanceof Error ? e.message : String(e)}`);
+    }
   try {
     const account = row.account as Address;
     for (const [key, action] of Object.entries(v.actions)) {
@@ -344,7 +413,7 @@ const getApproval = createRoute({
   responses: { 200: json(approvalView, 'The approval'), 404: json(apiError, 'unknown_approval') },
 });
 
-const assertion = z
+export const assertion = z
   .object({
     authenticatorData: z.string().min(1).max(2048).openapi({ description: 'Hex or base64url' }),
     clientDataJSON: z
@@ -400,12 +469,195 @@ const decide = createRoute({
   },
 });
 
+/**
+ * What one passkey signs to refuse a run's holds of one reason (D18, S16-2): the chain, the
+ * account, the run, the reason and exactly the held payments' ids, sorted.
+ */
+export function groupRefusalChallenge(
+  chainId: number,
+  account: Address,
+  runId: string,
+  reason: string,
+  ids: string[],
+): Hex {
+  return keccak256(
+    encodeAbiParameters(
+      [
+        { type: 'string' },
+        { type: 'uint256' },
+        { type: 'address' },
+        { type: 'string' },
+        { type: 'string' },
+        { type: 'bytes32[]' },
+      ],
+      [
+        'Countersign: refuse held payments',
+        BigInt(chainId),
+        account,
+        runId,
+        reason,
+        [...ids].map((i) => i.toLowerCase() as Hex).sort(),
+      ],
+    ),
+  );
+}
+
+const groupParams = z.object({
+  runId: z.string().openapi({ param: { name: 'runId', in: 'path' } }),
+});
+const groupQuery = z.object({
+  reason: z.enum(REASONS).openapi({ param: { name: 'reason', in: 'query' } }),
+});
+
+const getGroup = createRoute({
+  method: 'get',
+  path: '/v1/approvals/runs/{runId}',
+  tags: ['Owner'],
+  summary: 'A run’s holds of one reason, and the one challenge that refuses them all',
+  description:
+    'No token, like every approvals route: the passkey is the authorisation. The challenge covers exactly the listed payments (D18).',
+  request: { params: groupParams, query: groupQuery },
+  responses: {
+    200: json(
+      z
+        .object({
+          runId: z.string(),
+          account: z.string(),
+          reason: z.enum(REASONS),
+          reasonText: z.string(),
+          ids: z.array(z.string()),
+          count: z.number(),
+          challenge: z.string().nullable(),
+          summary: z.string(),
+        })
+        .openapi('HeldGroup'),
+      'The group',
+    ),
+    404: json(apiError, 'unknown_run'),
+  },
+});
+
+const refuseGroup = createRoute({
+  method: 'post',
+  path: '/v1/approvals/runs/{runId}',
+  tags: ['Owner'],
+  summary: 'Refuse a run’s holds of one reason with one passkey signature',
+  description:
+    'Any one owner signs the challenge from the GET. The list is read again: if it changed, the answer is challenge_mismatch and nothing is refused. Each refused payment keeps the signature and the list.',
+  request: {
+    params: groupParams,
+    query: groupQuery,
+    body: { content: { 'application/json': { schema: z.object({ assertion: assertion }) } } },
+  },
+  responses: {
+    200: json(
+      z.object({
+        runId: z.string(),
+        reason: z.string(),
+        refused: z.number(),
+        ids: z.array(z.string()),
+      }),
+      'Refused',
+    ),
+    400: json(apiError, 'malformed_assertion'),
+    404: json(apiError, 'unknown_run'),
+    409: json(apiError, 'nothing_held'),
+    422: json(apiError, 'challenge_mismatch or invalid_passkey'),
+  },
+});
+
 export function registerApprovalRoutes(
   app: OpenAPIHono,
   deps: DecisionDeps & { chainId: number; publicUrl: string; proposals?: ProposalDeps },
 ): void {
   const { store, chainId, publicUrl } = deps;
   const owner = deps.proposals;
+
+  /** A run's holds of one reason, sorted, and the account they belong to (D18). */
+  const heldGroup = async (runId: string, reason: string) => {
+    const run = await store.getRun(runId);
+    if (!run) return null;
+    const ids = (await store.listRun(runId))
+      .filter((r) => r.status === 'held' && r.reason === reason)
+      .map((r) => r.id.toLowerCase())
+      .sort();
+    return { account: run.account as Address, ids };
+  };
+
+  app.openapi(getGroup, async (c) => {
+    const { runId } = c.req.valid('param');
+    const { reason } = c.req.valid('query');
+    const group = await heldGroup(runId, reason);
+    if (!group) return c.json({ error: 'unknown_run' }, 404);
+    const text = REASON_TEXT[reason];
+    return c.json(
+      {
+        runId,
+        account: group.account,
+        reason,
+        reasonText: text,
+        ids: group.ids,
+        count: group.ids.length,
+        challenge:
+          group.ids.length === 0
+            ? null
+            : groupRefusalChallenge(chainId, group.account, runId, reason, group.ids),
+        summary: `Refuse ${String(group.ids.length)} held payments: ${text} Nothing is paid.`,
+      },
+      200,
+    );
+  });
+
+  app.openapi(refuseGroup, async (c) => {
+    const { runId } = c.req.valid('param');
+    const { reason } = c.req.valid('query');
+    const group = await heldGroup(runId, reason);
+    if (!group) return c.json({ error: 'unknown_run' }, 404);
+    if (group.ids.length === 0)
+      return c.json(
+        { error: 'nothing_held', message: `no payment in this run is held for ${reason}` },
+        409,
+      );
+    // The list is read again here, so the signature must cover exactly what is held now.
+    const challenge = groupRefusalChallenge(chainId, group.account, runId, reason, group.ids);
+    let auth;
+    try {
+      auth = fromBrowser(c.req.valid('json').assertion, challenge);
+    } catch (e) {
+      if (!(e instanceof AssertionError)) throw e;
+      return c.json(
+        {
+          error: e.code,
+          message:
+            e.code === 'challenge_mismatch'
+              ? 'the held payments changed since they were shown; open them again and sign the new list'
+              : e.message,
+        },
+        e.code === 'challenge_mismatch' ? 422 : 400,
+      );
+    }
+    // Off chain, like refusing a proposal: a refusal moves no money. Any one owner (D36).
+    const sig = await ownerSigOf(deps.chain, group.account, auth, true);
+    if (!sig)
+      return c.json({ error: 'invalid_passkey', message: 'not this account’s passkey' }, 422);
+    const evidence = {
+      group: { runId, reason, ids: group.ids, challenge },
+      sigs: storedSigs([sig]),
+    };
+    let refused = 0;
+    for (const id of group.ids)
+      if (
+        await store.transition(id, 'held', 'refused', {
+          reason: 'user_refused',
+          decidedBy: 'user_refused',
+          decidedAt: new Date(),
+          ownerAuth: evidence,
+          detail: { group: { runId, reason } },
+        })
+      )
+        refused++;
+    return c.json({ runId, reason, refused, ids: group.ids }, 200);
+  });
 
   app.openapi(getApproval, async (c) => {
     const id = c.req.valid('param').id;
