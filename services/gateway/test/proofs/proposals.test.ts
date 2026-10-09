@@ -173,3 +173,48 @@ describe('the website check on a proposal', () => {
     expect(proofHashSigned(view)).toBe(zeroHash);
   });
 });
+
+describe('a proposal made while the gateway checks websites (Slice 15, found in Slice 16)', () => {
+  it('waits from the first instant: stored as checking, so approval is never offered before the check', async () => {
+    const { createApp } = await import('../../src/app.js');
+    const { TestChecker } = await import('../../src/checker.js');
+    const { FakeChain } = await import('../fakes.js');
+    const { generatePrivateKey } = await import('viem/accounts');
+    const TOKEN = 'test-service-token-0123456789';
+    const app = createApp({
+      store,
+      chain: new FakeChain(),
+      checker: new TestChecker(generatePrivateKey(), 10143),
+      chainId: 10143,
+      checkerTimeoutMs: 2_000,
+      token: TOKEN,
+      health: () => Promise.resolve({}),
+      // A website check that has not started yet (it runs after the proposal is stored).
+      websites: {
+        siteOnFile: () => Promise.resolve(null),
+        check: () => new Promise(() => undefined),
+        websiteChanged: () => Promise.resolve(null),
+      },
+    });
+    const res = await app.request('/v1/proposals', {
+      method: 'POST',
+      headers: { authorization: `Bearer ${TOKEN}`, 'content-type': 'application/json' },
+      body: JSON.stringify({
+        account: ACCOUNT,
+        supplier: {
+          name: 'Northwind Prints',
+          website: 'https://northwind.example',
+          payTo: NORTHWIND,
+        },
+        order: { amount: '20000', expiry: Math.floor(Date.now() / 1000) + 86_400 },
+        documentHash: keccak256(toHex('a quote just read')),
+      }),
+    });
+    const { proposal } = (await res.json()) as { proposal: { id: string } };
+    const stored = await store.getProposal(proposal.id);
+    expect(stored?.proofStatus).toBe('checking');
+    if (!stored) throw new Error('no proposal');
+    const view = await proposalApprovalView(deps, stored);
+    expect(Object.keys(view.actions)).toEqual(['refuse']);
+  });
+});

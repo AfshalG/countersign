@@ -672,7 +672,13 @@ export function createApp(deps: AppDeps) {
     }),
   );
 
-  registerOrderRoutes(app, { store, chain, indexing: deps.indexing, publicUrl });
+  registerOrderRoutes(app, {
+    store,
+    chain,
+    indexing: deps.indexing,
+    publicUrl,
+    checksWebsites: deps.websites !== undefined,
+  });
   registerApprovalRoutes(app, {
     store,
     chain,
