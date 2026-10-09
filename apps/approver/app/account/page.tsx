@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { call, GatewayError } from '../../lib/gateway';
 import { createPasskey, passkeyProblem, signChallenge } from '../../lib/passkey';
 import { loadSession } from '../../lib/session';
+import { mustMatch } from '../../lib/verify';
 import { Problem, Signed } from '../ui';
 
 /**
@@ -14,6 +15,7 @@ import { Problem, Signed } from '../ui';
 type Key = { qx: string; qy: string };
 type Change = {
   challenge: string;
+  typedData: unknown;
   deadline: number;
   owners: Key[];
   manage: number;
@@ -33,6 +35,7 @@ type Owner = {
       challenge: string;
       deadline: number;
       summary: string;
+      typedData: unknown;
       signatures?: { need: number; signed: number[] };
     }
   >;
@@ -72,6 +75,7 @@ export default function Account() {
     if (!a) return;
     setProblem(null);
     try {
+      mustMatch(a.typedData, a.challenge);
       setBusy(`Face ID: ${a.summary}`);
       const assertion = await signChallenge(a.challenge, loadSession().credentialId);
       setBusy('Checking with the account on Monad…');
@@ -97,6 +101,7 @@ export default function Account() {
   /** Signs an owner change (a new one from the preview, or one another owner started). */
   async function signChange(change: Change, owners: unknown[]) {
     if (!account) return;
+    mustMatch(change.typedData, change.challenge);
     setBusy(`Face ID: ${change.summary}`);
     const assertion = await signChallenge(change.challenge, loadSession().credentialId);
     setBusy('Checking with the account on Monad…');

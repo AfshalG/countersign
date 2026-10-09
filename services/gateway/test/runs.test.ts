@@ -76,6 +76,7 @@ function row(over: Partial<PaymentRequestRow>): PaymentRequestRow {
     finalizedAt: null,
     updatedAt: T0,
     leaseUntil: null,
+    invoiceKey: null,
     ...over,
   };
 }

@@ -1,6 +1,13 @@
 import { getAddress, type Address } from 'viem';
 import { usdc } from '@countersign/shared';
 import { readBank, type ReadBank } from './bank.js';
+import {
+  invisibleIn,
+  lookAlikesIn,
+  smuggledText,
+  withoutInvisible,
+  type Invisible,
+} from './invisible.js';
 
 /**
  * The checker's own read of an invoice (Slice 10). It never takes the agent's word for a field:
@@ -8,9 +15,12 @@ import { readBank, type ReadBank } from './bank.js';
  * only a machine reads (hidden by CSS) is kept apart, because that is how instructions aimed at
  * an agent hide (the hijack). Fixed patterns, no model: reading numbers is code's job (D27).
  *
- * Limits: hidden elements are found by their inline style (display, visibility, font size,
- * opacity), which is how the demo documents and most injected text hide; a page styled from a
- * stylesheet needs a real renderer (with PDF, later). A field it cannot find is null, never guessed.
+ * Hidden text is found by the element's inline style (display, visibility, a font size of 1px or
+ * less, near-zero opacity, transparent colour, pushed far off the page, clipped, scaled to nothing,
+ * no height with overflow hidden), the `hidden` attribute, and HTML comments; characters with no
+ * width, that reverse reading order or that spell text invisibly (tag characters) are listed apart
+ * (9 Oct). Limits: a page styled from a stylesheet, or white text on a white background, needs a
+ * real renderer (with PDF, later). A field it cannot find is null, never guessed.
  */
 
 export type InvoiceLine = {
@@ -36,6 +46,10 @@ export type ReadInvoice = {
   machineText: string;
   /** Text present in the page that a person would not see. */
   hiddenText: string[];
+  /** Characters a person cannot see (zero width, reversed reading order, tag characters). */
+  invisible: Invisible[];
+  /** Letters from another alphabet mixed into the number or the sender ("U+039A GREEK …"). */
+  lookAlikes: string[];
   source: 'html' | 'text';
 };
 
@@ -62,8 +76,29 @@ function textOf(html: string): string {
     .join('\n');
 }
 
-const HIDDEN =
-  /<(\w+)\b[^>]*\bstyle\s*=\s*"[^"]*(?:display\s*:\s*none|visibility\s*:\s*hidden|font-size\s*:\s*0(?![.\d]*[1-9])|opacity\s*:\s*0(?![.\d]*[1-9]))[^"]*"[^>]*>([\s\S]*?)<\/\1>/gi;
+/** Inline styles that hide text from a person while a machine still reads it. */
+const STYLE_HIDES = [
+  'display\\s*:\\s*none',
+  'visibility\\s*:\\s*hidden',
+  'font-size\\s*:\\s*0(?![.\\d]*[1-9])',
+  'font-size\\s*:\\s*(?:0?\\.\\d+|1)px',
+  'opacity\\s*:\\s*0(?:\\.0\\d*)?(?![.\\d]*[1-9])',
+  'color\\s*:\\s*transparent',
+  '(?:left|top|right|text-indent|margin-left|margin-top)\\s*:\\s*-\\d{3,}(?:\\.\\d+)?(?:px|em|rem)',
+  'clip-path\\s*:\\s*inset\\(\\s*(?:50|100)%',
+  'clip\\s*:\\s*rect\\(\\s*0',
+  'transform\\s*:\\s*scale\\(\\s*0(?![.\\d]*[1-9])',
+  '(?:max-)?(?:height|width)\\s*:\\s*0(?:px)?\\s*(?=;|")[^"]*overflow\\s*:\\s*hidden',
+  'overflow\\s*:\\s*hidden[^"]*(?:max-)?(?:height|width)\\s*:\\s*0(?:px)?\\s*(?=;|")',
+];
+const HIDDEN = new RegExp(
+  `<(\\w+)\\b[^>]*\\bstyle\\s*=\\s*"[^"]*(?:${STYLE_HIDES.join('|')})[^"]*"[^>]*>([\\s\\S]*?)<\\/\\1>`,
+  'gi',
+);
+/** An element with the `hidden` attribute (not aria-hidden, which does not hide). */
+const HIDDEN_ATTR = /<(\w+)\b[^>]*\shidden(?=[\s=>])[^>]*>([\s\S]*?)<\/\1>/gi;
+/** An HTML comment with words in it. */
+const COMMENT = /<!--([\s\S]*?)-->/g;
 
 /**
  * One invoice line however it is written: our pages' cells ("desc | 10 | 0.0001 USDC | 0.001
@@ -125,21 +160,43 @@ function fields(text: string) {
 
 /** Reads an invoice, a quote or a checkout from its HTML or its text. */
 export function readInvoice(doc: { html?: string; text?: string }): ReadInvoice {
+  const raw = doc.html ?? doc.text ?? '';
+  // Characters a person cannot see are listed, then taken out so the fields around them read.
+  const invisible = invisibleIn(raw);
+  const smuggled = smuggledText(raw);
+  const clean = withoutInvisible(raw);
+  const withLookAlikes = (r: ReturnType<typeof fields>) => ({
+    ...r,
+    invisible,
+    lookAlikes: [...new Set([...lookAlikesIn(r.number ?? ''), ...lookAlikesIn(r.sender ?? '')])],
+  });
   if (doc.html !== undefined) {
-    const body = doc.html
+    const body = clean
       .replace(/<head\b[^>]*>[\s\S]*?<\/head>/gi, '')
       .replace(/<(script|style)\b[^>]*>[\s\S]*?<\/\1>/gi, '');
-    const hiddenText = [...body.matchAll(HIDDEN)]
-      .map((m) => textOf(m[2] ?? '').replace(/\n/g, ' '))
-      .filter((t) => t !== '');
-    const visible = textOf(body.replace(HIDDEN, ''));
+    const comments = [...body.matchAll(COMMENT)]
+      .map((m) => (m[1] ?? '').replace(/\s+/g, ' ').trim())
+      .filter((t) => /\p{L}{2,}/u.test(t));
+    const hiddenText = [
+      ...[...body.matchAll(HIDDEN), ...body.matchAll(HIDDEN_ATTR)]
+        .map((m) => textOf(m[2] ?? '').replace(/\n/g, ' '))
+        .filter((t) => t !== ''),
+      ...comments,
+      ...smuggled,
+    ];
+    const visible = textOf(body.replace(COMMENT, '').replace(HIDDEN, '').replace(HIDDEN_ATTR, ''));
     return {
-      ...fields(visible),
-      machineText: textOf(body),
+      ...withLookAlikes(fields(visible)),
+      // What a model is asked about: everything a machine reads, the hidden parts included.
+      machineText: [textOf(body), ...comments, ...smuggled].join('\n'),
       hiddenText,
       source: 'html',
     };
   }
-  const text = doc.text ?? '';
-  return { ...fields(text), machineText: text, hiddenText: [], source: 'text' };
+  return {
+    ...withLookAlikes(fields(clean)),
+    machineText: [clean, ...smuggled].join('\n'),
+    hiddenText: smuggled,
+    source: 'text',
+  };
 }

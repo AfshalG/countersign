@@ -2,6 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { b64url, hexToBytes } from '../lib/encoding';
 import { markDifferences } from '../lib/diff';
 import { problemText } from '../lib/gateway';
+import { signedMatches, whatIsPaid } from '../lib/verify';
+import { hashTypedData } from 'viem';
+import { accountDomain, ownerActionTypes, paymentTypes, vaultDomain } from '@countersign/shared';
 
 /** Slice 11: the approver app's pure parts. The screens themselves are tried on a phone. */
 describe('encoding for WebAuthn', () => {
@@ -44,5 +47,80 @@ describe('what went wrong, in plain words', () => {
     expect(problemText(409, { error: 'contract_refuses', message: 'PayToNotOnFile' })).toMatch(
       /PayToNotOnFile/,
     );
+  });
+});
+
+describe('signing exactly what is shown (9 Oct)', () => {
+  const VAULT = '0x6c033066C05Eb524119c8C830F937C4bbd17E426';
+  const message = {
+    amount: 1_500n,
+    invoiceHash: `0x${'11'.repeat(32)}`,
+    payTo: '0x90f9931B748B26763161a8191C178Fe425C25fEc',
+    deadline: 2_000_000_000n,
+  } as const;
+  const typed = {
+    domain: vaultDomain(10143, VAULT),
+    types: paymentTypes,
+    primaryType: 'Payment' as const,
+    message,
+  };
+  const challenge = hashTypedData(typed);
+  // As the gateway sends it: numbers as strings.
+  const sent = JSON.parse(
+    JSON.stringify(typed, (_k, v: unknown) => (typeof v === 'bigint' ? v.toString() : v)),
+  ) as unknown;
+
+  it('accepts a challenge that is the digest of the typed data it came with', () => {
+    expect(signedMatches(sent, challenge)).toBe(true);
+    expect(whatIsPaid(sent)).toEqual({ amountUsdc: '0.0015', payTo: message.payTo });
+  });
+
+  it('refuses one that is not: another amount, another address, or nothing to compare', () => {
+    const more = JSON.parse(JSON.stringify(sent)) as { message: { amount: string } };
+    more.message.amount = '1500000';
+    expect(signedMatches(more, challenge)).toBe(false);
+    const elsewhere = JSON.parse(JSON.stringify(sent)) as { message: { payTo: string } };
+    elsewhere.message.payTo = '0x90f9931F1721Ed8D9f47ea45B5E485e6182D5feC';
+    expect(signedMatches(elsewhere, challenge)).toBe(false);
+    expect(signedMatches(null, challenge)).toBe(false);
+    expect(signedMatches({ nonsense: true }, challenge)).toBe(false);
+  });
+
+  it('checks an owner action too: approving an order, numbers sent as strings', () => {
+    const domain = accountDomain(10143, '0xC127e7Dbc29d0d38Be3b2e557ce7d796bd2403A9');
+    const message = {
+      orderId: `0x${'22'.repeat(32)}`,
+      supplierId: `0x${'33'.repeat(32)}`,
+      orderHash: `0x${'44'.repeat(32)}`,
+      amount: 5_000n,
+      expiry: 2_000_000_000n,
+      nonce: 7n,
+      deadline: 1_900_000_000n,
+    } as const;
+    const challenge = hashTypedData({
+      domain,
+      types: ownerActionTypes,
+      primaryType: 'ApproveOrder',
+      message,
+    });
+    const sentOrder = {
+      domain,
+      primaryType: 'ApproveOrder',
+      types: { ApproveOrder: ownerActionTypes.ApproveOrder },
+      message: {
+        ...message,
+        amount: '5000',
+        expiry: '2000000000',
+        nonce: '7',
+        deadline: '1900000000',
+      },
+    };
+    expect(signedMatches(sentOrder, challenge)).toBe(true);
+    expect(
+      signedMatches(
+        { ...sentOrder, message: { ...sentOrder.message, amount: '50000' } },
+        challenge,
+      ),
+    ).toBe(false);
   });
 });

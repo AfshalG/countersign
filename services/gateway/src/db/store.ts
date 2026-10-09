@@ -95,6 +95,7 @@ export type TransitionPatch = Partial<
     | 'votedAt'
     | 'finalizedAt'
     | 'leaseUntil'
+    | 'invoiceKey'
   >
 > & { reason?: Reason; decidedBy?: DecidedBy; detail?: unknown };
 
@@ -399,6 +400,19 @@ export class Store {
       .where(sql`lower(${runs.account}) = ${account.toLowerCase()}`)
       .orderBy(desc(runs.createdAt))
       .limit(limit);
+  }
+
+  /** The payment already released with this key on the account (a look-alike's original), if any. */
+  async releasedWithKey(
+    account: string,
+    invoiceKey: string,
+  ): Promise<PaymentRequestRow | undefined> {
+    const [row] = await this.db
+      .select()
+      .from(paymentRequests)
+      .where(and(eq(paymentRequests.account, account), eq(paymentRequests.invoiceKey, invoiceKey)))
+      .limit(1);
+    return row;
   }
 
   /** An account's held payments, newest first: what waits for its owner (Slice 11's inbox). */

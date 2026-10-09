@@ -115,6 +115,7 @@ function payment(): PaymentRequestRow {
     finalizedAt: null,
     updatedAt: now,
     leaseUntil: null,
+    invoiceKey: null,
   };
 }
 const decide = () =>
