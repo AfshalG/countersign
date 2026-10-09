@@ -1,6 +1,6 @@
 import type { Address, Hex } from 'viem';
 import type { WebsiteProofs } from '../proofs/website.js';
-import type { Reason } from '@countersign/shared';
+import { invoiceSkeleton, type Reason } from '@countersign/shared';
 import type { Chain, PaymentCall } from '../chain/types.js';
 import type { DecodedRefusal } from '../chain/refusals.js';
 import type { Checker, CheckResult, SignedDecision } from '../checker.js';
@@ -198,6 +198,50 @@ export async function evaluate(
   };
 }
 
+/** The number the checker read off the invoice, if it read one. */
+const numberRead = (evidence: unknown): string | null => {
+  const n = (evidence as { read?: { number?: unknown } } | null)?.read?.number;
+  return typeof n === 'string' && n.trim() !== '' ? n : null;
+};
+
+/**
+ * The supplier and the invoice number as a person sees it (9 Oct): two numbers a person cannot
+ * tell apart (an invisible character, a small L for a one, a Greek letter) have the same key.
+ */
+async function invoiceKeyOf(
+  store: Store,
+  row: PaymentRequestRow,
+  evidence: unknown,
+): Promise<string | null> {
+  const number = numberRead(evidence);
+  if (!number) return null;
+  const order = await store.orderByVault(row.vault);
+  return order ? `${order.supplierId.toLowerCase()}:${invoiceSkeleton(number)}` : null;
+}
+
+const isUniqueViolation = (e: unknown): boolean => {
+  const code = (x: unknown) => (x as { code?: unknown } | null)?.code;
+  return code(e) === '23505' || code((e as { cause?: unknown } | null)?.cause) === '23505';
+};
+
+/** Held as a duplicate: a look-alike copy of an invoice already released to the same supplier. */
+async function holdLookAlike(
+  store: Store,
+  row: PaymentRequestRow,
+  original: PaymentRequestRow,
+  evidence: unknown,
+  checkedAt: Date,
+): Promise<void> {
+  const duplicateOf = { id: original.id, number: numberRead(original.evidence) };
+  await store.transition(row.id, 'checking', 'held', {
+    checkedAt,
+    reason: 'duplicate_invoice',
+    decidedBy: 'rule',
+    evidence: { ...(evidence as Record<string, unknown>), duplicateOf },
+    detail: { duplicateOf },
+  });
+}
+
 /**
  * Checks one stored request and records the outcome. A request still in `requested` is moved
  * to `checking` first (if another worker got there first, nothing happens). A request already in
@@ -220,12 +264,25 @@ export async function checkOne(deps: CheckDeps, row: PaymentRequestRow): Promise
     // stays in `checking` (retried) rather than being released.
     if (outcome.checkerSig === undefined)
       throw new Error('a stored release has no checker signature');
-    await store.transition(row.id, 'checking', 'released', {
-      checkedAt,
-      decidedBy: outcome.decidedBy,
-      checkerSig: outcome.checkerSig,
-      evidence: outcome.evidence,
-    });
+    const key = await invoiceKeyOf(store, row, outcome.evidence);
+    const original = key ? await store.releasedWithKey(row.account, key) : undefined;
+    if (original && original.id !== row.id)
+      return holdLookAlike(store, row, original, outcome.evidence, checkedAt);
+    try {
+      await store.transition(row.id, 'checking', 'released', {
+        checkedAt,
+        decidedBy: outcome.decidedBy,
+        checkerSig: outcome.checkerSig,
+        evidence: outcome.evidence,
+        ...(key ? { invoiceKey: key } : {}),
+      });
+    } catch (e) {
+      // Released at the same moment as its look-alike: the key's unique index let one through.
+      const other =
+        key && isUniqueViolation(e) ? await store.releasedWithKey(row.account, key) : undefined;
+      if (!other) throw e;
+      await holdLookAlike(store, row, other, outcome.evidence, checkedAt);
+    }
     return;
   }
   const moved = await store.transition(row.id, 'checking', outcome.status, {

@@ -56,6 +56,7 @@ describe('the API reference', () => {
         '/v1/advice/{id}',
         '/v1/payments/{id}/record',
         '/v1/accounts/{account}/records.csv',
+        '/v1/accounts/{account}/inbox',
         '/v1/accounts',
         '/v1/accounts/{account}/banks',
         '/v1/owner/{account}/banks',

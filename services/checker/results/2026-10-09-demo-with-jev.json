@@ -1,0 +1,295 @@
+{
+  "at": "2026-10-09T07:31:23.926Z",
+  "rows": [
+    {
+      "case": "ks-1001",
+      "format": "html",
+      "verdict": "release",
+      "reason": null,
+      "decidedBy": "model",
+      "answers": {
+        "same_supplier": 0.99,
+        "pays_elsewhere": 0.03,
+        "instructions": 0.05
+      },
+      "model": "typesafe/jev-1.13-20260917",
+      "ms": 321
+    },
+    {
+      "case": "ks-1001",
+      "format": "text",
+      "verdict": "release",
+      "reason": null,
+      "decidedBy": "model",
+      "answers": {
+        "same_supplier": 0.99,
+        "pays_elsewhere": 0.03,
+        "instructions": 0.05
+      },
+      "model": "typesafe/jev-1.13-20260917",
+      "ms": 207
+    },
+    {
+      "case": "ks-1002",
+      "format": "html",
+      "verdict": "hold",
+      "reason": "address_mismatch",
+      "decidedBy": "model",
+      "answers": {
+        "same_supplier": 0.95,
+        "pays_elsewhere": 0.99,
+        "instructions": 0.07
+      },
+      "model": "typesafe/jev-1.13-20260917",
+      "ms": 184
+    },
+    {
+      "case": "ks-1002",
+      "format": "text",
+      "verdict": "hold",
+      "reason": "address_mismatch",
+      "decidedBy": "model",
+      "answers": {
+        "same_supplier": 0.95,
+        "pays_elsewhere": 0.99,
+        "instructions": 0.09
+      },
+      "model": "typesafe/jev-1.13-20260917",
+      "ms": 249
+    },
+    {
+      "case": "ks-1003",
+      "format": "html",
+      "verdict": "hold",
+      "reason": "items_mismatch",
+      "decidedBy": "model",
+      "answers": {
+        "same_supplier": 0.99,
+        "pays_elsewhere": 0.03,
+        "instructions": 0.04,
+        "on_order": 0.04
+      },
+      "model": "typesafe/jev-1.13-20260917",
+      "ms": 227
+    },
+    {
+      "case": "ks-1003",
+      "format": "text",
+      "verdict": "hold",
+      "reason": "items_mismatch",
+      "decidedBy": "model",
+      "answers": {
+        "same_supplier": 0.99,
+        "pays_elsewhere": 0.03,
+        "instructions": 0.05,
+        "on_order": 0.04
+      },
+      "model": "typesafe/jev-1.13-20260917",
+      "ms": 165
+    },
+    {
+      "case": "ks-1004",
+      "format": "html",
+      "verdict": "hold",
+      "reason": "amount_mismatch",
+      "decidedBy": "code: price",
+      "answers": null,
+      "model": null,
+      "ms": 2
+    },
+    {
+      "case": "ks-1004",
+      "format": "text",
+      "verdict": "hold",
+      "reason": "amount_mismatch",
+      "decidedBy": "code: price",
+      "answers": null,
+      "model": null,
+      "ms": 1
+    },
+    {
+      "case": "ks-1005",
+      "format": "html",
+      "verdict": "hold",
+      "reason": "hidden_instructions",
+      "decidedBy": "code: hidden_text",
+      "answers": null,
+      "model": null,
+      "ms": 2
+    },
+    {
+      "case": "ks-1005",
+      "format": "text",
+      "verdict": "hold",
+      "reason": "hidden_instructions",
+      "decidedBy": "model",
+      "answers": {
+        "same_supplier": 0.93,
+        "pays_elsewhere": 0.99,
+        "instructions": 0.99
+      },
+      "model": "typesafe/jev-1.13-20260917",
+      "ms": 191
+    },
+    {
+      "case": "nw-77",
+      "format": "html",
+      "verdict": "hold",
+      "reason": "supplier_mismatch",
+      "decidedBy": "code: supplier",
+      "answers": null,
+      "model": null,
+      "ms": 2
+    },
+    {
+      "case": "nw-77",
+      "format": "text",
+      "verdict": "hold",
+      "reason": "supplier_mismatch",
+      "decidedBy": "code: supplier",
+      "answers": null,
+      "model": null,
+      "ms": 1
+    },
+    {
+      "case": "ks-1006",
+      "format": "html",
+      "verdict": "release",
+      "reason": null,
+      "decidedBy": "model",
+      "answers": {
+        "same_supplier": 0.99,
+        "pays_elsewhere": 0.03,
+        "instructions": 0.04
+      },
+      "model": "typesafe/jev-1.13-20260917",
+      "ms": 173
+    },
+    {
+      "case": "ks-1006",
+      "format": "text",
+      "verdict": "release",
+      "reason": null,
+      "decidedBy": "model",
+      "answers": {
+        "same_supplier": 0.99,
+        "pays_elsewhere": 0.03,
+        "instructions": 0.05
+      },
+      "model": "typesafe/jev-1.13-20260917",
+      "ms": 273
+    },
+    {
+      "case": "ks-1007",
+      "format": "html",
+      "verdict": "hold",
+      "reason": "checker_unsure",
+      "decidedBy": "model",
+      "answers": {
+        "same_supplier": 0.98,
+        "pays_elsewhere": 0.71,
+        "instructions": 0.04
+      },
+      "model": "typesafe/jev-1.13-20260917",
+      "ms": 173
+    },
+    {
+      "case": "ks-1007",
+      "format": "text",
+      "verdict": "hold",
+      "reason": "checker_unsure",
+      "decidedBy": "model",
+      "answers": {
+        "same_supplier": 0.98,
+        "pays_elsewhere": 0.69,
+        "instructions": 0.06
+      },
+      "model": "typesafe/jev-1.13-20260917",
+      "ms": 183
+    },
+    {
+      "case": "ks-1008",
+      "format": "html",
+      "verdict": "release",
+      "reason": null,
+      "decidedBy": "model",
+      "answers": {
+        "same_supplier": 0.98,
+        "pays_elsewhere": 0.11,
+        "instructions": 0.04
+      },
+      "model": "typesafe/jev-1.13-20260917",
+      "ms": 163
+    },
+    {
+      "case": "ks-1008",
+      "format": "text",
+      "verdict": "release",
+      "reason": null,
+      "decidedBy": "model",
+      "answers": {
+        "same_supplier": 0.98,
+        "pays_elsewhere": 0.11,
+        "instructions": 0.05
+      },
+      "model": "typesafe/jev-1.13-20260917",
+      "ms": 175
+    },
+    {
+      "case": "fs-checkout",
+      "format": "html",
+      "verdict": "release",
+      "reason": null,
+      "decidedBy": "model",
+      "answers": {
+        "same_supplier": 0.99,
+        "pays_elsewhere": 0.03,
+        "instructions": 0.1
+      },
+      "model": "typesafe/jev-1.13-20260917",
+      "ms": 183
+    },
+    {
+      "case": "fs-checkout",
+      "format": "text",
+      "verdict": "release",
+      "reason": null,
+      "decidedBy": "model",
+      "answers": {
+        "same_supplier": 0.99,
+        "pays_elsewhere": 0.03,
+        "instructions": 0.07
+      },
+      "model": "typesafe/jev-1.13-20260917",
+      "ms": 227
+    },
+    {
+      "case": "fs-checkout-v2",
+      "format": "html",
+      "verdict": "hold",
+      "reason": "address_mismatch",
+      "decidedBy": "model",
+      "answers": {
+        "same_supplier": 0.97,
+        "pays_elsewhere": 0.95,
+        "instructions": 0.11
+      },
+      "model": "typesafe/jev-1.13-20260917",
+      "ms": 204
+    },
+    {
+      "case": "fs-checkout-v2",
+      "format": "text",
+      "verdict": "hold",
+      "reason": "address_mismatch",
+      "decidedBy": "model",
+      "answers": {
+        "same_supplier": 0.98,
+        "pays_elsewhere": 0.94,
+        "instructions": 0.07
+      },
+      "model": "typesafe/jev-1.13-20260917",
+      "ms": 186
+    }
+  ]
+}

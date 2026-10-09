@@ -95,6 +95,7 @@ export type TransitionPatch = Partial<
     | 'votedAt'
     | 'finalizedAt'
     | 'leaseUntil'
+    | 'invoiceKey'
   >
 > & { reason?: Reason; decidedBy?: DecidedBy; detail?: unknown };
 
@@ -398,6 +399,49 @@ export class Store {
       .from(runs)
       .where(sql`lower(${runs.account}) = ${account.toLowerCase()}`)
       .orderBy(desc(runs.createdAt))
+      .limit(limit);
+  }
+
+  /** The payment already released with this key on the account (a look-alike's original), if any. */
+  async releasedWithKey(
+    account: string,
+    invoiceKey: string,
+  ): Promise<PaymentRequestRow | undefined> {
+    const [row] = await this.db
+      .select()
+      .from(paymentRequests)
+      .where(and(eq(paymentRequests.account, account), eq(paymentRequests.invoiceKey, invoiceKey)))
+      .limit(1);
+    return row;
+  }
+
+  /** An account's held payments, newest first: what waits for its owner (Slice 11's inbox). */
+  async heldOf(account: string, limit = 200): Promise<PaymentRequestRow[]> {
+    return this.db
+      .select()
+      .from(paymentRequests)
+      .where(
+        and(
+          sql`lower(${paymentRequests.account}) = ${account.toLowerCase()}`,
+          eq(paymentRequests.status, 'held'),
+        ),
+      )
+      .orderBy(desc(paymentRequests.requestedAt))
+      .limit(limit);
+  }
+
+  /** An account's proposals waiting for its owner, newest first (Slice 11's inbox). */
+  async pendingProposalsOf(account: string, limit = 100): Promise<ProposalRow[]> {
+    return this.db
+      .select()
+      .from(proposals)
+      .where(
+        and(
+          sql`lower(${proposals.account}) = ${account.toLowerCase()}`,
+          eq(proposals.status, 'pending'),
+        ),
+      )
+      .orderBy(desc(proposals.createdAt))
       .limit(limit);
   }
 

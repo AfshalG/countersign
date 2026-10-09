@@ -1,3 +1,4 @@
+import { supplierNameOf } from '../suppliers.js';
 import { createRoute, type OpenAPIHono, type z } from '@hono/zod-openapi';
 import { encodeAbiParameters, keccak256, type Address, type Hex } from 'viem';
 import type { Chain } from '../chain/types.js';
@@ -161,11 +162,14 @@ export function registerOrderRoutes(app: OpenAPIHono, deps: OrderDeps): void {
     } catch {
       return c.json({ error: 'chain_unavailable' }, 503);
     }
+    // The supplier by name, from the proposal the owner approved (Slice 11's suppliers screen).
+    const names = await Promise.all(open.map((o) => supplierNameOf(store, account, o.vault)));
     const orders = open.map((o, i) => {
       const state = states[i];
       if (!state) throw new Error('order state missing');
       return {
         orderId: o.orderId,
+        supplierName: names[i] ?? null,
         vault: o.vault,
         supplierId: o.supplierId,
         payTo: state.payTo,

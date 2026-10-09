@@ -265,3 +265,68 @@ describe('an account’s records as one CSV', () => {
     expect(row).toContain(',0.001,requested,');
   });
 });
+
+describe('an account’s inbox: what waits for the owner (Slice 11)', () => {
+  it('lists its held payments and its pending proposals, newest first, and nothing decided', async () => {
+    const held = await submit('KS-1104');
+    await store.transition(held, 'requested', 'checking');
+    await store.transition(held, 'checking', 'held', {
+      reason: 'amount_mismatch',
+      decidedBy: 'checker',
+    });
+    const paid = await submit('KS-1105'); // still requested: not waiting for the owner
+    const { proposal } = await store.createProposal({
+      id: keccak256(stringToHex('inbox proposal')),
+      account: ACCOUNT,
+      supplierName: 'Northwind Prints',
+      website: null,
+      payTo: SUPPLIER,
+      amount: '5000',
+      expiry: 2_000_000_000,
+      documentHash: keccak256(stringToHex('a quote')),
+      document: 'Quote NW-Q-301',
+    });
+    const res = await app.request(`/v1/accounts/${ACCOUNT}/inbox`, {
+      headers: { authorization: `Bearer ${TOKEN}` },
+    });
+    expect(res.status).toBe(200);
+    const inbox = (await res.json()) as {
+      held: {
+        id: string;
+        reason: string;
+        reasonText: string;
+        amountUsdc: string;
+        supplierName: string | null;
+      }[];
+      proposals: { id: string; supplierName: string; amountUsdc: string }[];
+    };
+    expect(inbox.held).toEqual([
+      expect.objectContaining({
+        id: held,
+        reason: 'amount_mismatch',
+        amountUsdc: '0.001',
+        supplierName: 'Kalibre Studio',
+      }),
+    ]);
+    expect(inbox.held[0]?.reasonText).toMatch(/amount/);
+    expect(inbox.held.map((h) => h.id)).not.toContain(paid);
+    expect(inbox.proposals).toEqual([
+      expect.objectContaining({
+        id: proposal.id,
+        supplierName: 'Northwind Prints',
+        amountUsdc: '0.005',
+      }),
+    ]);
+  });
+
+  it('is only for the account’s own token', async () => {
+    const other = '0x5555555555555555555555555555555555555555';
+    const token = newAccountToken();
+    await store.registerAccount(other, 1);
+    await store.issueApiToken(other, hashToken(token), 1);
+    const res = await app.request(`/v1/accounts/${ACCOUNT}/inbox`, {
+      headers: { authorization: `Bearer ${token}` },
+    });
+    expect(res.status).toBe(403);
+  });
+});
