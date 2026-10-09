@@ -111,7 +111,7 @@ export function gateway(input: Parameters<typeof fetch>[0], init?: RequestInit):
         : null,
       said: changed
         ? "Advice: do not pay this invoice. The invoice's bank account is not the supplier's account on file. Advice only: do not pay it until the supplier confirms the account by phone, on a number you already have."
-        : 'Advice: the bank account on this invoice is the supplier’s account on file, and nothing else on it differs from the order. Countersign cannot stop or confirm a bank transfer: it is paid at the bank.',
+        : 'Advice: the bank account on this invoice is the supplier’s account on file, and nothing else on it differs from the order. Pay it at the bank as usual: this is advice, as Countersign cannot stop or confirm a bank transfer.',
       invoiceNumber: 'KS-1007',
       onFile: {
         source: 'demo',

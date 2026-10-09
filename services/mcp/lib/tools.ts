@@ -286,7 +286,8 @@ export function createTools(cs: Countersign, options: { waitMs?: number } = {}) 
               document: { text: args.invoiceText },
             });
             const onFile = a.onFile?.description ?? null;
-            const said = `${a.said}${onFile ? ` Account on file: ${onFile}.` : ''} Countersign cannot stop a bank transfer: this is advice, nothing was paid, and the owner has not been told.`;
+            // `said` already says it is advice; this adds what the tool did (and did not) do.
+            const said = `${a.said}${onFile ? ` Account on file: ${onFile}.` : ''} Nothing was paid, and the owner has not been told.`;
             return text(said, {
               verdict: a.advice,
               reason: a.reason,
