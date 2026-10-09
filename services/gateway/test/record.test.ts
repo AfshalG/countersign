@@ -99,7 +99,7 @@ async function submit(invoice: string): Promise<Hex> {
 
 const record = async (id: string, token = TOKEN) =>
   app.request(`/v1/payments/${id}/record`, { headers: { authorization: `Bearer ${token}` } });
-type Rec = Record<string, Record<string, unknown> & { onChain?: Record<string, unknown> | null }>;
+type Rec = Record<string, Record<string, unknown> & { onChain?: unknown }>;
 
 describe('a payment’s record', () => {
   it('holds a checker’s hold, its evidence hash and its decision on Monad, as one chain', async () => {
@@ -118,7 +118,7 @@ describe('a payment’s record', () => {
       },
       row,
     );
-    const tx = (await store.decisionRecord(id))?.txHash as Hex;
+    const tx = (await store.decisionRecord(id, 'checker'))?.txHash as Hex;
     await store.markRelayerTxFinal(tx, 'success', 4242);
 
     const res = await record(id);
@@ -145,16 +145,18 @@ describe('a payment’s record', () => {
       evidence: stored?.evidence,
       evidenceHash: evidenceHash(stored?.evidence),
     });
-    expect(r.decision?.onChain).toMatchObject({
-      by: 'checker',
-      decision: {
-        invoiceHash: keccak256(toHex('KS-1003')),
-        outcome: OUTCOME.held,
-        reasonHash: reasonHash('items_mismatch'),
-        evidenceHash: evidenceHash(stored?.evidence),
+    expect(r.decision?.onChain).toMatchObject([
+      {
+        by: 'checker',
+        decision: {
+          invoiceHash: keccak256(toHex('KS-1003')),
+          outcome: OUTCOME.held,
+          reasonHash: reasonHash('items_mismatch'),
+          evidenceHash: evidenceHash(stored?.evidence),
+        },
+        tx: { hash: tx, block: 4242, status: 'success', final: true },
       },
-      tx: { hash: tx, block: 4242, status: 'success', final: true },
-    });
+    ]);
     expect(r.settlement).toBeNull();
     expect((r.events as unknown as { to: string }[]).map((e) => e.to)).toEqual([
       'requested',
@@ -192,7 +194,7 @@ describe('a payment’s record', () => {
       tx: { hash: txHash, block: 777, relayer: SUPPLIER },
       checkerSig: sig,
     });
-    expect(r.decision?.onChain).toBeNull();
+    expect(r.decision?.onChain).toEqual([]);
     expect(String(r.decision?.onChainNote)).toMatch(/PaymentExecuted/);
   });
 
@@ -215,7 +217,7 @@ describe('a payment’s record', () => {
     );
     const r = (await (await record(id)).json()) as Rec;
     expect(r.check).toMatchObject({ status: 'held', decidedBy: 'rule' });
-    expect(r.decision?.onChain).toBeNull();
+    expect(r.decision?.onChain).toEqual([]);
     expect(String(r.decision?.onChainNote)).toMatch(/contract’s own rules/);
   });
 

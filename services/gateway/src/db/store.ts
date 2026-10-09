@@ -571,7 +571,7 @@ export class Store {
 
   // ---------- decisions recorded on Monad (Slice 18) ----------
 
-  /** A decision to record; the same request's second decision changes nothing. */
+  /** A decision to record; the same request's second decision by the same party changes nothing. */
   async addDecisionRecord(row: Omit<DecisionRecordRow, 'createdAt' | 'txHash'>): Promise<boolean> {
     const added = await this.db
       .insert(decisionRecords)
@@ -581,19 +581,43 @@ export class Store {
     return added.length > 0;
   }
 
-  async decisionRecord(requestId: string): Promise<DecisionRecordRow | undefined> {
+  async decisionRecord(
+    requestId: string,
+    decidedBy: 'checker' | 'owner',
+  ): Promise<DecisionRecordRow | undefined> {
     const [row] = await this.db
       .select()
       .from(decisionRecords)
-      .where(eq(decisionRecords.requestId, requestId));
+      .where(
+        and(eq(decisionRecords.requestId, requestId), eq(decisionRecords.decidedBy, decidedBy)),
+      );
     return row;
   }
 
-  async setDecisionTx(requestId: string, txHash: string): Promise<void> {
+  /** A payment's decisions to record, first first: the checker's hold, then the owner's refusal. */
+  async decisionRecords(requestId: string): Promise<DecisionRecordRow[]> {
+    return this.db
+      .select()
+      .from(decisionRecords)
+      .where(eq(decisionRecords.requestId, requestId))
+      .orderBy(asc(decisionRecords.createdAt));
+  }
+
+  async setDecisionTx(
+    requestId: string,
+    decidedBy: 'checker' | 'owner',
+    txHash: string,
+  ): Promise<void> {
     await this.db
       .update(decisionRecords)
       .set({ txHash })
-      .where(and(eq(decisionRecords.requestId, requestId), isNull(decisionRecords.txHash)));
+      .where(
+        and(
+          eq(decisionRecords.requestId, requestId),
+          eq(decisionRecords.decidedBy, decidedBy),
+          isNull(decisionRecords.txHash),
+        ),
+      );
   }
 
   /** Decisions whose transaction was never signed (a restart, or recording switched off then). */

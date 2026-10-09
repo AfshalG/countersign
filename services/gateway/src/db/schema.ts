@@ -445,20 +445,25 @@ export type AdviceCheckRow = typeof adviceChecks.$inferSelect;
  * A decision to be written on Monad with its evidence hash (Slice 18): a checker's hold
  * (`recordDecision`, the checker's signature) or an owner's refusal (`recordDecisionByOwner`, the
  * passkey's). Kept until its transaction is signed, so a restart sends what was not sent; its
- * finality is the relayer transaction's (`relayer_txs`, purpose `decision:<request id>`).
+ * finality is the relayer transaction's (`relayer_txs`, purpose `decision:<request id>:<by>`).
  */
-export const decisionRecords = pgTable('decision_records', {
-  requestId: text('request_id')
-    .primaryKey()
-    .references(() => paymentRequests.id),
-  vault: text('vault').notNull(),
-  decidedBy: text('decided_by').$type<'checker' | 'owner'>().notNull(),
-  /** The vault's `Decision`: invoiceHash, outcome, reasonHash, evidenceHash. */
-  decision: jsonb('decision').notNull(),
-  /** The checker's signature (hex), or the owners' (as stored by storedSigs). */
-  sigs: jsonb('sigs').notNull(),
-  txHash: text('tx_hash'),
-  createdAt: at('created_at').notNull().defaultNow(),
-});
+export const decisionRecords = pgTable(
+  'decision_records',
+  {
+    requestId: text('request_id')
+      .notNull()
+      .references(() => paymentRequests.id),
+    vault: text('vault').notNull(),
+    decidedBy: text('decided_by').$type<'checker' | 'owner'>().notNull(),
+    /** The vault's `Decision`: invoiceHash, outcome, reasonHash, evidenceHash. */
+    decision: jsonb('decision').notNull(),
+    /** The checker's signature (hex), or the owners' (as stored by storedSigs). */
+    sigs: jsonb('sigs').notNull(),
+    txHash: text('tx_hash'),
+    createdAt: at('created_at').notNull().defaultNow(),
+  },
+  // A payment can be decided twice: the checker holds it, then the owner refuses it. One each.
+  (t) => [primaryKey({ columns: [t.requestId, t.decidedBy] })],
+);
 
 export type DecisionRecordRow = typeof decisionRecords.$inferSelect;

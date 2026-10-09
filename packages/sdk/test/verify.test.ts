@@ -31,16 +31,18 @@ const held = (): PaymentRecord => ({
   document: { content: document, hash: evidenceHash(document) },
   check: { evidence, evidenceHash: evidenceHash(evidence) },
   decision: {
-    onChain: {
-      by: 'checker',
-      decision: {
-        invoiceHash: INVOICE,
-        outcome: OUTCOME.held,
-        reasonHash: reasonHash('amount_mismatch'),
-        evidenceHash: evidenceHash(evidence),
+    onChain: [
+      {
+        by: 'checker',
+        decision: {
+          invoiceHash: INVOICE,
+          outcome: OUTCOME.held,
+          reasonHash: reasonHash('amount_mismatch'),
+          evidenceHash: evidenceHash(evidence),
+        },
+        tx: { hash: DECISION_TX },
       },
-      tx: { hash: DECISION_TX },
-    },
+    ],
   },
   settlement: null,
 });
@@ -105,8 +107,8 @@ describe('verifying a payment record against Monad', () => {
       'chain',
       'evidence hash',
       'document hash',
-      'decision names this payment and its evidence',
-      'decision on Monad',
+      'the checker’s hold names this payment and its evidence',
+      'the checker’s hold on Monad',
     ]);
   });
 
@@ -123,7 +125,7 @@ describe('verifying a payment record against Monad', () => {
         [DECISION_TX]: { status: '0x1', logs: [decisionLog(evidenceHash({ other: 1 }))] },
       }),
     });
-    expect(failed(other)).toEqual(['decision on Monad']);
+    expect(failed(other)).toEqual(['the checker’s hold on Monad']);
     expect(other.ok).toBe(false);
   });
 
@@ -136,15 +138,59 @@ describe('verifying a payment record against Monad', () => {
         },
       }),
     });
-    expect(failed(wrongVault)).toEqual(['decision on Monad']);
+    expect(failed(wrongVault)).toEqual(['the checker’s hold on Monad']);
     const missing = await verifyRecord(held(), { fetch: rpc({}) });
-    expect(failed(missing)).toEqual(['decision on Monad']);
+    expect(failed(missing)).toEqual(['the checker’s hold on Monad']);
+  });
+
+  it('checks each decision: the checker’s hold, then the owner’s refusal (decided by 1)', async () => {
+    const REFUSAL_TX = keccak256(stringToHex('refusal tx'));
+    const refusal = {
+      by: 'owner' as const,
+      decision: {
+        invoiceHash: INVOICE,
+        outcome: OUTCOME.refused,
+        reasonHash: keccak256(stringToHex('refused by the owner')),
+        evidenceHash: evidenceHash(evidence),
+      },
+      tx: { hash: REFUSAL_TX },
+    };
+    const both = held();
+    both.decision.onChain.push(refusal);
+    const refusalLog = (by: number) => ({
+      address: VAULT,
+      topics: encodeEventTopics({
+        abi: orderVaultAbi,
+        eventName: 'DecisionRecorded',
+        args: { invoiceHash: INVOICE },
+      }),
+      data: encodeAbiParameters(
+        [{ type: 'uint8' }, { type: 'bytes32' }, { type: 'bytes32' }, { type: 'uint8' }],
+        [OUTCOME.refused, refusal.decision.reasonHash, evidenceHash(evidence), by],
+      ),
+    });
+    const ok = await verifyRecord(both, {
+      fetch: rpc({
+        [DECISION_TX]: { status: '0x1', logs: [decisionLog()] },
+        [REFUSAL_TX]: { status: '0x1', logs: [refusalLog(1)] },
+      }),
+    });
+    expect(failed(ok)).toEqual([]);
+    expect(ok.checks.map((c) => c.check)).toContain('the owner’s refusal on Monad');
+    // The same event saying the checker refused it is not the owner's refusal.
+    const notOwner = await verifyRecord(both, {
+      fetch: rpc({
+        [DECISION_TX]: { status: '0x1', logs: [decisionLog()] },
+        [REFUSAL_TX]: { status: '0x1', logs: [refusalLog(0)] },
+      }),
+    });
+    expect(failed(notOwner)).toEqual(['the owner’s refusal on Monad']);
   });
 
   it('checks a settlement’s PaymentExecuted: the invoice, the address and the amount', async () => {
     const paid: PaymentRecord = {
       ...held(),
-      decision: { onChain: null },
+      decision: { onChain: [] },
       settlement: { tx: { hash: SETTLE_TX } },
     };
     const ok = await verifyRecord(paid, {

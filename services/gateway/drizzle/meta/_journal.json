@@ -85,6 +85,13 @@
       "when": 1791517811687,
       "tag": "0011_decision_records",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1791519021364,
+      "tag": "0012_decision_per_decider",
+      "breakpoints": true
     }
   ]
 }
