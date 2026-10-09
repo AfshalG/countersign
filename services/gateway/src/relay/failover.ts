@@ -38,3 +38,20 @@ export function nextEndpoint(
   }
   return (current + 1) % n;
 }
+
+/**
+ * Where a stalled lane goes (Slice 16): of the other endpoints not set aside, the one with the
+ * fewest lanes on it; if every other one is set aside, the least crowded of them anyway.
+ */
+export function leastCrowded(
+  current: number,
+  setAsideUntil: readonly number[],
+  lanesOn: readonly number[],
+  now: number,
+): number {
+  const others = setAsideUntil.map((_, i) => i).filter((i) => i !== current);
+  if (others.length === 0) return current;
+  const open = others.filter((i) => (setAsideUntil[i] ?? 0) <= now);
+  const pool = open.length > 0 ? open : others;
+  return pool.reduce((best, i) => ((lanesOn[i] ?? 0) < (lanesOn[best] ?? 0) ? i : best));
+}

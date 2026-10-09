@@ -53,7 +53,9 @@ const pool = new RelayerPool({
   sender: monad,
   chainId,
   endpoints: ENDPOINTS.length,
-  stallMs: 3_000, // a payment is final in about 1.2 s at p95 (Spike 3)
+  // A payment is final in about 1.2 s at p95 (Spike 3), but in a run of 200 a wallet's oldest
+  // transaction can wait longer behind the burst; 3 s made lanes move for nothing (Slice 16).
+  stallMs: 6_000,
   tickMs: 25,
   onRefused: (hash, error) => {
     console.error(`endpoint refused ${hash}: ${error}`);

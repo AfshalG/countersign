@@ -1,9 +1,11 @@
 import { formatEther, keccak256, parseTransaction, type Address, type Hex } from 'viem';
 import { privateKeyToAccount, type PrivateKeyAccount } from 'viem/accounts';
 import type { Store } from '../db/store.js';
-import { nextEndpoint, stalledNonce } from './failover.js';
+import { leastCrowded, stalledNonce } from './failover.js';
 
-export type SendOutcome = 'accepted' | 'known' | { error: string; retry: boolean };
+/** `rateLimited`: the endpoint asks to slow down (HTTP 429), which is not a stall (Slice 16). */
+export type SendOutcome =
+  'accepted' | 'known' | { error: string; retry: boolean; rateLimited?: boolean };
 
 /** Sending, as the pool needs it. The real one is src/chain/monad.ts; tests use a fake. */
 export interface Sender {
@@ -344,14 +346,16 @@ export class RelayerPool {
           outcome = { error: e instanceof Error ? e.message : String(e), retry: true };
         }
         if (outcome === 'accepted' || outcome === 'known' || !outcome.retry) break;
-        await sleep(50 * attempt);
+        // Rate limited: back off longer, on the same endpoint (Slice 16).
+        await sleep((outcome.rateLimited === true ? 250 : 50) * attempt);
       }
       if (outcome === 'accepted' || outcome === 'known') {
         next.lastAcceptedAt = Date.now();
         next.failingSince = undefined;
       } else if (outcome.retry) {
         next.needsSend = true; // still transient after retries: try again on the next round
-        next.failingSince ??= Date.now();
+        // A rate limit is the endpoint asking to slow down, not a stall: it never moves the lane.
+        if (outcome.rateLimited !== true) next.failingSince ??= Date.now();
         if (next.lastError !== outcome.error)
           console.error(
             `relayer ${lane.account.address} nonce ${String(next.nonce)} on endpoint ${String(endpoint)}: ${outcome.error}`,
@@ -398,7 +402,12 @@ export class RelayerPool {
           `relayer ${lane.account.address} stalled at nonce ${String(stalled)}: moving from endpoint ${String(lane.endpoint)}`,
         );
         this.setAsideUntil[lane.endpoint] = now + 30_000;
-        const to = nextEndpoint(lane.endpoint, this.setAsideUntil, now);
+        // The least crowded endpoint not set aside (Slice 16: moving every stalled lane to "the
+        // next one" piled all eight onto the slowest endpoint in a run of 200).
+        const crowd = this.setAsideUntil.map(
+          (_, e) => this.lanes.filter((l) => l !== lane && l.endpoint === e).length,
+        );
+        const to = leastCrowded(lane.endpoint, this.setAsideUntil, crowd, now);
         this.moveLog.push({
           relayer: lane.account.address,
           nonce: stalled,
