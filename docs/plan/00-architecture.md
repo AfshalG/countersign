@@ -500,10 +500,10 @@ DEPTH AND PROOF:
              (D33: the track names the registry)
              (+ an A2A door; agentWallet = the policy's agent key, no
              redeploy: the A2A and ERC-8004 research)
-  Slice 20:  Benchmark: four arms and the false-alarm rate            TODO
+  Slice 20:  Benchmark: four arms and the false-alarm rate            BUILT (MODEL ARM WAITS ON CREDIT)
 
 SHIP:
-  Slice 21:  Developer docs and evidence pack: README, quickstart,     TODO
+  Slice 21:  Developer docs and evidence pack: README, quickstart,     DONE
              limits, deployed list
              (done early: README security model, quickstart, llms.txt)
   Slice 22:  Demo, pitch story, video, another team integrating,      TODO
