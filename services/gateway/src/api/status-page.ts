@@ -116,8 +116,8 @@ export function paymentPage(
   context: {
     agent?: { address: string; agentId: string | null } | null;
     supplierName?: string | null;
-    /** Slice 18: the transaction that wrote this hold or refusal on Monad, once it is final. */
-    decisionTx?: string | null;
+    /** Slice 18: the transactions that wrote its hold and its refusal on Monad, once final. */
+    decisionTxs?: { by: 'checker' | 'owner'; hash: string }[];
   } = {},
 ): string {
   const headline = HEADLINE[r.status] ?? r.status;
@@ -177,12 +177,12 @@ export function paymentPage(
           `<a href="${escape(`${explorer}/tx/${r.txHash}`)}" rel="noreferrer">View on the Monad explorer</a>`,
         )
       : '',
-    context.decisionTx
-      ? row(
-          r.status === 'refused' ? 'Refusal on Monad' : 'Hold on Monad',
-          `Written with the hash of its evidence: <a href="${escape(`${explorer}/tx/${context.decisionTx}`)}" rel="noreferrer">view on the Monad explorer</a>`,
-        )
-      : '',
+    ...(context.decisionTxs ?? []).map((d) =>
+      row(
+        d.by === 'owner' ? 'Refusal on Monad' : 'Hold on Monad',
+        `Written with the hash of its evidence: <a href="${escape(`${explorer}/tx/${d.hash}`)}" rel="noreferrer">view on the Monad explorer</a>`,
+      ),
+    ),
     row('Reference', `<code>${escape(r.id.slice(2, 10).toUpperCase())}</code>`),
   ].join('');
   const note =

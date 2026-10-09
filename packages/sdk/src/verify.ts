@@ -25,11 +25,12 @@ export type PaymentRecord = {
   document: { content: unknown; hash: string | null };
   check: { evidence: unknown; evidenceHash: string | null };
   decision: {
+    /** The checker's hold, then the owner's refusal: each written on Monad on its own. */
     onChain: {
       by: 'checker' | 'owner';
       decision: { invoiceHash: string; outcome: number; reasonHash: string; evidenceHash: string };
       tx: { hash: string } | null;
-    } | null;
+    }[];
   };
   settlement: { tx: { hash: string } } | null;
 };
@@ -121,23 +122,23 @@ export async function verifyRecord(
     };
   };
 
-  const onChain = record.decision.onChain;
-  if (onChain) {
+  for (const onChain of record.decision.onChain) {
     const d = onChain.decision;
+    const whose = onChain.by === 'checker' ? 'the checker’s hold' : 'the owner’s refusal';
     const ok =
       same(d.invoiceHash, record.payment.invoiceHash) &&
       record.check.evidenceHash !== null &&
       same(d.evidenceHash, record.check.evidenceHash);
     add(
-      'decision names this payment and its evidence',
+      `${whose} names this payment and its evidence`,
       ok,
       ok
         ? 'its invoice hash is the payment’s and its evidence hash is the evidence’s'
-        : 'the decision names another invoice or other evidence than this record’s',
+        : 'it names another invoice or other evidence than this record’s',
     );
     if (onChain.tx) {
       const found = await eventIn(onChain.tx.hash, 'DecisionRecorded');
-      if ('error' in found) add('decision on Monad', false, found.error ?? '');
+      if ('error' in found) add(`${whose} on Monad`, false, found.error ?? '');
       else {
         const a = found.args;
         const by = onChain.by === 'checker' ? 0 : 1;
@@ -148,7 +149,7 @@ export async function verifyRecord(
           same(String(a.evidenceHash), d.evidenceHash) &&
           Number(a.decidedBy) === by;
         add(
-          'decision on Monad',
+          `${whose} on Monad`,
           match,
           match
             ? `DecisionRecorded in ${onChain.tx.hash}, as recorded`

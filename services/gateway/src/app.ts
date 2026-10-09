@@ -734,11 +734,14 @@ export function createApp(deps: AppDeps) {
     return c.html(runPage(summary, publicUrl));
   });
 
-  /** The transaction that wrote a decision on Monad, once final and successful (Slice 18). */
-  const finalDecisionTx = async (id: string) => {
-    const kept = await store.decisionRecord(id);
-    const tx = kept?.txHash ? await store.relayerTx(kept.txHash) : undefined;
-    return tx?.finalAt && tx.status === 'success' ? tx.hash : null;
+  /** The transactions that wrote a payment's decisions on Monad, once final (Slice 18). */
+  const finalDecisionTxs = async (id: string) => {
+    const out: { by: 'checker' | 'owner'; hash: string }[] = [];
+    for (const k of await store.decisionRecords(id)) {
+      const tx = k.txHash ? await store.relayerTx(k.txHash) : undefined;
+      if (tx?.finalAt && tx.status === 'success') out.push({ by: k.decidedBy, hash: tx.hash });
+    }
+    return out;
   };
 
   // A page a person can open from an agent's message; public, like the link in the message.
@@ -754,7 +757,7 @@ export function createApp(deps: AppDeps) {
               ? null
               : { address: request.agentAddress, agentId: null }),
           supplierName: await supplierNameOf(store, request.account, request.vault),
-          decisionTx: await finalDecisionTx(request.id),
+          decisionTxs: await finalDecisionTxs(request.id),
         }),
       );
     const proposal = await store.getProposal(id);

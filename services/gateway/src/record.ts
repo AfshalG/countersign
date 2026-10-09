@@ -18,7 +18,7 @@ export const RECORD_FORMAT = 'countersign-record/1';
 export type RecordDeps = {
   store: Pick<
     Store,
-    'events' | 'orderByVault' | 'approvedSupplierNames' | 'decisionRecord' | 'relayerTx'
+    'events' | 'orderByVault' | 'approvedSupplierNames' | 'decisionRecords' | 'relayerTx'
   >;
   chainId: number;
   publicUrl: string;
@@ -51,8 +51,26 @@ export async function paymentRecord(deps: RecordDeps, row: PaymentRequestRow) {
   const order = await store.orderByVault(row.vault);
   const supplierName = await supplierNameOf(store, row.account, row.vault);
   const events = await store.events(row.id);
-  const kept = await store.decisionRecord(row.id);
-  const decisionTx = kept?.txHash ? await store.relayerTx(kept.txHash) : undefined;
+  // The checker's hold, then the owner's refusal: each written on Monad on its own.
+  const kept = await store.decisionRecords(row.id);
+  const onChain = [];
+  for (const k of kept) {
+    const tx = k.txHash ? await store.relayerTx(k.txHash) : undefined;
+    onChain.push({
+      by: k.decidedBy,
+      decision: k.decision,
+      sigs: k.sigs,
+      tx: tx
+        ? {
+            hash: tx.hash as Hex,
+            block: tx.blockNumber,
+            status: tx.status,
+            final: tx.finalAt !== null,
+            url: `${explorer}/tx/${tx.hash}`,
+          }
+        : null,
+    });
+  }
   const agent = deps.agents
     ? deps.agents.viewOf(row.agentAddress)
     : row.agentAddress === null
@@ -104,27 +122,15 @@ export async function paymentRecord(deps: RecordDeps, row: PaymentRequestRow) {
       by: row.decidedBy,
       at: iso(row.decidedAt ?? row.checkedAt),
       ownerAuth: row.ownerAuth ?? null,
-      onChain: kept
-        ? {
-            by: kept.decidedBy,
-            decision: kept.decision,
-            sigs: kept.sigs,
-            tx: decisionTx
-              ? {
-                  hash: decisionTx.hash as Hex,
-                  block: decisionTx.blockNumber,
-                  status: decisionTx.status,
-                  final: decisionTx.finalAt !== null,
-                  url: `${explorer}/tx/${decisionTx.hash}`,
-                }
-              : null,
-          }
-        : null,
-      onChainNote: kept
-        ? decisionTx
-          ? null
-          : 'Kept to be written on Monad, not sent yet (recording is off, or it is on its way).'
-        : offChainNote(row),
+      onChain,
+      onChainNote:
+        onChain.length === 0
+          ? offChainNote(row)
+          : onChain.some((d) => d.tx === null)
+            ? 'Kept to be written on Monad, not sent yet (recording is off, or it is on its way).'
+            : row.status === 'held' || row.status === 'refused'
+              ? null
+              : offChainNote(row),
     },
     settlement: row.txHash
       ? {
@@ -154,7 +160,7 @@ export async function paymentRecord(deps: RecordDeps, row: PaymentRequestRow) {
     },
     verify: [
       'check.evidenceHash is keccak256 of check.evidence as canonical JSON (RFC 8785: keys sorted, no whitespace); document.hash likewise of document.content.',
-      `decision.onChain: its transaction on Monad (chain ${String(deps.chainId)}) emits DecisionRecorded from payment.vault with the same invoice hash, outcome, reason hash and evidence hash.`,
+      `decision.onChain: each one's transaction on Monad (chain ${String(deps.chainId)}) emits DecisionRecorded from payment.vault with the same invoice hash, outcome, reason hash, evidence hash and decider (0 the checker, 1 an owner).`,
       'settlement: its transaction emits PaymentExecuted from payment.vault with payment.invoiceHash, payment.payTo and payment.amount.',
       'Or run `npx countersign-verify <this file>` (in @countersign/sdk), which checks each against Monad’s own RPC.',
     ],
@@ -186,7 +192,7 @@ export const RECORDS_CSV_HEADER = [
 /** An account's payments and advice, newest first, one row each, for an auditor's spreadsheet. */
 export async function recordsCsv(
   deps: Pick<RecordDeps, 'publicUrl'> & {
-    store: Pick<Store, 'orderByVault' | 'approvedSupplierNames' | 'decisionRecord'>;
+    store: Pick<Store, 'orderByVault' | 'approvedSupplierNames' | 'decisionRecords'>;
   },
   account: string,
   payments: PaymentRequestRow[],
@@ -200,7 +206,7 @@ export async function recordsCsv(
   const rows: { at: Date; cells: (string | number | null | undefined)[] }[] = [];
   for (const p of payments) {
     const read = (p.evidence as { read?: { number?: unknown } } | null)?.read;
-    const kept = await deps.store.decisionRecord(p.id);
+    const kept = await deps.store.decisionRecords(p.id);
     rows.push({
       at: p.requestedAt,
       cells: [
@@ -214,7 +220,10 @@ export async function recordsCsv(
         p.reason,
         p.decidedBy,
         p.evidence === null ? '' : evidenceHash(p.evidence),
-        kept?.txHash ?? '',
+        kept
+          .map((k) => k.txHash)
+          .filter((h) => h !== null)
+          .join(' '),
         p.txHash ?? '',
         `${deps.publicUrl}/v1/payments/${p.id}/record`,
       ],

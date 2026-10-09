@@ -47,7 +47,8 @@ export type DecisionRecorderDeps = {
   enabled: boolean;
 };
 
-export const decisionPurpose = (requestId: string) => `decision:${requestId}`;
+export const decisionPurpose = (requestId: string, by: 'checker' | 'owner') =>
+  `decision:${requestId}:${by}`;
 
 export class DecisionRecorder {
   /** Requests being sent now, so the same decision asked for twice at once is signed once. */
@@ -65,7 +66,7 @@ export class DecisionRecorder {
         decision: d.decision,
         sigs: d.decidedBy === 'checker' ? d.checkerSig : storedSigs(d.ownerSigs),
       });
-      if (this.deps.enabled) await this.send(d.requestId);
+      if (this.deps.enabled) await this.send(d.requestId, d.decidedBy);
     } catch (e) {
       console.error(
         `decision ${d.requestId}: not recorded yet: ${e instanceof Error ? e.message : String(e)}`,
@@ -77,30 +78,31 @@ export class DecisionRecorder {
   async resume(): Promise<void> {
     if (!this.deps.enabled) return;
     for (const r of await this.deps.store.unsentDecisionRecords())
-      await this.send(r.requestId).catch((e: unknown) => {
+      await this.send(r.requestId, r.decidedBy).catch((e: unknown) => {
         console.error(
           `decision ${r.requestId}: not recorded yet: ${e instanceof Error ? e.message : String(e)}`,
         );
       });
   }
 
-  private send(requestId: string): Promise<void> {
-    const running = this.inFlight.get(requestId);
+  private send(requestId: string, by: 'checker' | 'owner'): Promise<void> {
+    const key = `${requestId}:${by}`;
+    const running = this.inFlight.get(key);
     if (running) return running;
-    const sending = this.sendOnce(requestId).finally(() => this.inFlight.delete(requestId));
-    this.inFlight.set(requestId, sending);
+    const sending = this.sendOnce(requestId, by).finally(() => this.inFlight.delete(key));
+    this.inFlight.set(key, sending);
     return sending;
   }
 
-  private async sendOnce(requestId: string): Promise<void> {
+  private async sendOnce(requestId: string, by: 'checker' | 'owner'): Promise<void> {
     const { store, pool } = this.deps;
-    const rec = await store.decisionRecord(requestId);
+    const rec = await store.decisionRecord(requestId, by);
     if (!rec || rec.txHash) return;
-    const purpose = decisionPurpose(requestId);
+    const purpose = decisionPurpose(requestId, by);
     // Signed before a restart: the pool sends that transaction again; link it, never sign twice.
     const earlier = await store.relayerTxFor(purpose);
     if (earlier) {
-      await store.setDecisionTx(requestId, earlier.hash);
+      await store.setDecisionTx(requestId, by, earlier.hash);
       return;
     }
     const decision = rec.decision as Decision;
@@ -120,7 +122,7 @@ export class DecisionRecorder {
     const gas =
       rec.decidedBy === 'checker' ? GAS_LIMITS.recordDecision : GAS_LIMITS.recordDecisionByOwner;
     const signed = await pool.sign({ to: rec.vault as Address, data, gas }, { purpose });
-    await store.setDecisionTx(requestId, signed.hash);
+    await store.setDecisionTx(requestId, by, signed.hash);
     pool.enqueue(signed);
   }
 }

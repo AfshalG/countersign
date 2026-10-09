@@ -104,13 +104,13 @@ describe('recording decisions on Monad', () => {
     expect(pool.signed).toHaveLength(1);
     const sent = pool.signed[0];
     expect(sent?.to).toBe(VAULT);
-    expect(sent?.purpose).toBe(`decision:${id}`);
+    expect(sent?.purpose).toBe(`decision:${id}:checker`);
     expect(sent?.gas).toBe(94_000n);
     const call = decodeFunctionData({ abi: orderVaultAbi, data: sent?.data ?? '0x' });
     expect(call.functionName).toBe('recordDecision');
     expect(call.args).toEqual([decision(id), CHECKER_SIG]);
     expect(pool.queued).toHaveLength(1);
-    expect((await store.decisionRecord(id))?.txHash).toBe(pool.queued[0]?.hash);
+    expect((await store.decisionRecord(id, 'checker'))?.txHash).toBe(pool.queued[0]?.hash);
   });
 
   it('sends an owner’s refusal as recordDecisionByOwner, with the passkey’s signature', async () => {
@@ -128,6 +128,31 @@ describe('recording decisions on Monad', () => {
     expect(call.functionName).toBe('recordDecisionByOwner');
     expect(call.args[0]).toEqual(decision(id, OUTCOME.refused));
     expect(call.args[1]).toEqual(OWNER_SIGS);
+  });
+
+  it('records both of a payment’s decisions: the checker’s hold, then the owner’s refusal', async () => {
+    const pool = new FakePool();
+    const recorder = new DecisionRecorder({ store, pool, enabled: true });
+    const id = await request(7);
+    await recorder.record({
+      requestId: id,
+      vault: VAULT,
+      decidedBy: 'checker',
+      decision: decision(id),
+      checkerSig: CHECKER_SIG,
+    });
+    await recorder.record({
+      requestId: id,
+      vault: VAULT,
+      decidedBy: 'owner',
+      decision: decision(id, OUTCOME.refused),
+      ownerSigs: OWNER_SIGS,
+    });
+    expect(pool.signed.map((s) => s.purpose)).toEqual([
+      `decision:${id}:checker`,
+      `decision:${id}:owner`,
+    ]);
+    expect((await store.decisionRecords(id)).map((r) => r.decidedBy)).toEqual(['checker', 'owner']);
   });
 
   it('records a request’s decision once, however often it is asked', async () => {
@@ -156,7 +181,10 @@ describe('recording decisions on Monad', () => {
       checkerSig: CHECKER_SIG,
     });
     expect(off.signed).toHaveLength(0);
-    expect(await store.decisionRecord(id)).toMatchObject({ decidedBy: 'checker', txHash: null });
+    expect(await store.decisionRecord(id, 'checker')).toMatchObject({
+      decidedBy: 'checker',
+      txHash: null,
+    });
 
     const broke = new FakePool();
     broke.fail = true;
@@ -173,7 +201,7 @@ describe('recording decisions on Monad', () => {
     const pool = new FakePool();
     await new DecisionRecorder({ store, pool, enabled: true }).resume();
     expect(pool.signed.map((s) => s.purpose).sort()).toEqual(
-      [`decision:${id}`, `decision:${id2}`].sort(),
+      [`decision:${id}:checker`, `decision:${id2}:checker`].sort(),
     );
     expect(await store.unsentDecisionRecords()).toEqual([]);
   });
@@ -193,11 +221,11 @@ describe('recording decisions on Monad', () => {
       relayer: SUPPLIER,
       nonce: 7,
       raw: '0x02',
-      purpose: `decision:${id}`,
+      purpose: `decision:${id}:checker`,
     });
     const pool = new FakePool();
     await new DecisionRecorder({ store, pool, enabled: true }).resume();
     expect(pool.signed).toHaveLength(0);
-    expect((await store.decisionRecord(id))?.txHash).toBe(hash);
+    expect((await store.decisionRecord(id, 'checker'))?.txHash).toBe(hash);
   });
 });
