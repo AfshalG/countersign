@@ -2,7 +2,7 @@
 
 ## Status
 
-**BUILT (8 Oct 2026); live check waits on recording being switched on (Afshal: it spends testnet MON).** Technical decisions made by Claude (Afshal, 7 Oct: decide technical choices). Owner: Afshal; built by Claude.
+**DONE (8 Oct 2026): live on testnet, recording on.** Technical decisions made by Claude (Afshal, 7 Oct: decide technical choices). Owner: Afshal; built by Claude.
 
 ## Goal
 
