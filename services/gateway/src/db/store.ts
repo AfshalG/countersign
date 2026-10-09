@@ -401,6 +401,36 @@ export class Store {
       .limit(limit);
   }
 
+  /** An account's held payments, newest first: what waits for its owner (Slice 11's inbox). */
+  async heldOf(account: string, limit = 200): Promise<PaymentRequestRow[]> {
+    return this.db
+      .select()
+      .from(paymentRequests)
+      .where(
+        and(
+          sql`lower(${paymentRequests.account}) = ${account.toLowerCase()}`,
+          eq(paymentRequests.status, 'held'),
+        ),
+      )
+      .orderBy(desc(paymentRequests.requestedAt))
+      .limit(limit);
+  }
+
+  /** An account's proposals waiting for its owner, newest first (Slice 11's inbox). */
+  async pendingProposalsOf(account: string, limit = 100): Promise<ProposalRow[]> {
+    return this.db
+      .select()
+      .from(proposals)
+      .where(
+        and(
+          sql`lower(${proposals.account}) = ${account.toLowerCase()}`,
+          eq(proposals.status, 'pending'),
+        ),
+      )
+      .orderBy(desc(proposals.createdAt))
+      .limit(limit);
+  }
+
   /** An account's payment requests, newest first (Slice 18: its records). */
   async requestsOf(account: string, limit = 5_000): Promise<PaymentRequestRow[]> {
     return this.db
