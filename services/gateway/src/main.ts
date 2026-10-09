@@ -250,7 +250,7 @@ const app = createApp({
   token: settings.GATEWAY_SERVICE_TOKEN,
   health: async () => ({
     chainId,
-    finality: monad.socketState(),
+    finality: { ...monad.socketState(), behindBlocks: tracker.lag() },
     relayers: await Promise.all(
       pool.relayers.map(async (address: Address) => ({
         address,

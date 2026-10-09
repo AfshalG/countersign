@@ -93,6 +93,13 @@ export class FinalityTracker {
    * More than two finalized blocks not yet read (Slice 16): the relayer pool must not take a late
    * "included" for a stalled wallet then, or every wallet looks stalled at once.
    */
+  /** Finalized blocks seen but not yet read (for /health). */
+  lag(): number {
+    return this.newest !== undefined && this.lastProcessed !== undefined
+      ? Math.max(0, this.newest - this.lastProcessed)
+      : 0;
+  }
+
   behind(): boolean {
     return (
       this.newest !== undefined &&

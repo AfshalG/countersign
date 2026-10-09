@@ -91,9 +91,15 @@ export class MonadClient
     this.nextSend = endpoints.map(() => 0);
   }
 
-  private async read<T>(method: string, params: unknown[], pacer = this.reads): Promise<T> {
+  private async read<T>(
+    method: string,
+    params: unknown[],
+    pacer = this.reads,
+    on?: number,
+  ): Promise<T> {
     for (let attempt = 1; ; attempt++) {
-      const slot = pacer.take(Date.now() - this.started);
+      const now = Date.now() - this.started;
+      const slot = on === undefined ? pacer.take(now) : pacer.takeOn(on, now);
       await sleep(slot.at - (Date.now() - this.started));
       const endpoint = this.endpoints[slot.index] ?? this.endpoints[0];
       if (!endpoint) throw new Error('no endpoints configured');
@@ -400,15 +406,28 @@ export class MonadClient
 
   // ---------- Receipts ----------
 
+  /**
+   * A finalized block's receipts, from the first endpoint (Monad's own, the source of the finality
+   * stream) first, then the others at once (Slice 16: an endpoint a block or two behind answered
+   * null, and the tracker backed off for seconds while every payment waited to be marked final).
+   */
   async blockReceipts(blockNumber: number): Promise<BlockReceipt[] | null> {
-    const receipts = await this.read<
-      | {
-          transactionHash: Hex;
-          status: Hex;
-          logs?: { address: Address; topics: Hex[]; data: Hex }[];
-        }[]
-      | null
-    >('eth_getBlockReceipts', [toHex(blockNumber)]);
+    type Raw = {
+      transactionHash: Hex;
+      status: Hex;
+      logs?: { address: Address; topics: Hex[]; data: Hex }[];
+    }[];
+    let receipts: Raw | null = null;
+    for (let on = 0; on < this.endpoints.length && receipts === null; on++)
+      receipts = await this.read<Raw | null>(
+        'eth_getBlockReceipts',
+        [toHex(blockNumber)],
+        this.reads,
+        on,
+      ).catch((e: unknown) => {
+        if (on === this.endpoints.length - 1) throw e;
+        return null; // this endpoint could not answer: the next one may
+      });
     return receipts === null
       ? null
       : receipts.map((r) => ({

@@ -11,6 +11,13 @@ export class Pacer {
     this.nextFree = perSecond.map(() => 0);
   }
 
+  /** The next slot on one endpoint in particular. */
+  takeOn(index: number, now: number): { index: number; at: number } {
+    const at = Math.max(now, this.nextFree[index] ?? 0);
+    this.nextFree[index] = at + 1000 / (this.perSecond[index] as number);
+    return { index, at };
+  }
+
   take(now: number): { index: number; at: number } {
     let index = 0;
     let at = Number.POSITIVE_INFINITY;
