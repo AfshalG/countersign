@@ -197,7 +197,7 @@ export class FinalityTracker {
     for (const tx of await this.deps.store.pendingRelayerTxsByHash([...byHash.keys()])) {
       const receipt = byHash.get(tx.hash.toLowerCase());
       if (!receipt) continue;
-      await this.deps.store.markRelayerTxFinal(tx.hash, receipt.status);
+      await this.deps.store.markRelayerTxFinal(tx.hash, receipt.status, blockNumber);
       this.deps.pool.included(receipt.transactionHash);
     }
     for (const [key, done] of [...this.waiters]) {

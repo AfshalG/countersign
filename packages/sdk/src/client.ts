@@ -32,6 +32,7 @@ import type {
   RunView,
   StatusChange,
 } from './types.js';
+import type { PaymentRecord } from './verify.js';
 
 export type CountersignOptions = {
   /** The gateway's URL, e.g. https://gateway-production-e17a.up.railway.app */
@@ -134,6 +135,15 @@ export class Countersign {
       `/v1/runs/${id}`,
     );
     return { ...run, requests: run.requests.map(withText) };
+  }
+
+  /**
+   * A payment's record (Slice 18): one file with the payment, the document, the checks and their
+   * evidence hash, the decision and where it is on Monad, and the settlement. Check it with
+   * `verifyRecord`, or `npx countersign-verify <file>`.
+   */
+  async record(id: string): Promise<PaymentRecord> {
+    return this.request('GET', `/v1/payments/${id}/record`);
   }
 
   async proposal(id: string): Promise<Proposal> {

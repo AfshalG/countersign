@@ -53,6 +53,19 @@ const checkResponse = z
     checkerSig: z.string().optional().openapi({
       description: "The checker's EIP-712 signature of the vault's Payment ('0x' on a dry run)",
     }),
+    decision: z
+      .object({
+        invoiceHash: bytes32,
+        outcome: z.number().int(),
+        reasonHash: bytes32,
+        evidenceHash: bytes32,
+        sig: z.string(),
+      })
+      .optional()
+      .openapi({
+        description:
+          "A hold as the vault's EIP-712 Decision, signed with the checker key, for recordDecision on Monad (Slice 18). evidenceHash is keccak256 of the evidence as canonical JSON. None on a dry run",
+      }),
     evidence: z.unknown(),
   })
   .openapi('CheckResponse');

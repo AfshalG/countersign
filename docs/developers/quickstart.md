@@ -73,6 +73,16 @@ A bank transfer happens inside the bank, so Countersign cannot stop one. It can 
 
 On `mismatch`, don't pay it. On `unsure`, confirm the account with the supplier by phone, on a number you already have. Try it on the demo site's KS-1007 ("we have moved to a new bank": mismatch) and KS-1008 (match).
 
+## A payment's record
+
+`GET /v1/payments/{id}/record` (or `cs.record(id)`) is one JSON file per payment: the payment, the document the agent gave, the checks and the hash of their evidence, who decided and where that decision is on Monad, and the settlement. Check it against Monad yourself:
+
+```bash
+npx countersign-verify countersign-record-0x….json
+```
+
+It recomputes the hashes and reads the decision's `DecisionRecorded` and the settlement's `PaymentExecuted` from Monad's own RPC. An account's payments and advice come as one CSV: `GET /v1/accounts/{account}/records.csv`.
+
 ## Identity of an invoice
 
 `invoiceHash = keccak256(abi.encode(supplierId, normalizedNumber))`, with the number normalized (NFKC, trimmed, spaces collapsed, upper case). The same supplier's same invoice is one payment, however often it is sent. The SDK does this for you (`invoiceHash()`); test vectors are in [`packages/shared/test/fixtures/invoice-ids.json`](../../packages/shared/test/fixtures/invoice-ids.json).

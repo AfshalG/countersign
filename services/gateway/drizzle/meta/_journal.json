@@ -78,6 +78,13 @@
       "when": 1791514950572,
       "tag": "0010_bank_advice",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1791517811687,
+      "tag": "0011_decision_records",
+      "breakpoints": true
     }
   ]
 }

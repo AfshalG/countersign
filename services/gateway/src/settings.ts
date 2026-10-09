@@ -74,6 +74,9 @@ export function loadSettings(source?: Record<string, string | undefined>) {
       // Primus's Core SDK keys (Slice 15), both or none: suppliers' websites are proven with them.
       PRIMUS_APP_ID: z.string().min(1).optional(),
       PRIMUS_APP_SECRET: z.string().min(1).optional(),
+      // Slice 18 (S18-4): write checker holds and owner refusals on Monad (each costs testnet MON).
+      // On unless set to "false"; off, decisions are kept and sent once it is on again.
+      RECORD_DECISIONS: z.enum(['true', 'false']).optional(),
       // How many payments are checked at once (D16): sized from a measured burst (Slice 16).
       CHECK_CONCURRENCY: z
         .string()

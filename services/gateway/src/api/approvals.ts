@@ -9,6 +9,7 @@ import {
 } from 'viem';
 import {
   decisionTypes,
+  evidenceHash,
   formatUsdc,
   OUTCOME,
   paymentTypes,
@@ -32,6 +33,7 @@ import {
 } from '../owner/proposals.js';
 import { OwnerActionError } from '../owner/send.js';
 import type { WebsiteProofs } from '../proofs/website.js';
+import type { DecisionRecorder } from '../decisions.js';
 import { holdWebsiteView } from '../proofs/view.js';
 
 /**
@@ -47,6 +49,8 @@ export type DecisionDeps = {
   chainId: number;
   /** Slice 15: suppliers' websites, shown on a changed-address hold. */
   websites?: Pick<WebsiteProofs, 'siteOnFile' | 'check'>;
+  /** Slice 18: writes an owner's refusal on Monad; without it, refusals stay off chain. */
+  decisions?: Pick<DecisionRecorder, 'record'>;
 };
 
 type Refused = {
@@ -153,6 +157,14 @@ export async function refuseHeld(
     detail: { decision },
   });
   if (!moved) return { ok: false, status: 409, body: { error: 'not_held' } };
+  // On Monad with its evidence hash (Slice 18), after the refusal is stored.
+  await deps.decisions?.record({
+    requestId: row.id as Hex,
+    vault: row.vault as Address,
+    decidedBy: 'owner',
+    decision: signed,
+    ownerSigs: [sig],
+  });
   return after(deps.store, row.id);
 }
 
@@ -160,9 +172,13 @@ export async function refuseHeld(
 
 /** The refusal the approvals routes record: fixed, so the challenge shown is the one checked. */
 export const REFUSED_BY_OWNER = keccak256(stringToHex('refused by the owner'));
-const refusalOf = (row: PaymentRequestRow) => ({
+/**
+ * What the owner refuses: the hold's own evidence, by its hash (Slice 18), so the refusal on
+ * Monad names exactly what the owner saw. (Before Slice 18 this was the request's id.)
+ */
+export const refusalOf = (row: PaymentRequestRow) => ({
   reasonHash: REFUSED_BY_OWNER,
-  evidenceHash: row.id as Hex,
+  evidenceHash: evidenceHash(row.evidence),
 });
 
 const typedAction = z.object({

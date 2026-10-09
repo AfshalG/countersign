@@ -22,7 +22,8 @@
     "./test-account": "./src/test-account.ts"
   },
   "bin": {
-    "countersign-test-account": "./dist/bin.js"
+    "countersign-test-account": "./dist/bin.js",
+    "countersign-verify": "./dist/verify-bin.js"
   },
   "files": [
     "dist",
@@ -54,6 +55,7 @@
   },
   "devDependencies": {
     "@countersign/shared": "workspace:*",
-    "tsdown": "0.23.0"
+    "tsdown": "0.23.0",
+    "@countersign/chain": "workspace:*"
   }
 }

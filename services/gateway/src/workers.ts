@@ -5,6 +5,7 @@ import type { Checker } from './checker.js';
 import type { PaymentRequestRow } from './db/schema.js';
 import type { Store } from './db/store.js';
 import { checkOne } from './pipeline/check.js';
+import type { DecisionRecorder } from './decisions.js';
 import { sendOne } from './pipeline/send.js';
 import type { RelayerPool } from './relay/pool.js';
 
@@ -23,6 +24,8 @@ export type WorkerOptions = {
   tickMs: number;
   /** Slice 15 (D21): a supplier whose website stopped listing the address on file is held. */
   websites?: Pick<WebsiteProofs, 'websiteChanged'>;
+  /** Slice 18: a checker's hold is written on Monad. */
+  decisions?: Pick<DecisionRecorder, 'record'>;
 };
 
 const sleep = (ms: number) =>

@@ -1,6 +1,13 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { keccak256, stringToHex, type Address, type Hex } from 'viem';
-import { invoiceHash, supplierId, supplierSlug } from '@countersign/shared';
+import {
+  evidenceHash,
+  invoiceHash,
+  OUTCOME,
+  reasonHash,
+  supplierId,
+  supplierSlug,
+} from '@countersign/shared';
 import { Store } from '../src/db/store.js';
 import type { Database } from '../src/db/client.js';
 import type { PaymentRequestRow } from '../src/db/schema.js';
@@ -137,6 +144,42 @@ describe('asking the checker service', () => {
   const checkerWith = (fetchFn: typeof fetch) =>
     new RemoteChecker({ url: 'https://checker.test', token: 'checker-token', facts, fetchFn });
   const input = (document: unknown) => ({ request: row(document), payment, chainId: 10143 });
+
+  it('keeps a hold’s signed decision only when it is exactly this hold (Slice 18)', async () => {
+    const evidence = {
+      checker: 'countersign-checker/1',
+      findings: [{ check: 'amount', ok: false }],
+    };
+    const decision = {
+      invoiceHash: payment.invoiceHash,
+      outcome: OUTCOME.held,
+      reasonHash: reasonHash('amount_mismatch'),
+      evidenceHash: evidenceHash(evidence),
+      sig: `0x${'ef'.repeat(65)}`,
+    };
+    const hold = (d: unknown) =>
+      checkerWith(
+        answering(200, { verdict: 'hold', reason: 'amount_mismatch', evidence, decision: d }),
+      ).check(input({ text: 'Invoice KS-1' }), () => AbortSignal.timeout(1_000));
+    expect(await hold(decision)).toEqual({
+      verdict: 'hold',
+      reason: 'amount_mismatch',
+      evidence,
+      decision,
+    });
+    // Over other evidence, another reason, another invoice or as a release: dropped, still held.
+    for (const wrong of [
+      { ...decision, evidenceHash: evidenceHash({ other: true }) },
+      { ...decision, reasonHash: reasonHash('items_mismatch') },
+      { ...decision, invoiceHash: invoiceHash(KALIBRE_ID, 'KS-2') },
+      { ...decision, outcome: OUTCOME.refused },
+      { ...decision, sig: '0x12' },
+    ]) {
+      const r = await hold(wrong);
+      expect(r).toMatchObject({ verdict: 'hold', reason: 'amount_mismatch' });
+      expect('decision' in r).toBe(false);
+    }
+  });
 
   it('sends the payment, the order and the invoice as the agent gave it, with its token', async () => {
     const seen: { body?: unknown; auth?: string | null } = {};

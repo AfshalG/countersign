@@ -63,6 +63,8 @@ export const GAS_LIMITS = {
   // limit on Monad, so these are fixed, not estimated per call.
   payWithOwner: 285_000n, // 243,681
   recordDecision: 94_000n, // 86,592 (the checker's signature only)
+  // Slice 18: an owner's refusal, any one owner's passkey (scripts/estimate-decision-gas.ts, 8 Oct).
+  recordDecisionByOwner: 115_000n, // 97,978
   // Judge mode's account setup (Slice 9 part 4).
   createAccount: 251_000n, // no passkey data: the D36 broadcast's limit, which landed
   setPolicy: 198_000n, // 169,255
@@ -90,7 +92,10 @@ export const GAS_PER_OWNER_KEY = 50_000n;
 
 /** The limit for an owner action carrying `signers` signatures. */
 export function ownerGas(
-  action: Exclude<keyof typeof GAS_LIMITS, 'pay' | 'recordDecision' | 'createAccount'>,
+  action: Exclude<
+    keyof typeof GAS_LIMITS,
+    'pay' | 'recordDecision' | 'recordDecisionByOwner' | 'createAccount'
+  >,
   signers: number,
   keys = 0,
 ): bigint {

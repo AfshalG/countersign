@@ -243,6 +243,25 @@ describe('advice on a bank-transfer invoice (Slice 17)', () => {
   });
 });
 
+describe('a payment’s record (Slice 18)', () => {
+  it('downloads it, ready for verifyRecord or an auditor', async () => {
+    const record = { format: 'countersign-record/1', payment: { id: '0xabc' } };
+    const gw = fakeGateway(() => ({ status: 200, body: record }));
+    const cs = new Countersign({
+      gateway: 'https://gw.test',
+      account: ACCOUNT,
+      token: 'cs_token',
+      fetch: gw.fetch,
+    });
+    expect(await cs.record('0xabc')).toEqual(record);
+    expect(gw.calls[0]).toMatchObject({
+      url: 'https://gw.test/v1/payments/0xabc/record',
+      method: 'GET',
+      auth: 'Bearer cs_token',
+    });
+  });
+});
+
 describe('errors', () => {
   it('turns the gateway’s typed errors into CountersignError, with the field issues', async () => {
     const gateway = fakeGateway(() => ({
