@@ -1,4 +1,4 @@
-import { KALIBRE, lookAlike } from '../../../apps/supplier/lib/documents';
+import { KALIBRE, lookAlike } from '../../../apps/supplier/lib/documents.js';
 
 /**
  * Disguised invoices for the checker's model questions (9 Oct): the tricks code cannot see,
