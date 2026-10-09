@@ -46,6 +46,8 @@ export type Evidence = {
     payTo: string | null;
     lines: string[];
     hiddenText: string[];
+    invisible?: { codePoint: string; name: string; count: number }[];
+    lookAlikes?: string[];
   };
   findings: Finding[];
   model?: {
@@ -138,6 +140,8 @@ export async function check(
           `${l.description} x${String(l.quantity)} at ${formatUsdc(l.unit)}: ${formatUsdc(l.amount)}`,
       ),
       hiddenText: invoice.hiddenText,
+      ...(invoice.invisible.length > 0 ? { invisible: invoice.invisible } : {}),
+      ...(invoice.lookAlikes.length > 0 ? { lookAlikes: invoice.lookAlikes } : {}),
     },
     findings: code.findings,
     ms: 0,

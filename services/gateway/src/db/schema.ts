@@ -77,11 +77,18 @@ export const paymentRequests = pgTable(
     updatedAt: at('updated_at').notNull().defaultNow(),
     /** A worker's claim on the row; another worker may take it once this has passed. */
     leaseUntil: at('lease_until'),
+    /**
+     * Set when released: the supplier and the invoice number as a person sees it (its skeleton,
+     * 9 Oct). Unique per account, so a look-alike copy of an invoice already released is held,
+     * even when the two are checked at the same moment.
+     */
+    invoiceKey: text('invoice_key'),
   },
   (t) => [
     index('payment_requests_status_idx').on(t.status, t.leaseUntil),
     index('payment_requests_run_idx').on(t.runId),
     index('payment_requests_tx_idx').on(t.txHash),
+    uniqueIndex('payment_requests_invoice_key_idx').on(t.account, t.invoiceKey),
   ],
 );
 

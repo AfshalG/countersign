@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import vectors from './fixtures/invoice-ids.json' with { type: 'json' };
-import { invoiceHash, normalizeInvoiceNumber, supplierId, supplierSlug } from '../src/invoice.js';
+import {
+  invoiceHash,
+  invoiceSkeleton,
+  normalizeInvoiceNumber,
+  supplierId,
+  supplierSlug,
+} from '../src/invoice.js';
 
 describe('invoice identity', () => {
   it('names a supplier by the keccak256 of its slug', () => {
@@ -43,5 +49,32 @@ describe('supplierSlug (a proposal names its supplier; the account knows it by s
 
   it('refuses a name with nothing to identify it', () => {
     expect(() => supplierSlug(' -- ')).toThrow(/name/);
+  });
+});
+
+describe('an invoice number’s skeleton: what it looks like to a person (9 Oct)', () => {
+  it('is the same for numbers a person cannot tell apart', () => {
+    const one = invoiceSkeleton('INV-1001');
+    expect(one).toBe('1NV1001');
+    for (const lookAlike of [
+      'INV-1001​', // a zero-width space
+      'INV‭-1001', // a direction override
+      'inv 1001', // case and separators
+      'INV-l001', // a small L for a one
+      'INV-1OO1', // capital Os for zeros
+      'ΙNV-1001', // a Greek capital iota
+      'INV-1001'.normalize('NFKC'),
+      'ＩＮＶ-１００１', // full width
+    ])
+      expect(invoiceSkeleton(lookAlike), JSON.stringify(lookAlike)).toBe(one);
+  });
+
+  it('differs for numbers that differ', () => {
+    expect(invoiceSkeleton('INV-1002')).not.toBe(invoiceSkeleton('INV-1001'));
+    expect(invoiceSkeleton('KS-1001-R7')).not.toBe(invoiceSkeleton('KS-1001-R8'));
+  });
+
+  it('keeps a number written wholly in another alphabet', () => {
+    expect(invoiceSkeleton('СЧ-001')).toBe('СЧ001');
   });
 });

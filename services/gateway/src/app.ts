@@ -502,6 +502,7 @@ export function createApp(deps: AppDeps) {
       finalizedAt: null,
       updatedAt: now,
       leaseUntil: null,
+      invoiceKey: null,
     };
     try {
       const outcome = await evaluate(deps, row, { dryRun: true });

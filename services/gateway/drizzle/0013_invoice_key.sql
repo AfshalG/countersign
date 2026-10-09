@@ -1,0 +1,2 @@
+ALTER TABLE "payment_requests" ADD COLUMN "invoice_key" text;--> statement-breakpoint
+CREATE UNIQUE INDEX "payment_requests_invoice_key_idx" ON "payment_requests" USING btree ("account","invoice_key");

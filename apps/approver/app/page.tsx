@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { call, GatewayError } from '../lib/gateway';
 import { createPasskey, passkeyProblem, passkeysAvailable, signChallenge } from '../lib/passkey';
 import { forgetSession, loadSession, saveSession, type Session } from '../lib/session';
+import { mustMatch } from '../lib/verify';
 import { explorer, Problem } from './ui';
 
 /**
@@ -14,7 +15,7 @@ import { explorer, Problem } from './ui';
 type DemoAccount = {
   account: string;
   status: 'creating' | 'awaiting_passkey' | 'setting_up' | 'ready';
-  actions: { action: string; summary: string; challenge: string }[];
+  actions: { action: string; summary: string; challenge: string; typedData: unknown }[];
   order: { supplier: string; amountUsdc: string } | null;
   fundedUsdc: string;
 };
@@ -108,6 +109,7 @@ export default function Home() {
       setDemo(created);
       const assertions = [];
       for (const [i, a] of created.actions.entries()) {
+        mustMatch(a.typedData, a.challenge);
         setBusy(`Face ID ${String(i + 1)} of ${String(created.actions.length)}: ${a.summary}`);
         assertions.push(await signChallenge(a.challenge, key.credentialId));
       }

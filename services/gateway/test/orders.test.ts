@@ -107,6 +107,8 @@ describe('accounts and their open orders', () => {
       amount: '30000',
       remaining: '13600',
       supplierActive: true,
+      // The supplier by name (Slice 11's suppliers screen).
+      supplierName: 'Kalibre Studio',
     });
   });
 

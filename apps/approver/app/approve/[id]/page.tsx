@@ -4,6 +4,7 @@ import { useParams } from 'next/navigation';
 import { call, GatewayError } from '../../../lib/gateway';
 import { passkeyProblem, signChallenge, type Assertion } from '../../../lib/passkey';
 import { loadSession } from '../../../lib/session';
+import { mustMatch, whatIsPaid } from '../../../lib/verify';
 import { Address, explorer, Problem, Signed } from '../../ui';
 
 /**
@@ -14,6 +15,7 @@ import { Address, explorer, Problem, Signed } from '../../ui';
 
 type Action = {
   challenge: string;
+  typedData?: unknown;
   summary?: string;
   signatures?: { need: number; signed: number[] };
 };
@@ -89,6 +91,7 @@ export default function Approve() {
         for (const [i, k] of steps.entries()) {
           const step = view.actions[k];
           if (!step) continue;
+          mustMatch(step.typedData, step.challenge);
           setBusy(
             `Face ID ${String(i + 1)} of ${String(steps.length)}: ${step.summary ?? k.replace('_', ' ')}`,
           );
@@ -98,6 +101,9 @@ export default function Approve() {
       } else {
         const a = view.actions[action];
         if (!a) return;
+        // A proposal's refusal moves no money and has no typed data; everything else is checked.
+        if (a.typedData !== null && a.typedData !== undefined) mustMatch(a.typedData, a.challenge);
+        else if (action !== 'refuse') throw new Error('Nothing to check this against: not signed.');
         setBusy(action === 'refuse' ? 'Face ID to refuse…' : 'Face ID to pay once…');
         body = { action, assertion: await signChallenge(a.challenge, credentialId) };
       }
@@ -140,9 +146,15 @@ export default function Approve() {
       </h1>
       <p className="amount">{s.amountUsdc} USDC</p>
 
-      {view.kind === 'payment' && s.reasonText && (
+      {view.kind === 'payment' && s.reasonText && view.status === 'held' && (
         <p className="note warn">
           <strong>Why it is held: </strong>
+          {s.reasonText}
+        </p>
+      )}
+      {view.kind === 'payment' && s.reasonText && view.status === 'blocked' && (
+        <p className="note bad">
+          <strong>Blocked: </strong>
           {s.reasonText}
         </p>
       )}
@@ -242,6 +254,15 @@ export default function Approve() {
               approve.
             </p>
           )}
+          {(() => {
+            const paid = whatIsPaid(view.actions.pay_once?.typedData);
+            return paid ? (
+              <p className="small">
+                Pay once sends exactly <strong>{paid.amountUsdc} USDC</strong> to{' '}
+                <Address value={paid.payTo} />, and only there.
+              </p>
+            ) : null;
+          })()}
           <div className={`choices${Object.keys(view.actions).length === 1 ? ' one' : ''}`}>
             {view.actions.pay_once && (
               <button className="primary" onClick={() => void decide('pay_once')} disabled={!!busy}>

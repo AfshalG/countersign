@@ -60,6 +60,28 @@ export function codeChecks(
     'hidden_instructions',
   );
 
+  // 2b. Characters a person cannot see: no width, a reversed reading order, or tag characters that
+  // spell text only a machine reads (9 Oct). A person and a machine read different invoices.
+  add(
+    'invisible_characters',
+    invoice.invisible.length === 0,
+    invoice.invisible.length === 0
+      ? 'no characters a person cannot see'
+      : `characters a person cannot see: ${invoice.invisible.map((c) => `${c.codePoint} ${c.name} x${String(c.count)}`).join(', ')}`,
+    'hidden_instructions',
+  );
+
+  // 2c. Letters from another alphabet mixed into the number or the sender's name, which look like
+  // Latin ones (a Greek K in "KS-1001"): a second copy of an invoice, or a supplier's look-alike.
+  add(
+    'look_alike_letters',
+    invoice.lookAlikes.length === 0,
+    invoice.lookAlikes.length === 0
+      ? 'no letters from another alphabet in the number or the sender'
+      : `letters from another alphabet that look like Latin ones: ${invoice.lookAlikes.join(', ')}`,
+    'checker_unsure',
+  );
+
   if (invoice.number !== null && payment !== null) {
     // 3. The payment is for this document: its invoice hash is the order's supplier and this number.
     const ok = invoiceHash(order.supplierId, invoice.number) === payment.invoiceHash;
