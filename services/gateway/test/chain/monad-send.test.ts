@@ -57,3 +57,25 @@ describe('sending a transaction', () => {
     expect(await client().send(0, '0x01')).toBe('known');
   });
 });
+
+describe('reading a finalized block’s receipts (Slice 16)', () => {
+  it('asks the first endpoint (Monad’s own, the source of the finality stream) first', async () => {
+    const asked: string[] = [];
+    vi.stubGlobal('fetch', (url: string) => {
+      asked.push(url);
+      return answer({ jsonrpc: '2.0', id: 1, result: [] });
+    });
+    expect(await client().blockReceipts(5)).toEqual([]);
+    expect(asked).toEqual(['https://a.test']);
+  });
+
+  it('tries another endpoint at once when one has not seen the block yet', async () => {
+    const asked: string[] = [];
+    vi.stubGlobal('fetch', (url: string) => {
+      asked.push(url);
+      return answer({ jsonrpc: '2.0', id: 1, result: url === 'https://a.test' ? null : [] });
+    });
+    expect(await client().blockReceipts(6)).toEqual([]);
+    expect(asked).toEqual(['https://a.test', 'https://b.test']);
+  });
+});
