@@ -1,7 +1,7 @@
 import { serve } from '@hono/node-server';
 import { formatEther, type Address } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
-import { deployments, ENDPOINTS } from '@countersign/chain';
+import { deployments, ENDPOINTS, GAS_LIMITS } from '@countersign/chain';
 import { IDENTITY_REGISTRY_TESTNET, REASONS, type Reason } from '@countersign/shared';
 import { createApp } from './app.js';
 import { TestChecker, type Checker } from './checker.js';
@@ -276,6 +276,8 @@ const app = createApp({
     lanes: pool.lanesView(),
     // Wallets a node refused for low balance; their payments wait until they are topped up.
     starved: pool.starved(),
+    // How many payments the wallets can still pay gas for (Slice 18): 0 means payments wait.
+    funds: { paymentsLeft: await pool.affordable(GAS_LIMITS.pay) },
     // Which checker decides: the service (Slice 10) or the stand-in.
     checker: { kind: checking.kind, signer: checking.address },
     // WhatsApp (Slice 14): on or off, and the template used outside the 24-hour window.

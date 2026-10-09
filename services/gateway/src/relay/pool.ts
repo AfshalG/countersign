@@ -169,6 +169,23 @@ export class RelayerPool {
     }
   }
 
+  /**
+   * How many transactions of this gas limit the wallets can still pay for at today's fee (for
+   * /health). A wallet below one is never picked, so it never becomes "starved": this is what
+   * says the pool is out of gas before payments wait (found in Slice 18's load check).
+   */
+  async affordable(gas: bigint): Promise<number> {
+    const { maxFeePerGas } = await this.fees();
+    const cost = gas * maxFeePerGas;
+    if (cost === 0n) return Number.POSITIVE_INFINITY;
+    return this.lanes
+      .filter((l) => !l.starved)
+      .reduce(
+        (n, l) => n + Number((l.balance - l.reserved > 0n ? l.balance - l.reserved : 0n) / cost),
+        0,
+      );
+  }
+
   /** Wallets waiting for a top-up, for /health. */
   starved(): Address[] {
     return this.lanes.filter((l) => l.starved).map((l) => l.account.address);

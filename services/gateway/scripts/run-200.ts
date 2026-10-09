@@ -72,6 +72,28 @@ async function relayerMon(): Promise<number> {
   return h.relayers.reduce((n, r) => n + Number(r.mon), 0);
 }
 
+// 0. Enough gas in the relayers for the whole run, or no run (Slice 18: a run once started with
+// too little, and twelve released payments waited twelve minutes for a top-up). Counted in
+// payments' worth of gas: the account's setup, each order's approval, each payment, each hold
+// written on Monad.
+{
+  const h = (await (await fetch(`${gateway}/health`)).json()) as {
+    funds?: { paymentsLeft: number };
+  };
+  const PAY = 266_000;
+  const need = Math.ceil((907_000 + ORDERS * 332_000 + SIZE * PAY + EACH * 4 * 94_000) / PAY);
+  if (h.funds === undefined) log('the gateway does not report its funds: not checked');
+  else if (h.funds.paymentsLeft < need) {
+    log(
+      `the relayers can pay for ${String(h.funds.paymentsLeft)} payments' gas; this run needs about ${String(need)}. Top them up first (pnpm --filter @countersign/gateway top-up).`,
+    );
+    process.exit(1);
+  } else
+    log(
+      `the relayers can pay for ${String(h.funds.paymentsLeft)} payments; this run needs about ${String(need)}`,
+    );
+}
+
 // 1. The account, its USDC and its orders.
 let t = Date.now();
 const me = await createTestAccount({ gateway });
