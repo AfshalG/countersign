@@ -266,6 +266,44 @@ describe('an account’s records as one CSV', () => {
   });
 });
 
+describe('the approver app reaches its token routes from the browser (9 Oct)', () => {
+  // The phone's browser asks permission first (a preflight, with no token): it was answered 401,
+  // so the app's inbox, orders and records never loaded. Found on Afshal's phone.
+  const ROUTES = [
+    `/v1/accounts/${ACCOUNT}/inbox`,
+    `/v1/accounts/${ACCOUNT}/orders`,
+    `/v1/accounts/${ACCOUNT}/banks`,
+    `/v1/payments/0x${'ab'.repeat(32)}`,
+    `/v1/payments/0x${'ab'.repeat(32)}/record`,
+  ];
+  it('answers the browser’s preflight, allowing the token header', async () => {
+    for (const path of ROUTES) {
+      const res = await app.request(path, {
+        method: 'OPTIONS',
+        headers: {
+          origin: 'https://countersign-approver.vercel.app',
+          'access-control-request-method': 'GET',
+          'access-control-request-headers': 'authorization',
+        },
+      });
+      expect(res.status, path).toBe(204);
+      expect(res.headers.get('access-control-allow-origin'), path).toBe('*');
+      expect(res.headers.get('access-control-allow-headers')?.toLowerCase(), path).toContain(
+        'authorization',
+      );
+    }
+  });
+
+  it('still refuses a request without a token, and says so to the browser', async () => {
+    const res = await app.request(`/v1/accounts/${ACCOUNT}/inbox`, {
+      headers: { origin: 'https://countersign-approver.vercel.app' },
+    });
+    expect(res.status).toBe(401);
+    // Readable by the app, so it can say "connect this phone" rather than fail silently.
+    expect(res.headers.get('access-control-allow-origin')).toBe('*');
+  });
+});
+
 describe('an account’s inbox: what waits for the owner (Slice 11)', () => {
   it('lists its held payments and its pending proposals, newest first, and nothing decided', async () => {
     const held = await submit('KS-1104');

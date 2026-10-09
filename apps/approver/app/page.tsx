@@ -43,6 +43,8 @@ export default function Home() {
   const [session, setSession] = useState<Session | null>(null);
   const [demo, setDemo] = useState<DemoAccount | null>(null);
   const [inbox, setInbox] = useState<Inbox | null>(null);
+  // Why the inbox could not be read, so a failure is said rather than "Reading…" forever (9 Oct).
+  const [inboxProblem, setInboxProblem] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
   const [paid, setPaid] = useState<Paid[]>([]);
@@ -63,8 +65,10 @@ export default function Home() {
     if (s.token)
       try {
         setInbox((await call<Inbox>(`/v1/accounts/${s.account}/inbox`, { token: s.token })).body);
+        setInboxProblem(null);
       } catch (e) {
         if (e instanceof GatewayError && e.status === 401) setSession(saveSession({ token: null }));
+        else setInboxProblem(message(e));
       }
   }, []);
   useEffect(() => {
@@ -110,22 +114,28 @@ export default function Home() {
       const assertions = [];
       for (const [i, a] of created.actions.entries()) {
         mustMatch(a.typedData, a.challenge);
-        setBusy(`Face ID ${String(i + 1)} of ${String(created.actions.length)}: ${a.summary}`);
+        setBusy(`Confirm ${String(i + 2)} of 4 on your phone: ${a.summary}`);
         assertions.push(await signChallenge(a.challenge, key.credentialId));
       }
+      let token: string | undefined;
       if (assertions.length > 0) {
         setBusy('Setting up the account on Monad (about 4 s)…');
-        setDemo(
-          (
-            await call<DemoAccount>(`/v1/demo/accounts/${created.account}/setup`, {
-              method: 'POST',
-              body: { assertions },
-            })
-          ).body,
-        );
+        const ready = (
+          await call<DemoAccount & { token?: string }>(
+            `/v1/demo/accounts/${created.account}/setup`,
+            { method: 'POST', body: { assertions } },
+          )
+        ).body;
+        setDemo(ready);
+        token = ready.token;
       }
-      setBusy('One more Face ID to connect this phone to the account…');
-      s = await connectPhone(s);
+      // The setup answers with this phone's token (9 Oct): no fifth prompt. Only an account set up
+      // earlier (no setup now) still needs one signature for it.
+      if (token) s = saveSession({ token });
+      else {
+        setBusy('One more confirmation to connect this phone to the account…');
+        s = await connectPhone(s);
+      }
       setSession(s);
     } catch (e) {
       setProblem(message(e));
@@ -188,7 +198,12 @@ export default function Home() {
           <h2>Try it with your own account</h2>
           <p className="small muted">
             A testnet account made from this phone’s passkey, with 0.01 test USDC and an order with
-            the demo supplier. No wallet, nothing to install. Five Face ID prompts.
+            the demo supplier. No wallet, nothing to install.
+          </p>
+          <p className="small muted">
+            Your phone asks for your fingerprint or face four times: once to make the passkey, then
+            once each to approve your agent’s rules, the supplier and the order. Those three are the
+            approvals a real owner signs, each checked by the contract on Monad.
           </p>
           {passkeysAvailable() ? (
             <button className="primary" onClick={() => void createAccount()} disabled={!!busy}>
@@ -255,7 +270,13 @@ export default function Home() {
         <section className="card">
           <h2>Waiting for you</h2>
           {inbox === null ? (
-            <p className="muted small">Reading…</p>
+            inboxProblem ? (
+              <p className="note warn">
+                Could not read what is waiting: {inboxProblem} Trying again every few seconds.
+              </p>
+            ) : (
+              <p className="muted small">Reading…</p>
+            )
           ) : waiting === 0 ? (
             <p className="muted small">
               Nothing is held and nothing is proposed. Payments inside your rules are paid without

@@ -106,6 +106,34 @@ describe('judge mode over HTTP (what the approver app calls, with no token)', ()
     expect(await res.json()).toMatchObject({ status: 'ready', order: { amountUsdc: '0.005' } });
   });
 
+  it('gives the phone its token with the setup, so a fifth Face ID asks nothing new (9 Oct)', async () => {
+    const app = appWith(deps);
+    const view = (await (
+      await post(app, '/v1/demo/accounts', { publicKey: { x: judge.qx, y: judge.qy } })
+    ).json()) as View;
+    const assertions = view.actions.map((a) => assertion(a.challenge));
+    const res = await post(app, `/v1/demo/accounts/${view.account}/setup`, { assertions });
+    const body = (await res.json()) as View & { token?: string };
+    expect(body.status).toBe('ready');
+    expect(body.token).toMatch(/^cs_[A-Za-z0-9_-]{43}$/);
+    // It reads this account's inbox, from the browser.
+    const inbox = await app.request(`/v1/accounts/${view.account}/inbox`, {
+      headers: { authorization: `Bearer ${body.token ?? ''}`, origin: 'https://approver.example' },
+    });
+    expect(inbox.status).toBe(200);
+    // Only the call that set the account up gets one: replaying the assertions gets none, and
+    // does not revoke the phone's token.
+    const again = (await (
+      await post(app, `/v1/demo/accounts/${view.account}/setup`, { assertions })
+    ).json()) as View & { token?: string };
+    expect(again.status).toBe('ready');
+    expect(again.token).toBeUndefined();
+    const still = await app.request(`/v1/accounts/${view.account}/inbox`, {
+      headers: { authorization: `Bearer ${body.token ?? ''}` },
+    });
+    expect(still.status).toBe(200);
+  });
+
   it('answers each refusal with its status and code', async () => {
     const app = appWith(deps);
     const view = (await (

@@ -142,7 +142,16 @@ const setupRoute = createRoute({
     },
   },
   responses: {
-    200: json(demoAccountView, 'Ready: the order is open'),
+    200: json(
+      demoAccountView.extend({
+        token: z.string().optional().openapi({
+          example: 'cs_…',
+          description:
+            'This account’s API token, shown once, when this call set the account up: the setup signatures prove the passkey, so no separate token signature is needed. It reaches only this account.',
+        }),
+      }),
+      'Ready: the order is open',
+    ),
     400: json(demoError, 'malformed_assertion'),
     404: json(demoError, 'unknown_account'),
     409: json(demoError, 'not_created, contract_refuses or reverted'),

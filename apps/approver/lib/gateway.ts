@@ -59,15 +59,27 @@ export async function call<T>(
   path: string,
   init: { method?: 'GET' | 'POST'; body?: unknown; token?: string | null } = {},
 ): Promise<{ status: number; body: T }> {
-  const res = await fetch(`${GATEWAY}${path}`, {
-    method: init.method ?? 'GET',
-    headers: {
-      ...(init.body === undefined ? {} : { 'content-type': 'application/json' }),
-      ...(init.token ? { authorization: `Bearer ${init.token}` } : {}),
-    },
-    ...(init.body === undefined ? {} : { body: JSON.stringify(init.body) }),
-    cache: 'no-store',
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${GATEWAY}${path}`, {
+      method: init.method ?? 'GET',
+      headers: {
+        ...(init.body === undefined ? {} : { 'content-type': 'application/json' }),
+        ...(init.token ? { authorization: `Bearer ${init.token}` } : {}),
+      },
+      ...(init.body === undefined ? {} : { body: JSON.stringify(init.body) }),
+      cache: 'no-store',
+    });
+  } catch {
+    // No answer at all: no connection, or a browser that refused the call (a refused preflight
+    // left the inbox on "Reading…" on 9 Oct). The browser's own words ("Failed to fetch", "Load
+    // failed") say nothing to an owner.
+    throw new GatewayError(
+      0,
+      'unreachable',
+      'This phone could not reach Countersign. Check the connection.',
+    );
+  }
   const text = await res.text();
   let body: unknown;
   try {
