@@ -480,7 +480,7 @@ THE HOLD:
   Slice 10:  Invoice check: own read, exact compare, guard model,     DONE (CHECKER SERVICE LIVE)
              scored on the set (catch rate, false holds); the
              checker spec, so anyone can run one (D33)
-  Slice 11:  Approver app: proposals, holds, feed, the diff           SHELL PUSHED (SOPHIE)
+  Slice 11:  Approver app: proposals, holds, feed, the diff           BUILT (LIVE; PHONE TEST NEXT)
 
 AGENT DOOR:
   Slice 12:  Developer kit: TypeScript SDK, MCP server and web API    DONE (SDK RELEASED, MCP LIVE)
