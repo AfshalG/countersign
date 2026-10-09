@@ -64,6 +64,15 @@ The reference is at [`/docs`](https://gateway-production-e17a.up.railway.app/doc
 | `blocked` | Never payable as it stands (over what is left, already paid, a closed order) |
 | `requested`, `checking`, `released`, `settling` | On the way |
 
+## Invoices paid by bank transfer: advice
+
+A bank transfer happens inside the bank, so Countersign cannot stop one. It can check one: the invoice's bank account against the account the owner put on file for that supplier (with their passkey), plus the same checks as a USDC invoice. The answer is `match`, `mismatch` or `unsure`, with a sentence to relay (`said`) and the evidence; nothing is paid.
+
+- MCP: `check_invoice` with `bankTransfer: true` and the invoice's full text as `invoiceText`.
+- Web API: `POST /v1/advice` `{ account, vault, document }`.
+
+On `mismatch`, don't pay it. On `unsure`, confirm the account with the supplier by phone, on a number you already have. Try it on the demo site's KS-1007 ("we have moved to a new bank": mismatch) and KS-1008 (match).
+
 ## Identity of an invoice
 
 `invoiceHash = keccak256(abi.encode(supplierId, normalizedNumber))`, with the number normalized (NFKC, trimmed, spaces collapsed, upper case). The same supplier's same invoice is one payment, however often it is sent. The SDK does this for you (`invoiceHash()`); test vectors are in [`packages/shared/test/fixtures/invoice-ids.json`](../../packages/shared/test/fixtures/invoice-ids.json).

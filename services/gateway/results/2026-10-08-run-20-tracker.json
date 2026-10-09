@@ -1,0 +1,269 @@
+{
+  "date": "2026-10-09T01:24:43.555Z",
+  "gateway": "https://gateway-production-e17a.up.railway.app",
+  "account": "0x761f43c960894DADBE520BB4EB695B0dD2167d2b",
+  "runId": "0x43e7290a376c4c7bba5df0ef0d6a5f1e040b7adab50ee1b60f03f92dd7285098",
+  "board": "https://gateway-production-e17a.up.railway.app/r/0x43e7290a376c4c7bba5df0ef0d6a5f1e040b7adab50ee1b60f03f92dd7285098",
+  "size": 20,
+  "orders": 10,
+  "intakeToLastDecisionMs": 2620,
+  "wallClockMs": 9901,
+  "settled": {
+    "count": 15,
+    "p50Ms": 2087,
+    "p95Ms": 2675,
+    "maxMs": 2675
+  },
+  "held": [
+    {
+      "reason": "address_mismatch",
+      "count": 1
+    },
+    {
+      "reason": "amount_mismatch",
+      "count": 1
+    },
+    {
+      "reason": "hidden_instructions",
+      "count": 1
+    },
+    {
+      "reason": "items_mismatch",
+      "count": 1
+    }
+  ],
+  "blocked": [
+    {
+      "reason": "over_limit",
+      "text": "The amount is over a limit the owner set: per payment, for a newly added address, or what is left in the order.",
+      "count": 1,
+      "ids": ["0xc9b35aeccdcec84eabdcaa160b2655295894938bfdce9f06d2566c5e5a2583be"]
+    }
+  ],
+  "doctored": {
+    "total": 5,
+    "caught": 5
+  },
+  "clean": {
+    "total": 15,
+    "wronglyHeld": 0,
+    "examples": []
+  },
+  "asExpected": 20,
+  "secondAgent": {
+    "sent": 15,
+    "sameRequests": true
+  },
+  "transactions": 15,
+  "relayerMonSpent": 0.407,
+  "groupRefusal": {
+    "reason": "address_mismatch",
+    "shown": 1,
+    "status": 200,
+    "runId": "0x43e7290a376c4c7bba5df0ef0d6a5f1e040b7adab50ee1b60f03f92dd7285098",
+    "refused": 1,
+    "ids": ["0x37e9b63435f508ee8b4ec596650b6fc8fa8101a8ae82075fa3dd953200ac3147"]
+  },
+  "invoices": [
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-67D2B-RICR0",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-67D2B-RICR1",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-67D2B-RICR2",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-67D2B-RICR3",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-67D2B-RICR4",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-67D2B-RICR5",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1002",
+      "number": "KS-1002-67D2B-RICR6",
+      "expected": {
+        "outcome": "held",
+        "reason": "address_mismatch"
+      },
+      "outcome": "held",
+      "reason": "address_mismatch"
+    },
+    {
+      "case": "ks-1003",
+      "number": "KS-1003-67D2B-RICR7",
+      "expected": {
+        "outcome": "held",
+        "reason": "items_mismatch"
+      },
+      "outcome": "held",
+      "reason": "items_mismatch"
+    },
+    {
+      "case": "ks-1004",
+      "number": "KS-1004-67D2B-RICR8",
+      "expected": {
+        "outcome": "held",
+        "reason": "amount_mismatch"
+      },
+      "outcome": "held",
+      "reason": "amount_mismatch"
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-67D2B-RICR9",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-67D2B-RICR10",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1006",
+      "number": "KS-1006-67D2B-RICR11",
+      "expected": {
+        "outcome": "blocked",
+        "reason": "over_limit"
+      },
+      "outcome": "blocked",
+      "reason": "over_limit"
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-67D2B-RICR12",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-67D2B-RICR13",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-67D2B-RICR14",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1005",
+      "number": "KS-1005-67D2B-RICR15",
+      "expected": {
+        "outcome": "held",
+        "reason": "hidden_instructions"
+      },
+      "outcome": "held",
+      "reason": "hidden_instructions"
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-67D2B-RICR16",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-67D2B-RICR17",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-67D2B-RICR18",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    },
+    {
+      "case": "ks-1001",
+      "number": "KS-1001-67D2B-RICR19",
+      "expected": {
+        "outcome": "settled",
+        "reason": null
+      },
+      "outcome": "settled",
+      "reason": null
+    }
+  ]
+}
