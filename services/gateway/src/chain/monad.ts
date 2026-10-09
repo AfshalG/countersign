@@ -40,6 +40,12 @@ const sleep = (ms: number) =>
   });
 
 const ALREADY_IN = /already known|known transaction|already imported|nonce too low/i;
+/**
+ * A node asking to slow down inside a JSON-RPC answer (Monad: -32007 "50/second request limit
+ * reached", -32011 "requests limited to 15/sec"): a reason to wait and try again, never a refusal
+ * (Slice 16: treated as one, it abandoned a wallet's lowest transaction and stuck its lane).
+ */
+const RATE_LIMITED = /request limit|requests limited|rate limit|too many requests/i;
 
 /** The account events the order indexer reads: OrderApproved and OrderClosed. */
 const ORDER_EVENTS: Hex[] = (['OrderApproved', 'OrderClosed'] as const).map(
@@ -63,6 +69,8 @@ export class MonadClient
    * payments sat sent but not marked final until the checks were done).
    */
   private readonly simulations: Pacer;
+  /** When each endpoint can take its next send (Slice 16: sends were not paced at all). */
+  private readonly nextSend: number[];
   private readonly started = Date.now();
   private socketOpen = false;
   private lastHeadAt = 0;
@@ -80,6 +88,7 @@ export class MonadClient
     this.simulations = new Pacer(
       endpoints.map((e, i) => Math.max(1, e.readsPerSecond - (kept[i] as number))),
     );
+    this.nextSend = endpoints.map(() => 0);
   }
 
   private async read<T>(method: string, params: unknown[], pacer = this.reads): Promise<T> {
@@ -91,7 +100,8 @@ export class MonadClient
       try {
         return await rpc<T>(endpoint.url, method, params);
       } catch (e) {
-        if (!(e instanceof RpcError) || e.kind === 'rpc' || attempt >= 5) throw e;
+        const slowDown = e instanceof RpcError && e.kind === 'rpc' && RATE_LIMITED.test(e.message);
+        if (!(e instanceof RpcError) || (e.kind === 'rpc' && !slowDown) || attempt >= 5) throw e;
         await sleep(150 * attempt);
       }
     }
@@ -348,13 +358,23 @@ export class MonadClient
   async send(endpoint: number, raw: Hex): Promise<SendOutcome> {
     const target = this.endpoints[endpoint];
     if (!target) return { error: `no endpoint ${String(endpoint)}`, retry: false };
+    // Each endpoint's sends are paced to its budget, which leaves room for the reads under its limit.
+    const now = Date.now() - this.started;
+    const at = Math.max(now, this.nextSend[endpoint] ?? 0);
+    this.nextSend[endpoint] = at + 1000 / target.sendsPerSecond;
+    await sleep(at - now);
     try {
       await rpc<Hex>(target.url, 'eth_sendRawTransaction', [raw]);
       return 'accepted';
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
-      if (e instanceof RpcError && e.kind === 'rpc')
-        return ALREADY_IN.test(message) ? 'known' : { error: message, retry: false };
+      if (e instanceof RpcError && e.kind === 'rate')
+        return { error: message, retry: true, rateLimited: true };
+      if (e instanceof RpcError && e.kind === 'rpc') {
+        if (ALREADY_IN.test(message)) return 'known';
+        if (RATE_LIMITED.test(message)) return { error: message, retry: true, rateLimited: true };
+        return { error: message, retry: false };
+      }
       return { error: message, retry: true };
     }
   }

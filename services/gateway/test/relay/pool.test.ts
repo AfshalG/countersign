@@ -144,6 +144,44 @@ describe('relayer pool', () => {
     expect(pool.lanesView()[0]?.endpoint).not.toBe(stuckOn);
   });
 
+  it('does not move a wallet its endpoint is rate-limiting: it slows down (Slice 16)', async () => {
+    pool.stop();
+    pool = new RelayerPool({
+      keys: [key0],
+      store,
+      sender,
+      chainId: 10143,
+      endpoints: 3,
+      stallMs: 150,
+      tickMs: 20,
+    });
+    await pool.start();
+    const on = pool.lanesView()[0]?.endpoint;
+    let limited = 4;
+    sender.reply = () =>
+      limited-- > 0
+        ? { error: 'eth_sendRawTransaction: HTTP 429', retry: true, rateLimited: true }
+        : 'accepted';
+    const s = await pool.sign({ to: VAULT, data: '0x12345678', gas: 266_000n });
+    pool.enqueue(s);
+    await waitFor(() => sender.sent.filter((x) => x.raw === s.raw).length >= 5, 3_000);
+    expect(pool.moves()).toHaveLength(0);
+    expect(new Set(sender.sent.map((x) => x.endpoint))).toEqual(new Set([on]));
+  });
+
+  it('moves a stalled wallet to the endpoint with the fewest wallets, never piling them up (Slice 16)', async () => {
+    // Three wallets on three endpoints; one stalls on its endpoint.
+    const stuck = pool.lanesView()[0];
+    if (!stuck) throw new Error('no lane');
+    sender.blackHoles.add(stuck.endpoint);
+    const s = await pool.sign({ to: VAULT, data: '0x12345678', gas: 266_000n });
+    pool.enqueue(s);
+    await waitFor(() => pool.moves().length > 0, 3_000);
+    const lanes = pool.lanesView();
+    const perEndpoint = [0, 1, 2].map((e) => lanes.filter((l) => l.endpoint === e).length);
+    expect(Math.max(...perEndpoint)).toBe(1);
+  });
+
   it('moves a stalled wallet to the next endpoint and re-sends its pending transactions in order', async () => {
     pool.stop();
     pool = new RelayerPool({
