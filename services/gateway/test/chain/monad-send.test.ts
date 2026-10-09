@@ -59,23 +59,29 @@ describe('sending a transaction', () => {
 });
 
 describe('reading a finalized block’s receipts (Slice 16)', () => {
-  it('asks the first endpoint (Monad’s own, the source of the finality stream) first', async () => {
+  it('reads from whichever endpoint is free: one read per block', async () => {
     const asked: string[] = [];
     vi.stubGlobal('fetch', (url: string) => {
       asked.push(url);
       return answer({ jsonrpc: '2.0', id: 1, result: [] });
     });
     expect(await client().blockReceipts(5)).toEqual([]);
-    expect(asked).toEqual(['https://a.test']);
+    expect(asked).toHaveLength(1);
   });
 
   it('tries another endpoint at once when one has not seen the block yet', async () => {
     const asked: string[] = [];
     vi.stubGlobal('fetch', (url: string) => {
       asked.push(url);
-      return answer({ jsonrpc: '2.0', id: 1, result: url === 'https://a.test' ? null : [] });
+      return answer({ jsonrpc: '2.0', id: 1, result: asked.length === 1 ? null : [] });
     });
     expect(await client().blockReceipts(6)).toEqual([]);
-    expect(asked).toEqual(['https://a.test', 'https://b.test']);
+    expect(asked).toHaveLength(2);
+    expect(new Set(asked).size).toBe(2);
+  });
+
+  it('answers null only when no endpoint has the block', async () => {
+    vi.stubGlobal('fetch', () => answer({ jsonrpc: '2.0', id: 1, result: null }));
+    expect(await client().blockReceipts(7)).toBeNull();
   });
 });
