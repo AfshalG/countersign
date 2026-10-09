@@ -495,7 +495,7 @@ DEPTH AND PROOF:
   Slice 15:  Supplier address attestation wired in, or the fallback   DONE (WEBSITE PROOFS LIVE)
   Slice 16:  Payment run: 200 invoices in parallel, run board         DONE (RUNS OF 200 AND 100 LIVE)
   Slice 17:  Advice-only check for bank-transfer invoices             DONE (LIVE THROUGH MCP)
-  Slice 18:  Audit record export                                      TODO
+  Slice 18:  Audit record export                                      BUILT (LIVE CHECK WAITS ON MON)
   Slice 19:  ERC-8004 agent identity; built right after Slice 12      DONE (ERC-8004 IDENTITY, A2A DOOR)
              (D33: the track names the registry)
              (+ an A2A door; agentWallet = the policy's agent key, no
