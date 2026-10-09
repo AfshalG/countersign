@@ -91,15 +91,25 @@ export class MonadClient
     this.nextSend = endpoints.map(() => 0);
   }
 
+  /**
+   * One read, paced. With `tried`, the endpoints already asked (for this read) are skipped and the
+   * one used is added: the first try takes whichever endpoint is free.
+   */
   private async read<T>(
     method: string,
     params: unknown[],
     pacer = this.reads,
-    on?: number,
+    tried?: Set<number>,
   ): Promise<T> {
     for (let attempt = 1; ; attempt++) {
       const now = Date.now() - this.started;
-      const slot = on === undefined ? pacer.take(now) : pacer.takeOn(on, now);
+      const untried = this.endpoints.findIndex((_, i) => !tried?.has(i));
+      // Every endpoint tried (a rate-limited retry on the last one): any free one again.
+      const slot =
+        tried === undefined || tried.size === 0 || untried < 0
+          ? pacer.take(now)
+          : pacer.takeOn(untried, now);
+      tried?.add(slot.index);
       await sleep(slot.at - (Date.now() - this.started));
       const endpoint = this.endpoints[slot.index] ?? this.endpoints[0];
       if (!endpoint) throw new Error('no endpoints configured');
@@ -407,9 +417,10 @@ export class MonadClient
   // ---------- Receipts ----------
 
   /**
-   * A finalized block's receipts, from the first endpoint (Monad's own, the source of the finality
-   * stream) first, then the others at once (Slice 16: an endpoint a block or two behind answered
+   * A finalized block's receipts, from whichever endpoint is free, then each other endpoint at once
+   * if that one has not seen the block yet (Slice 16: an endpoint a block or two behind answered
    * null, and the tracker backed off for seconds while every payment waited to be marked final).
+   * Pinning every read to Monad's own endpoint instead left it too few reads a second.
    */
   async blockReceipts(blockNumber: number): Promise<BlockReceipt[] | null> {
     type Raw = {
@@ -418,14 +429,15 @@ export class MonadClient
       logs?: { address: Address; topics: Hex[]; data: Hex }[];
     }[];
     let receipts: Raw | null = null;
-    for (let on = 0; on < this.endpoints.length && receipts === null; on++)
+    const tried = new Set<number>();
+    while (receipts === null && tried.size < this.endpoints.length)
       receipts = await this.read<Raw | null>(
         'eth_getBlockReceipts',
         [toHex(blockNumber)],
         this.reads,
-        on,
+        tried,
       ).catch((e: unknown) => {
-        if (on === this.endpoints.length - 1) throw e;
+        if (tried.size >= this.endpoints.length) throw e;
         return null; // this endpoint could not answer: the next one may
       });
     return receipts === null
