@@ -22,7 +22,7 @@ Three ways in, all to the same gateway (${publicUrl}):
 - **MCP server** (six tools: list_open_orders, check_invoice, pay_invoice, pay_invoices, payment_status, propose_order): ${MCP_URL}, with \`Authorization: Bearer <token>\`
 - **Web API**: [reference](${publicUrl}/docs), [OpenAPI 3.1](${publicUrl}/openapi.json)
 
-Key rules for an agent: a payment names an open order and the invoice's number, amount (a decimal string of USDC, e.g. "12.50", never a float) and payment address. The account pays only the supplier's address on file, within the order, each invoice once. A result is \`settled\`, \`held\` (tell the person the reason and give them the link; do not retry with another address or amount) or \`blocked\`. Sending the same invoice again is the same request, not a new payment (\`duplicate: true\`).
+Key rules for an agent: a payment names an open order and the invoice's number, amount (a decimal string of USDC, e.g. "12.50", never a float) and payment address. The account pays only the supplier's address on file, within the order, each invoice once. A result is \`settled\`, \`held\` (tell the person the reason and give them the link; do not retry with another address or amount) or \`blocked\`. Sending the same invoice again is the same request, not a new payment (\`duplicate: true\`). An invoice paid by bank transfer gets advice, not a payment: \`check_invoice\` with \`bankTransfer: true\` and the invoice's text, or SDK \`advise()\` (\`match\`, \`mismatch\`: do not pay, or \`unsure\`). Each payment's record (\`GET /v1/payments/{id}/record\`, SDK \`record()\`) checks out against Monad with \`npx countersign-verify <file>\`.
 
 ## Docs
 
@@ -39,6 +39,7 @@ Key rules for an agent: a payment names an open order and the invoice's number, 
 ## Optional
 
 - [Security model](${REPO}#security-model): what the contract enforces, each claim with a test or a transaction
+- [Where your data goes](${REPO}#where-your-data-goes) and [the evidence](${RAW}/docs/evidence.md): every claim with its transaction, test or results file
 - [Repository](${REPO})
 `;
 }
