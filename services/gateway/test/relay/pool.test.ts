@@ -182,6 +182,29 @@ describe('relayer pool', () => {
     expect(Math.max(...perEndpoint)).toBe(1);
   });
 
+  it('judges no wallet stalled while the finality tracker is behind (Slice 16)', async () => {
+    pool.stop();
+    let behind = true;
+    pool = new RelayerPool({
+      keys: [key0],
+      store,
+      sender,
+      chainId: 10143,
+      endpoints: 3,
+      stallMs: 100,
+      tickMs: 20,
+      finalityBehind: () => behind,
+    });
+    await pool.start();
+    sender.blackHoles.add(pool.lanesView()[0]?.endpoint ?? 0);
+    const s = await pool.sign({ to: VAULT, data: '0x12345678', gas: 266_000n });
+    pool.enqueue(s);
+    await new Promise((r) => setTimeout(r, 400));
+    expect(pool.moves()).toHaveLength(0);
+    behind = false; // caught up, and still not included: now it is a stall
+    await waitFor(() => pool.moves().length > 0, 2_000);
+  });
+
   it('moves a stalled wallet to the next endpoint and re-sends its pending transactions in order', async () => {
     pool.stop();
     pool = new RelayerPool({

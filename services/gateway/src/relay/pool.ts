@@ -78,6 +78,8 @@ export type PoolOptions = {
   tickMs: number;
   /** How often wallet balances are read again (default 15 s); also how soon a topped-up wallet resumes. */
   balanceRefreshMs?: number;
+  /** True while the finality tracker is behind: no wallet is judged stalled then (Slice 16). */
+  finalityBehind?: () => boolean;
   /** Called when an endpoint refuses a transaction for good (not a transient error). */
   onRefused?: (hash: Hex, error: string) => void;
 };
@@ -378,7 +380,9 @@ export class RelayerPool {
         // A failed read keeps the last balances until the next interval.
         await this.refreshBalances().catch(() => undefined);
       }
-      for (const lane of this.lanes) {
+      // A late "included" from a tracker that is behind is not a stall.
+      const trackerBehind = this.options.finalityBehind?.() === true;
+      for (const lane of trackerBehind ? [] : this.lanes) {
         const records = [...lane.pending.values()]
           .filter((p) => p.error === undefined)
           .map((p) => ({

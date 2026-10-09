@@ -151,6 +151,34 @@ describe('the order indexer', () => {
     expect((await store.openOrders(ACCOUNT, NOW)).map((o) => o.vault)).toEqual([VAULT_B]);
   });
 
+  it('keeps every caught-up account up to date in one write per block, however many there are (Slice 16)', async () => {
+    const others = Array.from(
+      { length: 40 },
+      (_, i) => `0x${(i + 1).toString(16).padStart(40, '0')}` as const,
+    );
+    // Registered from block 800: indexed up to 799, so block 800 is next for each.
+    for (const a of others) await store.registerAccount(a, 800);
+    await store.registerAccount(ACCOUNT, 800);
+    let writes = 0;
+    const counting = new Proxy(store, {
+      get(target, prop, receiver) {
+        const value = Reflect.get(target, prop, receiver) as unknown;
+        if (prop === 'setIndexedTo' || prop === 'advanceIndexed') {
+          return (...args: unknown[]) => {
+            writes++;
+            return (value as (...a: unknown[]) => unknown).apply(target, args);
+          };
+        }
+        return typeof value === 'function' ? (value as () => unknown).bind(target) : value;
+      },
+    });
+    const fast = new OrderIndexer({ store: counting, source, windowBlocks: 100 });
+    await fast.onBlock(800, [approved(ACCOUNT, VAULT_A, 'in a busy block', 800)]);
+    expect(writes).toBe(1);
+    expect(await store.openOrders(ACCOUNT, NOW)).toHaveLength(1);
+    expect((await store.listAccounts()).every((a) => a.indexedTo === 800)).toBe(true);
+  });
+
   it('leaves an account that is behind to the catch-up, never skipping a gap', async () => {
     await store.registerAccount(ACCOUNT, 700);
     await indexer.onBlock(705, [approved(ACCOUNT, VAULT_A, 'after a gap', 705)]); // 700–704 unseen

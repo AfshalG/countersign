@@ -29,13 +29,20 @@ export class OrderIndexer {
 
   /** A finalized block's logs, in order. */
   async onBlock(blockNumber: number, logs: readonly RawLog[]): Promise<void> {
-    for (const account of await this.deps.store.listAccounts()) {
-      if (account.indexedTo !== blockNumber - 1) continue; // behind: catchUp; ahead: done
-      const address = account.address as Address;
-      for (const log of logs)
-        if (log.address.toLowerCase() === address.toLowerCase()) await this.apply(address, log);
-      await this.deps.store.setIndexedTo(address, blockNumber);
+    // Events only for the accounts that have some in this block, and only if they are caught up
+    // (behind: catchUp; ahead: done); then every caught-up account moves to this block in one
+    // write, however many accounts there are (Slice 16).
+    if (logs.length > 0) {
+      const emitters = new Set(logs.map((l) => l.address.toLowerCase()));
+      for (const account of await this.deps.store.listAccounts()) {
+        if (account.indexedTo !== blockNumber - 1) continue;
+        if (!emitters.has(account.address.toLowerCase())) continue;
+        const address = account.address as Address;
+        for (const log of logs)
+          if (log.address.toLowerCase() === address.toLowerCase()) await this.apply(address, log);
+      }
     }
+    await this.deps.store.advanceIndexed(blockNumber);
   }
 
   /** Brings every account up to the latest finalized block. Concurrent calls share one run. */

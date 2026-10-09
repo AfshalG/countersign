@@ -48,6 +48,8 @@ const sleep = (ms: number) =>
  */
 export class FinalityTracker {
   private readonly stages = new StageTracker();
+  /** The newest finalized block seen (a head or a poll). */
+  private newest: number | undefined;
   private lastProcessed: number | undefined;
   private queue: Promise<void> = Promise.resolve();
   private poller: ReturnType<typeof setInterval> | undefined;
@@ -87,6 +89,18 @@ export class FinalityTracker {
     if (head.commitState === 'Finalized') await this.finalizedUpTo(head.number);
   }
 
+  /**
+   * More than two finalized blocks not yet read (Slice 16): the relayer pool must not take a late
+   * "included" for a stalled wallet then, or every wallet looks stalled at once.
+   */
+  behind(): boolean {
+    return (
+      this.newest !== undefined &&
+      this.lastProcessed !== undefined &&
+      this.newest - this.lastProcessed > 2
+    );
+  }
+
   startPolling(intervalMs: number): void {
     this.stopPolling();
     this.poller = setInterval(() => {
@@ -114,6 +128,7 @@ export class FinalityTracker {
    * faster than one read at a time keeps up with, and payments were marked final seconds late).
    */
   private finalizedUpTo(n: number): Promise<void> {
+    if (this.newest === undefined || n > this.newest) this.newest = n;
     this.queue = this.queue
       .then(async () => {
         const from = this.lastProcessed === undefined ? n : this.lastProcessed + 1;
@@ -149,6 +164,14 @@ export class FinalityTracker {
   }
 
   private async applyBlock(blockNumber: number, receipts: BlockReceipt[]): Promise<void> {
+    const byHash = new Map(receipts.map((r) => [r.transactionHash.toLowerCase(), r]));
+    // Payments first: nothing an agent or a person waits on queues behind indexing (Slice 16).
+    if (receipts.length > 0) {
+      const ours = await this.deps.store.settlingByTx([...byHash.keys()]);
+      const stages = this.stages.stagesOf(blockNumber);
+      // Each payment is its own row and transaction, so a busy block's are written together.
+      await Promise.all(ours.map((row) => this.settle(row, byHash, blockNumber, stages)));
+    }
     if (this.deps.onFinalizedBlock) {
       // Indexing never holds up settling payments: on an error the account falls behind and the
       // indexer's catch-up reads that block again.
@@ -162,9 +185,8 @@ export class FinalityTracker {
         });
     }
     if (receipts.length === 0) return;
-
-    const byHash = new Map(receipts.map((r) => [r.transactionHash.toLowerCase(), r]));
-    // Relayer transactions that are not payments: final now, whoever is (or is not) waiting.
+    // Setup transactions (an order approved, an account made) after indexing: whoever waits on one
+    // may read the order's index next.
     for (const tx of await this.deps.store.pendingRelayerTxsByHash([...byHash.keys()])) {
       const receipt = byHash.get(tx.hash.toLowerCase());
       if (!receipt) continue;
@@ -177,10 +199,6 @@ export class FinalityTracker {
       this.deps.pool.included(receipt.transactionHash);
       done({ status: receipt.status, blockNumber });
     }
-    const ours = await this.deps.store.settlingByTx([...byHash.keys()]);
-    const stages = this.stages.stagesOf(blockNumber);
-    // Each payment is its own row and transaction, so a busy block's are written together.
-    await Promise.all(ours.map((row) => this.settle(row, byHash, blockNumber, stages)));
   }
 
   private async settle(
