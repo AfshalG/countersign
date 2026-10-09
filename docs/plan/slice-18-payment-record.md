@@ -65,7 +65,9 @@ A held invoice (KS-1003) and a refused one through the demo account: each decisi
 4. **The record** (`GET /v1/payments/{id}/record`), **the CSV** (`GET /v1/accounts/{account}/records.csv`, payments and advice) and **advice by id** (`GET /v1/advice/{id}`), all with the account's own token. The payment page names a hold or refusal on Monad.
 5. **SDK**: `record(id)`, `verifyRecord(record, { rpcUrl })` and `npx countersign-verify <file>`: the chain id, both hashes, that the decision names this payment and its evidence, the decision's `DecisionRecorded` (invoice, outcome, reason, evidence, who) and the settlement's `PaymentExecuted` (invoice, address, amount), each from the payment's own vault.
 
-Found while building: a refusal's signed "evidence hash" was the request's id; holds were never recorded. Both fixed above.
+Found while building: a refusal's signed "evidence hash" was the request's id; holds were never recorded. Both fixed above. And in my own first version: decisions were kept one per payment, so an owner's refusal of a payment the checker had held would have been dropped. Now one per payment and decider (migration 0012), each on Monad on its own, each listed in the record and checked by `verifyRecord`. Found before anything was recorded: production runs with `RECORD_DECISIONS=false` until Afshal decides the MON.
+
+**Live (8 Oct):** deployed with recording off. The live check (a held invoice and its refusal on the demo account, their two transactions, the record verified with `countersign-verify` against Monad's RPC) costs about 0.03 MON plus a test account's setup (about 0.09), and waits on Afshal.
 
 Tests: 666 across the repo.
 
