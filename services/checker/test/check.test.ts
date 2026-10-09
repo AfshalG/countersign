@@ -2,6 +2,10 @@ import { describe, expect, it } from 'vitest';
 import { recoverTypedDataAddress } from 'viem';
 import { generatePrivateKey } from 'viem/accounts';
 import {
+  OUTCOME,
+  decisionTypes,
+  evidenceHash,
+  reasonHash,
   invoiceHash,
   paymentTypes,
   supplierId,
@@ -12,7 +16,7 @@ import { documentFor, KALIBRE } from '../../../apps/supplier/lib/documents';
 import { asText, render } from '../../../apps/supplier/lib/render';
 import { check, type CheckInput } from '../src/check.js';
 import { FallbackModel, type Model, type Question } from '../src/model.js';
-import { keySigner } from '../src/sign.js';
+import { keySigner, type SignedDecision } from '../src/sign.js';
 import type { PaymentFacts } from '../src/types.js';
 
 const ACCOUNT = '0x8f1431D15E547a1073b064e73F0C61372CcEA739';
@@ -190,6 +194,54 @@ describe('the checker', () => {
       read: { number: expect.stringMatching(/^KS-1004-/) as string, total: '0.0018' },
     });
     expect(JSON.stringify(r.evidence)).toContain('the quote says 0.0001 USDC');
+  });
+});
+
+describe('a hold, signed so it can be recorded on Monad (Slice 18)', () => {
+  const recover = (input: CheckInput, d: SignedDecision) =>
+    recoverTypedDataAddress({
+      domain: vaultDomain(input.payment.chainId, input.payment.vault),
+      types: decisionTypes,
+      primaryType: 'Decision',
+      message: {
+        invoiceHash: d.invoiceHash,
+        outcome: d.outcome,
+        reasonHash: d.reasonHash,
+        evidenceHash: d.evidenceHash,
+      },
+      signature: d.sig,
+    });
+
+  it('signs the vault’s Decision over the evidence it returns, whether code or the model held it', async () => {
+    const byCode = inputFor('ks-1004');
+    const byModel = inputFor('ks-1003');
+    const worried = new FakeModel('jev', (q) => (q.key === 'on_order' ? 0.05 : allFine(q)));
+    for (const [input, model] of [
+      [byCode, new FakeModel('jev', allFine)],
+      [byModel, worried],
+    ] as const) {
+      const r = await check(input, { model, signer });
+      expect(r.verdict).toBe('hold');
+      if (r.verdict !== 'hold' || !r.decision) throw new Error('no decision');
+      expect(r.decision).toMatchObject({
+        invoiceHash: input.payment.invoiceHash,
+        outcome: OUTCOME.held,
+        reasonHash: reasonHash(r.reason),
+        // The hash is of the evidence exactly as returned, after the time is written into it.
+        evidenceHash: evidenceHash(JSON.parse(JSON.stringify(r.evidence))),
+      });
+      expect(await recover(input, r.decision)).toBe(signer.address);
+    }
+  });
+
+  it('signs no decision on a dry run, and none on a release', async () => {
+    const dry = await check(
+      { ...inputFor('ks-1004'), dryRun: true },
+      { model: new FakeModel('jev', allFine), signer },
+    );
+    expect(dry.verdict === 'hold' && dry.decision).toBeFalsy();
+    const ok = await check(inputFor('ks-1001'), { model: new FakeModel('jev', allFine), signer });
+    expect('decision' in ok).toBe(false);
   });
 });
 

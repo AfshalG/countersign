@@ -24,6 +24,7 @@ import type { PauseDeps } from './owner/pause.js';
 import { registerOwnerRoutes } from './api/owner.js';
 import { registerAdviceRoutes } from './api/advice.js';
 import type { Advisor } from './advice.js';
+import type { DecisionRecorder } from './decisions.js';
 import { registerWhatsAppRoutes, type WhatsAppRouteDeps } from './api/whatsapp.js';
 import { recoverAgent, type AgentDirectory } from './agents/identity.js';
 import { supplierNameOf } from './suppliers.js';
@@ -61,6 +62,8 @@ export type AppDeps = {
   checker: Checker;
   /** Advice on bank-transfer invoices (Slice 17); without it POST /v1/advice answers 503. */
   advisor?: Advisor;
+  /** Slice 18: owners' refusals written on Monad; without it they stay off chain. */
+  decisions?: Pick<DecisionRecorder, 'record'>;
   chainId: number;
   checkerTimeoutMs: number;
   /** The service token the MCP server and the apps send; developers' accounts use account tokens. */
@@ -602,7 +605,12 @@ export function createApp(deps: AppDeps) {
       return c.json({ error: 'unknown_request' }, 404);
     const body = c.req.valid('json');
     const result = await refuseHeld(
-      { store, chain, chainId: deps.chainId },
+      {
+        store,
+        chain,
+        chainId: deps.chainId,
+        ...(deps.decisions ? { decisions: deps.decisions } : {}),
+      },
       c.req.valid('param').id,
       toAuth(body.ownerAuth),
       {
@@ -696,6 +704,7 @@ export function createApp(deps: AppDeps) {
     chain,
     chainId: deps.chainId,
     publicUrl,
+    ...(deps.decisions ? { decisions: deps.decisions } : {}),
     ...(deps.proposals ? { proposals: deps.proposals } : {}),
     ...(deps.websites ? { websites: deps.websites } : {}),
   });

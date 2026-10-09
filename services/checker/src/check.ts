@@ -1,10 +1,10 @@
 import type { Hex } from 'viem';
 import type { Reason } from '@countersign/shared';
-import { formatUsdc } from '@countersign/shared';
+import { evidenceHash, formatUsdc, OUTCOME, reasonHash } from '@countersign/shared';
 import { codeChecks } from './compare.js';
 import type { Model, Question } from './model.js';
 import { readInvoice } from './read.js';
-import type { Signer } from './sign.js';
+import type { SignedDecision, Signer } from './sign.js';
 import type { Finding, OrderFacts, PaymentFacts } from './types.js';
 
 /**
@@ -25,7 +25,16 @@ export type CheckInput = {
 
 export type CheckOutcome =
   | { verdict: 'release'; checkerSig: Hex; evidence: Evidence }
-  | { verdict: 'hold'; reason: Reason; evidence: Evidence };
+  | {
+      verdict: 'hold';
+      reason: Reason;
+      evidence: Evidence;
+      /**
+       * The hold as the vault's `Decision`, signed (Slice 18): the gateway records it on Monad with
+       * `recordDecision`. Its evidence hash is of `evidence` exactly as returned. None on a dry run.
+       */
+      decision?: SignedDecision;
+    };
 
 export type Evidence = {
   checker: string;
@@ -137,8 +146,25 @@ export async function check(
     o.evidence.ms = Date.now() - started;
     return o;
   };
+  /** A hold, its evidence complete, signed as the vault's Decision unless this is a dry run. */
+  const hold = async (reason: Reason): Promise<CheckOutcome> => {
+    const o = done({ verdict: 'hold', reason, evidence });
+    if (input.dryRun === true || o.verdict !== 'hold') return o;
+    const decision = {
+      invoiceHash: input.payment.invoiceHash,
+      outcome: OUTCOME.held,
+      reasonHash: reasonHash(reason),
+      evidenceHash: evidenceHash(evidence),
+    };
+    const sig = await deps.signer.signDecision(
+      input.payment.chainId,
+      input.payment.vault,
+      decision,
+    );
+    return { ...o, decision: { ...decision, sig } };
+  };
   // Code decides clear: a failure is held, and the model is not asked (D27).
-  if (code.hold) return done({ verdict: 'hold', reason: code.hold, evidence });
+  if (code.hold) return hold(code.hold);
 
   const questions = questionsFor(
     input.order,
@@ -159,7 +185,7 @@ export async function check(
     answer = await deps.model.ask(state, questions, AbortSignal.timeout(budget));
   } catch (e) {
     evidence.error = e instanceof Error ? e.message : String(e);
-    return done({ verdict: 'hold', reason: 'checker_unavailable', evidence });
+    return hold('checker_unavailable');
   }
   evidence.model = {
     name: answer.model,
@@ -181,7 +207,7 @@ export async function check(
         (ASKED[a.key]?.rank ?? 9) - (ASKED[b.key]?.rank ?? 9),
     );
   const first = holds[0];
-  if (first) return done({ verdict: 'hold', reason: first.reason, evidence });
+  if (first) return hold(first.reason);
   if (input.dryRun === true) return done({ verdict: 'release', checkerSig: '0x', evidence });
   const checkerSig = await deps.signer.sign(input.payment);
   return done({ verdict: 'release', checkerSig, evidence });

@@ -3,7 +3,8 @@ import type { WebsiteProofs } from '../proofs/website.js';
 import type { Reason } from '@countersign/shared';
 import type { Chain, PaymentCall } from '../chain/types.js';
 import type { DecodedRefusal } from '../chain/refusals.js';
-import type { Checker, CheckResult } from '../checker.js';
+import type { Checker, CheckResult, SignedDecision } from '../checker.js';
+import type { DecisionRecorder } from '../decisions.js';
 import type { PaymentRequestRow } from '../db/schema.js';
 import type { Store } from '../db/store.js';
 import { paymentOf, type Payment } from '../payment.js';
@@ -20,6 +21,8 @@ export type EvaluateDeps = {
 
 export type CheckDeps = EvaluateDeps & {
   store: Store;
+  /** Writes a checker's hold on Monad (Slice 18); without it, holds stay off chain. */
+  decisions?: Pick<DecisionRecorder, 'record'>;
   /** How long a request taken for checking stays claimed; another worker re-checks it after that. */
   leaseMs?: number;
 };
@@ -33,6 +36,8 @@ export type Outcome =
       decidedBy: 'rule' | 'checker';
       evidence: unknown;
       detail?: unknown;
+      /** The checker's signed hold, to record on Monad (Slice 18). */
+      decision?: SignedDecision;
     };
 
 /** A simulation the RPC could not answer: the request stays in `checking` and is tried again. */
@@ -170,6 +175,7 @@ export async function evaluate(
       reason: result.reason,
       decidedBy: 'checker',
       evidence: result.evidence,
+      ...(result.decision ? { decision: result.decision } : {}),
     };
   }
   if (options.dryRun === true) {
@@ -222,11 +228,22 @@ export async function checkOne(deps: CheckDeps, row: PaymentRequestRow): Promise
     });
     return;
   }
-  await store.transition(row.id, 'checking', outcome.status, {
+  const moved = await store.transition(row.id, 'checking', outcome.status, {
     checkedAt,
     reason: outcome.reason,
     decidedBy: outcome.decidedBy,
     evidence: outcome.evidence,
     ...(outcome.detail === undefined ? {} : { detail: outcome.detail }),
   });
+  // After the hold is stored, never before: recording follows the decision and cannot change it.
+  if (moved && outcome.decision && deps.decisions) {
+    const { sig, ...decision } = outcome.decision;
+    await deps.decisions.record({
+      requestId: row.id as Hex,
+      vault: row.vault as Address,
+      decidedBy: 'checker',
+      decision,
+      checkerSig: sig,
+    });
+  }
 }

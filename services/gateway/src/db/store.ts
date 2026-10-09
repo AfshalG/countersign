@@ -36,6 +36,8 @@ import {
   runs,
   supplierWebsites,
   supplierBanks,
+  decisionRecords,
+  type DecisionRecordRow,
   adviceChecks,
   type SupplierBankRow,
   type AdviceCheckRow,
@@ -527,11 +529,70 @@ export class Store {
       .where(and(inArray(sql`lower(${relayerTxs.hash})`, hashes), isNull(relayerTxs.finalAt)));
   }
 
-  async markRelayerTxFinal(hash: string, status: 'success' | 'reverted'): Promise<void> {
+  async markRelayerTxFinal(
+    hash: string,
+    status: 'success' | 'reverted',
+    blockNumber?: number,
+  ): Promise<void> {
     await this.db
       .update(relayerTxs)
-      .set({ finalAt: new Date(), status })
+      .set({ finalAt: new Date(), status, ...(blockNumber === undefined ? {} : { blockNumber }) })
       .where(and(eq(relayerTxs.hash, hash), isNull(relayerTxs.finalAt)));
+  }
+
+  /** The latest transaction for this purpose, final or not. */
+  async relayerTxFor(purpose: string): Promise<RelayerTxRow | undefined> {
+    const [row] = await this.db
+      .select()
+      .from(relayerTxs)
+      .where(eq(relayerTxs.purpose, purpose))
+      .orderBy(sql`${relayerTxs.createdAt} desc`)
+      .limit(1);
+    return row;
+  }
+
+  async relayerTx(hash: string): Promise<RelayerTxRow | undefined> {
+    const [row] = await this.db
+      .select()
+      .from(relayerTxs)
+      .where(sql`lower(${relayerTxs.hash}) = ${hash.toLowerCase()}`);
+    return row;
+  }
+
+  // ---------- decisions recorded on Monad (Slice 18) ----------
+
+  /** A decision to record; the same request's second decision changes nothing. */
+  async addDecisionRecord(row: Omit<DecisionRecordRow, 'createdAt' | 'txHash'>): Promise<boolean> {
+    const added = await this.db
+      .insert(decisionRecords)
+      .values(row)
+      .onConflictDoNothing()
+      .returning({ id: decisionRecords.requestId });
+    return added.length > 0;
+  }
+
+  async decisionRecord(requestId: string): Promise<DecisionRecordRow | undefined> {
+    const [row] = await this.db
+      .select()
+      .from(decisionRecords)
+      .where(eq(decisionRecords.requestId, requestId));
+    return row;
+  }
+
+  async setDecisionTx(requestId: string, txHash: string): Promise<void> {
+    await this.db
+      .update(decisionRecords)
+      .set({ txHash })
+      .where(and(eq(decisionRecords.requestId, requestId), isNull(decisionRecords.txHash)));
+  }
+
+  /** Decisions whose transaction was never signed (a restart, or recording switched off then). */
+  async unsentDecisionRecords(): Promise<DecisionRecordRow[]> {
+    return this.db
+      .select()
+      .from(decisionRecords)
+      .where(isNull(decisionRecords.txHash))
+      .orderBy(asc(decisionRecords.createdAt));
   }
 
   // ---------- judge mode's demo accounts (Slice 9 part 4) ----------

@@ -1,7 +1,7 @@
 import { getAddress, keccak256, stringToHex, type Address, type Hex } from 'viem';
-import { REASONS, type Reason } from '@countersign/shared';
+import { evidenceHash, OUTCOME, REASONS, reasonHash, type Reason } from '@countersign/shared';
 import type { AdviceInput, AdviceResult, Advisor } from './advice.js';
-import type { CheckInput, CheckResult, Checker } from './checker.js';
+import type { CheckInput, CheckResult, Checker, SignedDecision } from './checker.js';
 import type { PaymentRequestRow } from './db/schema.js';
 import type { Store } from './db/store.js';
 import { DEMO_QUOTE } from './demo/invoices.js';
@@ -150,6 +150,7 @@ export class RemoteChecker implements Checker, Advisor {
       reason?: unknown;
       checkerSig?: unknown;
       evidence?: unknown;
+      decision?: unknown;
     };
     const evidence = out.evidence ?? null;
     // Trust only a well-formed answer: anything else is a hold (money rule 1).
@@ -165,6 +166,47 @@ export class RemoteChecker implements Checker, Advisor {
     const reason = (REASONS as readonly unknown[]).includes(out.reason)
       ? (out.reason as Reason)
       : 'checker_unsure';
-    return { verdict: 'hold', reason, evidence };
+    const decision = decisionOf(out.decision, input, out.reason, evidence);
+    return { verdict: 'hold', reason, evidence, ...(decision ? { decision } : {}) };
   }
+}
+
+const HEX32 = /^0x[0-9a-fA-F]{64}$/;
+
+/**
+ * The checker's signed hold, kept only if it is exactly this hold (Slice 18): this payment's
+ * invoice, outcome held, the reason given and the hash of the evidence given. Anything else is
+ * dropped (the hold stands, unrecorded): the vault would accept a signature over other values, and
+ * the record must match its evidence. The signature itself is checked by the vault.
+ */
+function decisionOf(
+  raw: unknown,
+  input: CheckInput,
+  reason: unknown,
+  evidence: unknown,
+): SignedDecision | undefined {
+  if (typeof raw !== 'object' || raw === null || typeof reason !== 'string') return undefined;
+  const d = raw as Record<string, unknown>;
+  const ok =
+    typeof d.invoiceHash === 'string' &&
+    d.invoiceHash.toLowerCase() === input.payment.invoiceHash.toLowerCase() &&
+    d.outcome === OUTCOME.held &&
+    d.reasonHash === reasonHash(reason) &&
+    d.evidenceHash === evidenceHash(evidence) &&
+    typeof d.sig === 'string' &&
+    /^0x[0-9a-fA-F]{130}$/.test(d.sig) &&
+    HEX32.test(d.invoiceHash) &&
+    HEX32.test(d.reasonHash) &&
+    HEX32.test(d.evidenceHash);
+  if (!ok) {
+    console.error(`checker: a hold's signed decision did not match the hold; not recorded`);
+    return undefined;
+  }
+  return {
+    invoiceHash: d.invoiceHash as Hex,
+    outcome: OUTCOME.held,
+    reasonHash: d.reasonHash as Hex,
+    evidenceHash: d.evidenceHash as Hex,
+    sig: d.sig as Hex,
+  };
 }

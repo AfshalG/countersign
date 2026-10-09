@@ -14,6 +14,7 @@ import { Store } from './db/store.js';
 import { RelayerPool } from './relay/pool.js';
 import { WalletFunder } from './demo/funder.js';
 import { AgentDirectory } from './agents/identity.js';
+import { DecisionRecorder } from './decisions.js';
 import { checkerMode, judgeMode, loadSettings, primusKeys, whatsappMode } from './settings.js';
 import { supplierNameOf } from './suppliers.js';
 import { WhatsAppApi } from './notify/whatsapp-api.js';
@@ -126,6 +127,12 @@ store.onChange((change) => {
 console.log(`website proofs ${primus ? 'on' : 'off (no Primus keys)'}`);
 
 const CHECKER_TIMEOUT_MS = 2_000;
+// Slice 18: checker holds and owner refusals written on Monad with their evidence hashes.
+const decisions = new DecisionRecorder({
+  store,
+  pool,
+  enabled: settings.RECORD_DECISIONS !== 'false',
+});
 const workers = new Workers({
   store,
   chain: monad,
@@ -134,6 +141,7 @@ const workers = new Workers({
   chainId,
   checkerTimeoutMs: CHECKER_TIMEOUT_MS,
   websites,
+  decisions,
   leaseMs: 30_000,
   checkConcurrency: settings.CHECK_CONCURRENCY ?? 8,
   sendConcurrency: 8,
@@ -142,6 +150,9 @@ const workers = new Workers({
 
 await pool.start();
 const recovered = await workers.recover();
+// Decisions kept but never signed (a restart, or recording off then); again every minute.
+await decisions.resume();
+setInterval(() => void decisions.resume(), 60_000).unref();
 console.log(
   `recovered: ${String(recovered.settled)} settled from receipts, ${String(recovered.resent)} re-sent`,
 );
@@ -243,6 +254,7 @@ const app = createApp({
   store,
   chain: monad,
   checker,
+  decisions,
   // Advice on bank-transfer invoices (Slice 17): only the checker service gives it.
   ...(checker instanceof RemoteChecker ? { advisor: checker } : {}),
   chainId,
