@@ -1,7 +1,7 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { b64url, hexToBytes } from '../lib/encoding';
 import { markDifferences } from '../lib/diff';
-import { problemText } from '../lib/gateway';
+import { call, GatewayError, problemText } from '../lib/gateway';
 import { signedMatches, whatIsPaid } from '../lib/verify';
 import { hashTypedData } from 'viem';
 import { accountDomain, ownerActionTypes, paymentTypes, vaultDomain } from '@countersign/shared';
@@ -122,5 +122,21 @@ describe('signing exactly what is shown (9 Oct)', () => {
         challenge,
       ),
     ).toBe(false);
+  });
+});
+
+describe('a gateway that cannot be reached (9 Oct)', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+  it('is a plain-words error, not the browser’s “Failed to fetch”', async () => {
+    // What a refused preflight or a lost connection looks like to the page.
+    vi.stubGlobal('fetch', () => Promise.reject(new TypeError('Failed to fetch')));
+    const failure = await call('/v1/accounts/0x1/inbox', { token: 'cs_x' }).catch(
+      (e: unknown) => e,
+    );
+    expect(failure).toBeInstanceOf(GatewayError);
+    expect(failure).toMatchObject({ status: 0, code: 'unreachable' });
+    expect((failure as Error).message).toMatch(/could not reach Countersign/i);
   });
 });

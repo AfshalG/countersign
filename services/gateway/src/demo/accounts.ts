@@ -176,20 +176,33 @@ export function createDemoAccount(deps: DemoDeps, key: { qx: Hex; qy: Hex }, age
       });
     }
 
-    if (!(await deps.chain.hasCode(account)))
-      await sendAndWait(
-        deps,
-        deps.factory,
-        create,
-        GAS_LIMITS.createAccount,
-        `demo ${account} createAccount`,
-      );
-    const balance = await deps.chain.usdcBalance(account);
-    if (balance < DEMO_FUNDING) {
-      const hash = await deps.funder.sendUsdc(account, DEMO_FUNDING - balance);
-      const waiting = deps.finality.waitFinal(hash, deps.finalTimeoutMs ?? 60_000);
-      await finalOf(deps, hash, waiting, 'the USDC transfer');
-    }
+    // The account and its test USDC at once (9 Oct; one after the other took 4.6 s on a phone):
+    // the address is the factory's deterministic one, so the USDC can land before the code. Both
+    // finish, whatever happens to the other, before an error is answered, so a retry never finds a
+    // transfer still in flight and sends a second.
+    const [hasCode, balance] = await Promise.all([
+      deps.chain.hasCode(account),
+      deps.chain.usdcBalance(account),
+    ]);
+    const steps = await Promise.allSettled([
+      hasCode
+        ? Promise.resolve()
+        : sendAndWait(
+            deps,
+            deps.factory,
+            create,
+            GAS_LIMITS.createAccount,
+            `demo ${account} createAccount`,
+          ),
+      balance >= DEMO_FUNDING
+        ? Promise.resolve()
+        : deps.funder.sendUsdc(account, DEMO_FUNDING - balance).then((hash) => {
+            const waiting = deps.finality.waitFinal(hash, deps.finalTimeoutMs ?? 60_000);
+            return finalOf(deps, hash, waiting, 'the USDC transfer');
+          }),
+    ]);
+    const failed = steps.find((r): r is PromiseRejectedResult => r.status === 'rejected');
+    if (failed) throw failed.reason;
     await deps.store.registerAccount(account, await deps.chain.latestFinalized(), 'demo');
     const ready = await deps.store.setDemoStatus(account, 'awaiting_passkey');
     return demoView(ready, deps.chainId);
@@ -258,7 +271,17 @@ export function setUpDemoAccount(deps: DemoDeps, account: Address, assertions: u
       await deps.store.setDemoStatus(account, 'awaiting_passkey');
       throw e;
     }
-    return demoView(await deps.store.setDemoStatus(account, 'ready'), deps.chainId);
+    const view = demoView(await deps.store.setDemoStatus(account, 'ready'), deps.chainId);
+    // The phone's token in the same answer (9 Oct): the setup signatures already prove this
+    // passkey is the account's owner, so a fifth Face ID only for a token asked nothing new. Checked
+    // off chain against the owner keys, as a token's own signature is, and only in the call that
+    // set the account up: replayed assertions find it ready above and get no token.
+    if (!(await ownerSigOf(deps.chain, account, auths[2] as (typeof auths)[number], true)))
+      return view;
+    const generation = await deps.store.nextTokenGeneration(account);
+    const token = newAccountToken();
+    if (!(await deps.store.issueApiToken(account, hashToken(token), generation))) return view;
+    return { ...view, token };
   });
 }
 

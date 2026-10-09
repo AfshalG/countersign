@@ -410,6 +410,17 @@ export function createApp(deps: AppDeps) {
   // The owner's routes: the stop button's, and the bank accounts on file (Slice 17).
   app.use('/v1/owner/*', browserCors);
   if (deps.whatsapp) app.use('/v1/whatsapp/*', browserCors);
+  // The app's token routes (its inbox, orders, banks, payments and records), registered before
+  // the token check: a browser's preflight carries no token, and answering it 401 kept every one
+  // of them from loading on the phone (9 Oct). Safe with any origin: the token is a header the
+  // page must already hold, never a cookie a browser would attach for another site.
+  const tokenCors = cors({
+    origin: '*',
+    allowMethods: ['GET', 'POST', 'OPTIONS'],
+    allowHeaders: ['content-type', 'authorization'],
+  });
+  app.use('/v1/accounts/*', tokenCors);
+  app.use('/v1/payments/*', tokenCors);
   // The service token, or an account token limited to its own account (Slice 12 part 2).
   app.use(
     '/v1/*',
