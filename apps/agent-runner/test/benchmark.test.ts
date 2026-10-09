@@ -11,7 +11,7 @@ import {
   type Draft,
   type Kind,
 } from '../src/benchmark/score';
-import { selfCheck, selfCheckPrompt } from '../src/benchmark/self-check';
+import { selfCheck, selfCheckArm, selfCheckPrompt } from '../src/benchmark/self-check';
 
 /**
  * Slice 20: the benchmark's arithmetic and its "agent checks itself" arm, with fixed model answers
@@ -146,5 +146,29 @@ describe('the agent checks itself (fixed model answers)', () => {
       paid: null,
       reason: 'no answer: I cannot help with that.',
     });
+  });
+
+  it('tells the model, invoice by invoice, what it has already paid (so a copy can be caught)', async () => {
+    const prompts: string[] = [];
+    const model = new MockLanguageModelV4({
+      doGenerate: (options) => {
+        prompts.push(JSON.stringify(options.prompt));
+        return Promise.resolve({
+          content: [{ type: 'text', text: '{"decision":"pay","reason":"ok"}' }],
+          finishReason: { unified: 'stop', raw: 'stop' },
+          usage: {
+            inputTokens: { total: 10, noCache: 10, cacheRead: undefined, cacheWrite: undefined },
+            outputTokens: { total: 5, text: 5, reasoning: undefined },
+          },
+          warnings: [],
+        });
+      },
+    });
+    const first = draft('ks-1001', 'clean', 1);
+    const copy = { ...first, key: 'copy', kind: 'duplicate' as const };
+    const arm = await selfCheckArm('mock', model, [first, copy], ORDER);
+    expect(prompts[0]).toContain('already paid on this order: none');
+    expect(prompts[1]).toContain(first.number);
+    expect(arm).toMatchObject({ arm: 'agent checks itself: mock', caught: 0, lostUsdc: '0.001' });
   });
 });

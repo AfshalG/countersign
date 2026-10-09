@@ -2,7 +2,7 @@ import { generateText, type LanguageModel } from 'ai';
 import type { Address } from 'viem';
 import { z } from 'zod';
 import { formatUsdc } from '@countersign/shared';
-import type { Decision, Draft } from './score';
+import { summarize, type ArmSummary, type Decision, type Draft } from './score';
 
 /**
  * The benchmark's third arm (Slice 20): the agent checks the payment itself before sending it, with
@@ -79,4 +79,24 @@ export async function selfCheck(
   } catch (e) {
     return { paid: null, reason: `no answer: ${e instanceof Error ? e.message : String(e)}` };
   }
+}
+
+/**
+ * One model's arm: the drafts in order, each checked by the model with what it has paid so far
+ * (so a second copy of an invoice it paid can be seen for what it is).
+ */
+export async function selfCheckArm(
+  label: string,
+  model: LanguageModel,
+  drafts: readonly Draft[],
+  order: OrderFacts,
+): Promise<ArmSummary> {
+  const decided = new Map<string, Decision>();
+  const paid: string[] = [];
+  for (const d of drafts) {
+    const dec = await selfCheck(model, d, order, paid);
+    decided.set(d.key, dec);
+    if (dec.paid === true) paid.push(d.number);
+  }
+  return summarize(`agent checks itself: ${label}`, drafts, decided);
 }

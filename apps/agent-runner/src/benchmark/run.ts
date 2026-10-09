@@ -33,7 +33,7 @@ import {
   type Draft,
   type Kind,
 } from './score';
-import { selfCheck, type OrderFacts } from './self-check';
+import { selfCheckArm, type OrderFacts } from './self-check';
 
 process.loadEnvFile(new URL('../../../../.env', import.meta.url));
 const OPENROUTER = process.env.OPENROUTER_API_KEY;
@@ -205,14 +205,7 @@ const order: OrderFacts = {
 };
 const selfChecks = Promise.all(
   MODELS.map(async (modelId) => {
-    const decided = new Map<string, Decision>();
-    const paid: string[] = [];
-    for (const d of all) {
-      const dec = await selfCheck(openrouter(modelId), d, order, paid);
-      decided.set(d.key, dec);
-      if (dec.paid === true) paid.push(d.number);
-    }
-    const s = summarize(`agent checks itself: ${modelId}`, all, decided);
+    const s = await selfCheckArm(modelId, openrouter(modelId), all, order);
     log(
       `${modelId}: caught ${String(s.caught)}/${String(s.doctored)}, wrongly held ${String(s.wronglyHeld)}/${String(s.clean)}, no answer ${String(s.noAnswer)}, lost ${s.lostUsdc} USDC`,
     );
@@ -287,6 +280,15 @@ const out = {
     summary: (view as { summary?: unknown }).summary ?? null,
   },
   arms: results,
+  // Everything the self-check arm needs, so more models can be run on exactly this set later
+  // (src/benchmark/self-check-run.ts).
+  order,
+  drafts: all.map((d) => ({
+    ...d,
+    amount: d.amount.toString(),
+    cleanAmount: d.cleanAmount.toString(),
+    approvedAmount: d.approvedAmount.toString(),
+  })),
 };
 mkdirSync(new URL('../../results/', import.meta.url), { recursive: true });
 const file = new URL(
