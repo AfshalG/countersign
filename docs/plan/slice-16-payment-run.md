@@ -2,7 +2,7 @@
 
 ## Status
 
-**PLANNED (8 Oct 2026); building now.** Technical decisions made by Claude (Afshal, 7 Oct: decide technical choices). MON: the relayers were topped up to 1 MON each on 8 Oct (Afshal: "top up before the 200-payment run"). Owner: Afshal (gateway); built by Claude. The board's look is Sophie's (`apps/approver/FEATURES.md`); this slice gives it its data and a plain read-only page meanwhile (S12-7).
+**DONE (8 Oct 2026).** Built test-first and run live on Monad testnet (results below). Technical decisions made by Claude (Afshal, 7 Oct: decide technical choices). MON: the relayers were topped up to 1 MON each on 8 Oct (Afshal: "top up before the 200-payment run"). Owner: Afshal (gateway); built by Claude. The board's look is Sophie's (`apps/approver/FEATURES.md`); this slice gives it its data and a plain read-only page meanwhile (S12-7).
 
 ## Goal
 
@@ -48,6 +48,43 @@ The run summary (timings, percentiles, holds by reason, a run still in progress,
 1. Dry-run checks in a burst (no gas): 40 at once, then 100, through `POST /v1/checks`, to see whether Jev answers or refuses; set `CHECK_CONCURRENCY` from it.
 2. The run of 200: intake to last decision, per-payment times, holds by reason, doctored caught, clean wrongly held, duplicates from the second agent (none paid twice), MON spent.
 3. Refuse all of one reason with one signature from the owner key; the run page shows it.
+
+## Built (8 Oct)
+
+- **The run board's data:** `summary` on `GET /v1/runs/{id}` (intake to the last decision, each paid invoice's time to final at p50 and p95, holds and stops grouped by reason with their ids), `GET /v1/accounts/{account}/runs`, and the public read-only run page `/r/{runId}` (it reloads until every payment is decided; `?format=json` for a board).
+- **Refusing a group with one signature (D18):** `GET`/`POST /v1/approvals/runs/{runId}?reason=`: one owner signs a challenge over the run, the reason and exactly the held ids; checked off chain against the owner keys; a list that changed meanwhile is `challenge_mismatch` and nothing is refused; each refused payment keeps the signature and the list.
+- **`run-200`:** a test account, ten orders on Kalibre's quote approved with the owner key, 200 invoices read from the supplier's pages (170 clean, six each of five doctored kinds), one run through the SDK with a second agent sending 20 of the same at once, the result scored against each document's expected outcome, and the largest group of holds refused with one signature. Funded from the deployer, never from a wallet the gateway sends from.
+
+**Fixed on the way, each found by measuring:**
+
+1. **The checker's time limit started before the gateway's own reads.** 20 dry-run checks at once held 19 as `checker_unavailable`: at volume the gateway's paced chain reads queue, and its own wait used the checker's 2 s. The checker now starts the timer itself when it asks the checker service. After: 100 at once, all answered, in 3.3 s.
+2. **Two agents sending the same invoices at once:** a request kept only the run that sent it first, so the other run listed 5 of its 20 and never looked done. `run_requests` (migration `0009`, backfilled) records every invoice each run sent; still one request, and one payment, per invoice.
+3. **A quote read as a web page went to the checker as plain text,** so it read no lines and compared no prices: a padded line and a padded total were paid in the first rehearsal. A quote stored as HTML now goes as HTML.
+4. **Wallets stuck on transient send errors.** In the first run of 200, the lowest pending transaction on two wallets was in no endpoint's mempool and not mined, and everything after it waited (the last settled about 15 minutes later). A lane only moved when an accepted transaction was not included; one whose sends kept failing with a transient error retried forever on the same endpoint, silently. It now moves after the same stall time, errors and moves are logged, and `/health` shows every lane.
+5. **Speed (Afshal: "make sure it's fast, speed matters"):** each payment was simulated three times; now once at the check, and again at the send step only when the check is over 30 s old, it is an owner's pay-once, or its order has no room by the gateway's own count (its amount less what this gateway has sent from that vault; sends to one order are taken one at a time). The read budget moved from sends to reads (21 to 35 a second); payment simulations have their own share, so the finality tracker never waits on them; the check and send workers keep every slot busy instead of waiting for whole batches; 64 checks at once (`CHECK_CONCURRENCY`). Public endpoints count every call in a JSON-RPC batch (Monad) or refuse batches (Ankr, monadinfra), so batching would not help.
+6. **A flaky test** (the relayer nonce-order test stalled on a loaded CI machine) never stalls now.
+7. **The finality tracker under a run** read one finalized block's receipts at a time and wrote a busy block's payments one by one, so payments were marked final seconds after Monad finalized them (run 3). It reads the next four blocks ahead and writes a block's payments together.
+8. **Accuracy at speed:** in run 3 one clean invoice was held because the model missed the checker's 1.5 s budget under 64 checks at once. A checker that does not answer in time (or errs) is asked once more before the payment waits for a person; a judgement is never re-asked, and a second failure still holds. Run 4: 0 false holds.
+9. **A new proposal waited for its website check only once the check had started** (found setting up run 4: approval was offered in the gap). With website checks on, a proposal is stored as checking.
+10. **Sending at volume (run 4: accurate, but 19.7 s):** 53 lane moves, and all eight wallets ended on monadinfra, the endpoint with the smallest budget, answering 429. Sends were never paced (`sendsPerSecond` was unused); a rate limit counted as a stall and moved the lane; a moved lane went to "the next" endpoint; and a JSON-RPC "requests limited" answer was taken as a final refusal, abandoning the transaction (what stuck two lanes in run 1). Now each endpoint's sends are paced to its budget, a rate limit backs off on the same endpoint and never moves a lane, a stalled lane goes to the least crowded endpoint, and the stall time is 6 s (3 s made lanes move for nothing in a burst).
+11. **The finality tracker slowed as accounts accumulated** (the run of 100: the chain finalized every payment within 5 s, but the gateway marked all 85 at once about 8 s later, and all eight wallets "stalled" meanwhile). For every finalized block the order index wrote each account's mark one by one (dozens of accounts after today's runs), and settling waited on it. Now a block's payments are settled first, the index advances every caught-up account in one write, setup transactions resolve after indexing, and no wallet is judged stalled while the tracker is behind.
+
+## Results (8 Oct 2026, Monad testnet)
+
+Each run: a new test account, ten orders, 200 invoices from the supplier's pages (170 clean, 30 doctored: six each of a look-alike address, a padded line, a padded total, hidden instructions and an amount over the limit), one run through the SDK while a second agent sends 20 of the same invoices, the real checker reading every invoice. "Chain" is intake to the last payment's Finalized stage on Monad; "agent" is from the submission's answer to the gateway marking the last one (what an agent waiting on them sees). Raw records: `services/gateway/results/2026-10-08-run-200-*.json`.
+
+| Run | What changed before it | Chain | Agent | Paid | Doctored caught | Clean wrongly held | MON |
+|---|---|---|---|---|---|---|---|
+| Rehearsal (20) | the timer, run accounting and HTML-quote fixes | 3.6 s | | 15 | 5 of 5 | 0 of 15 | 0.41 |
+| 1 | | stalled: two wallets stuck; the last paid about 15 min later | | 158 | 30 of 30 | 12 (the script's spread overran a small order: `over_limit`) | 4.29 |
+| 2 | stuck lanes move; one read fewer per payment; reads 35/s; 64 checks at once; workers without batch waits | 16.4 s | 18.8 s | 170 | 30 of 30 | 0 of 170 | 4.61 |
+| 3 | payment simulations in their own read queue | **12.5 s** | 23.1 s | 169 | 30 of 30 | 1 of 170 (the model missed the checker's 1.5 s budget: held, fail-closed) | 4.59 |
+| 4 | the finality tracker reads ahead; a checker that did not answer in time is asked once more; a new proposal waits for its website check | 19.7 s | about 28 s | 170 | 30 of 30 | **0 of 170** (200 of 200 as expected) | 4.61 |
+| 100 invoices | sends paced per endpoint; a rate limit slows down instead of moving a wallet; a stalled wallet goes to the least crowded endpoint | **5.0 s** | about 13 s | 85 | 15 of 15 | **0 of 85** (100 of 100 as expected) | 2.31 |
+
+In runs 2 and 3: every doctored invoice was held or stopped for its own reason (address_mismatch 6, items_mismatch 6, amount_mismatch 6, hidden_instructions 6, over_limit 6); the second agent's 20 were the same requests, each paid once; and the six changed-address holds were refused together with one passkey signature. Each paid invoice went from request to final in a median of 3.8 s (run 2) and 5.5 s (run 3). About 0.027 MON per payment.
+
+Run 3 finished on the chain sooner, but the gateway marked payments later: its finality tracker read one finalized block's receipts at a time and wrote a busy block's payments one by one, while Monad finalizes about 2.5 blocks a second. Fix 7 above reads the next four blocks' receipts ahead and writes a block's payments together.
 
 ## Decisions (made 8 Oct)
 
