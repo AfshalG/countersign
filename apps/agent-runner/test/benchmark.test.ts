@@ -22,6 +22,8 @@ const ORDER = {
   supplierName: 'Kalibre Studio',
   addressOnFile: KALIBRE.payTo,
   quote: 'Quote Q-2210: 50 product photos at 0.0001 USDC, total 0.005 USDC',
+  approvedUsdc: '0.048',
+  approved: '3 orders from this quote, 0.016 USDC each, for repeat work',
 };
 
 const draft = (id: Parameters<typeof documentFor>[0], kind: Kind, n = 1): Draft => {
@@ -108,8 +110,11 @@ describe('the agent checks itself (fixed model answers)', () => {
 
   it('shows the model the order, what was paid, the draft and the invoice as read, hidden text included', () => {
     const d = draft('ks-1005', 'hidden_instructions');
-    const p = selfCheckPrompt(d, ORDER, ['KS-1001-403A9-RB1']);
+    const p = selfCheckPrompt(d, ORDER, [{ number: 'KS-1001-403A9-RB1', amount: 1_000n }]);
     expect(p).toContain(KALIBRE.payTo);
+    // What the owner approved and what is left, as list_open_orders tells an agent.
+    expect(p).toContain('0.048 USDC approved');
+    expect(p).toContain('0.047 USDC left');
     expect(p).toContain('Q-2210');
     expect(p).toContain('KS-1001-403A9-RB1');
     expect(p).toContain(d.payTo);
@@ -148,6 +153,32 @@ describe('the agent checks itself (fixed model answers)', () => {
     });
   });
 
+  it('asks again when the model service is overloaded', async () => {
+    let calls = 0;
+    const flaky = new MockLanguageModelV4({
+      doGenerate: () => {
+        calls++;
+        if (calls === 1)
+          return Promise.reject(
+            new Error('Upstream error from Nvidia: Service temporarily overloaded'),
+          );
+        return Promise.resolve({
+          content: [{ type: 'text', text: '{"decision":"hold","reason":"padded"}' }],
+          finishReason: { unified: 'stop', raw: 'stop' },
+          usage: {
+            inputTokens: { total: 10, noCache: 10, cacheRead: undefined, cacheWrite: undefined },
+            outputTokens: { total: 5, text: 5, reasoning: undefined },
+          },
+          warnings: [],
+        });
+      },
+    });
+    expect(
+      await selfCheck(flaky, draft('ks-1003', 'padded_line'), ORDER, [], { backoffMs: 1 }),
+    ).toEqual({ paid: false, reason: 'padded' });
+    expect(calls).toBe(2);
+  });
+
   it('tells the model, invoice by invoice, what it has already paid (so a copy can be caught)', async () => {
     const prompts: string[] = [];
     const model = new MockLanguageModelV4({
@@ -167,8 +198,9 @@ describe('the agent checks itself (fixed model answers)', () => {
     const first = draft('ks-1001', 'clean', 1);
     const copy = { ...first, key: 'copy', kind: 'duplicate' as const };
     const arm = await selfCheckArm('mock', model, [first, copy], ORDER);
-    expect(prompts[0]).toContain('already paid on this order: none');
+    expect(prompts[0]).toContain('already paid on these orders: none');
     expect(prompts[1]).toContain(first.number);
+    expect(prompts[1]).toContain('0.047 USDC left');
     expect(arm).toMatchObject({ arm: 'agent checks itself: mock', caught: 0, lostUsdc: '0.001' });
   });
 });

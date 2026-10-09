@@ -202,6 +202,8 @@ const order: OrderFacts = {
   supplierName: 'Kalibre Studio',
   addressOnFile: KALIBRE,
   quote: quoteText,
+  approvedUsdc: (perOrder * ORDERS).toFixed(3),
+  approved: `${String(ORDERS)} orders from this quote, ${perOrder.toFixed(3)} USDC each, for repeat work`,
 };
 const selfChecks = Promise.all(
   MODELS.map(async (modelId) => {

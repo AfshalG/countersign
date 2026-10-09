@@ -2,7 +2,7 @@
 
 ## Status
 
-**PLANNED (8 Oct 2026).** Technical decisions made by Claude (Afshal, 7 Oct: decide technical choices); the spend (testnet MON, OpenRouter credit) is Afshal's. Owner: Afshal; built by Claude.
+**BUILT; three arms measured (8 Oct 2026); the frontier models wait on OpenRouter credit.** Technical decisions made by Claude (Afshal, 7 Oct: decide technical choices); the spend (testnet MON, OpenRouter credit) is Afshal's. Owner: Afshal; built by Claude.
 
 ## Goal
 
@@ -40,7 +40,21 @@ The two computed arms are labelled as computed in every chart and in the pitch: 
 |---|---|---|
 | S20-1 | Computed arms | No guard and limits only are computed from the drafts (they would send them; nothing else to measure), labelled as computed |
 | S20-2 | Who drafts | The scripted agent (Slice 8), careful and obedient, so every arm sees exactly the same payments; real agents' own behaviour is Slice 14's runs |
-| S20-3 | Size and models | Afshal's (spend) |
+| S20-3 | Size and models | Afshal (8 Oct): 40 invoices; free models and three frontier ones (Claude Sonnet 5.5, GPT-5.6 Terra, Gemini 3.8 Flash; Gemma 4 and Nemotron 3 Ultra free) |
+
+## Results so far (8 Oct, ~10:10 PM PDT; `apps/agent-runner/results/benchmark-2026-10-08.json`)
+
+40 invoices: 20 clean, 20 doctored, drafted once. Countersign on a fresh test account, on Monad testnet.
+
+| Arm | Doctored caught | Clean wrongly held | USDC let go |
+|---|---|---|---|
+| No guard (computed) | 0 of 20 | 0 of 20 | 0.0199 |
+| Limits only (computed: 0.005 per payment, 0.03 a day) | 9 of 20 | 5 of 20 | 0.0111 |
+| **Countersign** | **20 of 20** | **0 of 20** | **0** |
+
+Countersign decided all 40 within 6.4 s of intake. What stopped each: every wrong address by the contract (4 look-alikes, 4 hidden instructions followed by the obedient agent, 2 wrong supplier: `address_mismatch`); every padded invoice by the checker (3 `items_mismatch`, 3 `amount_mismatch`); more than the order by the contract (2 `over_limit`); the same invoice twice is the same request (2, not paid again). Limits only stopped only what was over a cap, and its daily cap, spent by doctored payments, then stopped 5 clean ones: what it catches depends on the cap, which is ours (stated).
+
+**The agent checks itself: not yet a result.** The first run (Nemotron 3 Ultra, free) is set aside (`superseded` in the file): the prompt gave the model the quote (50 photos, 0.005 USDC) but not the orders the owner approved (3 × 0.016 USDC), so it held repeat invoices as "more than the quote", fairly; and 4 answers were the provider overloaded. Fixed: the model now gets what was approved and what is left (as `list_open_orders` gives an agent), and a busy provider is asked again. The rerun, on exactly the saved set (`self-check-run.ts`), waits on OpenRouter credit: the account has none (free tier: 50 free-model requests a day, and the paid models refuse).
 
 ## Next
 
