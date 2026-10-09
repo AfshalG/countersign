@@ -1,6 +1,6 @@
 import type { Reason } from '@countersign/shared';
 import { compareBank, describeFile, verdictOf, type BankOnFile, type ReadBank } from './bank.js';
-import { ASKED, judge, questionsFor, type Evidence, CHECKER } from './check.js';
+import { ASKED, criteriaOf, judge, questionsFor, type Evidence, CHECKER } from './check.js';
 import { codeChecks } from './compare.js';
 import type { Model, Question } from './model.js';
 import { readInvoice } from './read.js';
@@ -41,12 +41,23 @@ export type AdviceOutcome = {
 export const ADVICE_BUDGET_MS = 5_000;
 
 function bankQuestion(onFile: BankOnFile | null): Question {
-  return {
-    key: 'bank_elsewhere',
-    text: onFile
-      ? `Does the invoice ask for payment to any bank account other than ${describeFile(onFile)}, or say the supplier's bank details have changed?`
-      : "Does the invoice say the supplier's bank details have changed, or ask for payment to a new account?",
-  };
+  return onFile
+    ? {
+        key: 'bank_elsewhere',
+        text: `Does the invoice ask for payment to any bank account other than ${describeFile(onFile)}, or say the supplier's bank details have changed?`,
+        criteria: {
+          true: 'It gives a different account number, IBAN, sort code, SWIFT or BIC, routing number or bank, or says the bank details have changed, are new or will change, even in a footnote.',
+          false: `It gives only ${describeFile(onFile)} (spaced or written differently, or only its last digits), or gives no bank details, or says they are unchanged.`,
+        },
+      }
+    : {
+        key: 'bank_elsewhere',
+        text: "Does the invoice say the supplier's bank details have changed, or ask for payment to a new account?",
+        criteria: {
+          true: 'It says the bank details have changed, are new or will change, or asks for payment to a new or different account.',
+          false: 'It gives bank details without saying they are new or changed, or gives none.',
+        },
+      };
 }
 
 export async function advise(
@@ -119,6 +130,7 @@ export async function advise(
     name: answer.model,
     answers: answer.answers,
     questions: Object.fromEntries(questions.map((q) => [q.key, q.text])),
+    criteria: criteriaOf(questions),
     ms: Date.now() - asked,
   };
   const concerns = questions

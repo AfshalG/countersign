@@ -7,7 +7,8 @@
     "typecheck": "tsc --noEmit",
     "dev": "tsx src/main.ts",
     "start": "tsx src/main.ts",
-    "demo-with-jev": "tsx scripts/demo-with-jev.ts"
+    "demo-with-jev": "tsx scripts/demo-with-jev.ts",
+    "criteria-eval": "tsx scripts/criteria-eval.ts"
   },
   "dependencies": {
     "@countersign/shared": "workspace:*",
