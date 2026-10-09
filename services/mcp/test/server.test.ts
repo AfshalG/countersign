@@ -187,7 +187,9 @@ describe('the MCP server', () => {
     const said = textOf(r);
     expect(said).toMatch(/^Advice: do not pay this invoice\./);
     expect(said).toContain('Kalibre Studio Ltd, IBAN GB29 NWBK 6016 1331 9268 19');
-    expect(said).toContain('Countersign cannot stop a bank transfer');
+    expect(said).toContain('Advice only');
+    expect(said).toContain('Nothing was paid, and the owner has not been told.');
+    expect(said.match(/cannot stop/g) ?? []).toHaveLength(0);
     expect(r.structuredContent).toMatchObject({
       verdict: 'mismatch',
       reason: 'bank_account_mismatch',

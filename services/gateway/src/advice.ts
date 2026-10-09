@@ -165,7 +165,7 @@ export const bankOf = (row: SupplierBankRow): BankDetails =>
 /** What the agent is told, in plain words; always that it is advice. */
 export function adviceSaid(advice: AdviceResult['advice'], reason: Reason | null): string {
   if (advice === 'match')
-    return 'Advice: the bank account on this invoice is the supplier’s account on file, and nothing else on it differs from the order. Countersign cannot stop or confirm a bank transfer: it is paid at the bank.';
+    return 'Advice: the bank account on this invoice is the supplier’s account on file, and nothing else on it differs from the order. Pay it at the bank as usual: this is advice, as Countersign cannot stop or confirm a bank transfer.';
   const why = reason ? REASON_TEXT[reason] : '';
   if (advice === 'mismatch')
     return reason === 'bank_account_mismatch'
