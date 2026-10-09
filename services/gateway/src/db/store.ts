@@ -687,7 +687,7 @@ export class Store {
       | 'proofSource'
       | 'proofId'
       | 'proofError'
-    >,
+    > & { proofStatus?: 'checking' },
   ): Promise<{ proposal: ProposalRow; created: boolean }> {
     const inserted = await this.db
       .insert(proposals)

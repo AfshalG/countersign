@@ -24,6 +24,11 @@ export type OrderDeps = {
   chain: Pick<Chain, 'orderState'>;
   indexing: Indexing | undefined;
   publicUrl: string;
+  /**
+   * Slice 15: this gateway checks proposals' websites. A proposal is then stored as checking, so
+   * its approval waits from the first instant, not from when the check starts a moment later.
+   */
+  checksWebsites?: boolean;
 };
 
 const json = <T extends z.ZodType>(schema: T, description: string) => ({
@@ -188,6 +193,7 @@ export function registerOrderRoutes(app: OpenAPIHono, deps: OrderDeps): void {
       expiry: body.order.expiry,
       documentHash: body.documentHash,
       document: body.document ?? null,
+      ...(deps.checksWebsites === true ? { proofStatus: 'checking' as const } : {}),
     });
     const result = { created, proposal: proposalViewOf(proposal, publicUrl) };
     return created ? c.json(result, 201) : c.json(result, 200);

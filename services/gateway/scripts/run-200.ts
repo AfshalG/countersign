@@ -102,24 +102,30 @@ for (let i = 0; i < ORDERS; i++) {
     expiry: Math.floor(Date.now() / 1000) + 14 * 86_400,
     document: text,
   });
-  let view: { actions: Record<string, { challenge: Hex } | undefined> };
-  for (;;) {
-    view = (await (await fetch(`${gateway}/v1/approvals/${p.id}`)).json()) as typeof view;
-    if (view.actions.approve_order) break;
-    await new Promise((r) => setTimeout(r, 1_000));
+  // Approve once the supplier's website has been checked (the page offers it only then).
+  for (let attempt = 1; ; attempt++) {
+    const view = (await (await fetch(`${gateway}/v1/approvals/${p.id}`)).json()) as {
+      actions: Record<string, { challenge: Hex } | undefined>;
+    };
+    const approveOrder = view.actions.approve_order;
+    if (!approveOrder) {
+      await new Promise((r) => setTimeout(r, 1_000));
+      continue;
+    }
+    const res = await fetch(`${gateway}/v1/approvals/${p.id}`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        action: 'approve',
+        assertions: { approve_order: owner.sign(approveOrder.challenge) },
+      }),
+    });
+    if (res.ok) break;
+    const body = await res.text();
+    if (res.status !== 409 || attempt >= 30)
+      throw new Error(`order ${String(i)}: ${String(res.status)} ${body}`);
+    await new Promise((r) => setTimeout(r, 1_000)); // still being checked: ask again
   }
-  const approveOrder = view.actions.approve_order;
-  const res = await fetch(`${gateway}/v1/approvals/${p.id}`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({
-      action: 'approve',
-      assertions: {
-        approve_order: owner.sign(approveOrder.challenge),
-      },
-    }),
-  });
-  if (!res.ok) throw new Error(`order ${String(i)}: ${String(res.status)} ${await res.text()}`);
 }
 let orders: Order[] = [];
 for (let i = 0; i < 60 && orders.length < ORDERS; i++) {
