@@ -302,6 +302,12 @@ importers:
         specifier: 19.3.0
         version: 19.3.0
 
+  packages/agentkey-bridge:
+    dependencies:
+      '@agentkey/sdk':
+        specifier: github:Rosh2403/AgentKey#b5c744b453dba8f840e0b954725f77341bff2376&path:packages/sdk
+        version: git+https://github.com/Rosh2403/AgentKey.git#b5c744b453dba8f840e0b954725f77341bff2376&path:packages/sdk
+
   packages/chain:
     dependencies:
       viem:
@@ -366,6 +372,9 @@ importers:
 
   services/gateway:
     dependencies:
+      '@countersign/agentkey-bridge':
+        specifier: workspace:*
+        version: link:../../packages/agentkey-bridge
       '@countersign/chain':
         specifier: workspace:*
         version: link:../../packages/chain
@@ -603,6 +612,11 @@ packages:
 
   '@adraffy/ens-normalize@1.11.1':
     resolution: {integrity: sha512-nhCBV3quEgesuf7c7KYfperqSS14T8bYuvJ8PcLJp6znkZpFc0AuW4qBtr8eKVyPPe/8RSr7sglCWPU5eaxwKQ==}
+
+  '@agentkey/sdk@git+https://github.com/Rosh2403/AgentKey.git#b5c744b453dba8f840e0b954725f77341bff2376&path:packages/sdk':
+    resolution: {commit: b5c744b453dba8f840e0b954725f77341bff2376, path: packages/sdk, repo: https://github.com/Rosh2403/AgentKey.git, type: git}
+    version: 0.0.1
+    engines: {node: '>=20'}
 
   '@ai-sdk/gateway@4.0.104':
     resolution: {integrity: sha512-4lTyt8a4BMfVz4QGo+VO5odakmYMX5kq+xiRgdQGGY7o/jP2WSasp6LvIvYvt/lHzz1MfE+xKTOJhz7mMwjynA==}
@@ -3199,6 +3213,8 @@ snapshots:
       pg: 8.23.1
 
   '@adraffy/ens-normalize@1.11.1': {}
+
+  '@agentkey/sdk@git+https://github.com/Rosh2403/AgentKey.git#b5c744b453dba8f840e0b954725f77341bff2376&path:packages/sdk': {}
 
   '@ai-sdk/gateway@4.0.104(zod@4.6.5)':
     dependencies:
