@@ -492,11 +492,14 @@ export function createApp(deps: AppDeps) {
     if (!mayUse(c, account)) return c.json(wrongAccount, 403);
     const ids = payments.map((p) => requestId(account, p.vault, p.payment.invoiceHash as Hex));
     const id = runId(account, ids);
-    // Gate every payment in the run before creating any request (fail closed).
-    for (const p of payments) {
-      const agentAddress = await agentOf(p.vault, p.payment, p.agentSig);
-      const denied = await denyUnlessAgentkey(deps, agentAddress, p.agentkey);
-      if (denied) return c.json(denied, 403);
+    // Gate every payment in the run before creating any request (fail closed). Skipped entirely
+    // when the gate is off, so a run of hundreds pays no extra signature recovery.
+    if (deps.agentkey) {
+      for (const p of payments) {
+        const agentAddress = await agentOf(p.vault, p.payment, p.agentSig);
+        const denied = await denyUnlessAgentkey(deps, agentAddress, p.agentkey);
+        if (denied) return c.json(denied, 403);
+      }
     }
     await store.createRun(id, account, payments.length);
     const requests = [];
