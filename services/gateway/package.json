@@ -28,6 +28,7 @@
     "run-200": "tsx scripts/run-200.ts"
   },
   "dependencies": {
+    "@countersign/agentkey-bridge": "workspace:*",
     "@countersign/chain": "workspace:*",
     "@countersign/shared": "workspace:*",
     "@hono/node-server": "2.1.3",

@@ -85,7 +85,7 @@ const result = await cs.pay({
 // 'settled', or 'held' with the reason in plain words and a link for the owner
 ```
 
-Start with the [developer quickstart](docs/developers/quickstart.md). Coding agents (Claude Code, Cursor, Codex, Muse) can read [`llms.txt`](https://gateway-production-e17a.up.railway.app/llms.txt) or everything in [one file](https://gateway-production-e17a.up.railway.app/llms-full.txt).
+Start with the [developer quickstart](docs/developers/quickstart.md). Optional Agentkey identity verify before pay (Track 04 bridge, off by default): [docs/developers/agentkey.md](docs/developers/agentkey.md). Coding agents (Claude Code, Cursor, Codex, Muse) can read [`llms.txt`](https://gateway-production-e17a.up.railway.app/llms.txt) or everything in [one file](https://gateway-production-e17a.up.railway.app/llms-full.txt).
 
 ## Stated limits
 

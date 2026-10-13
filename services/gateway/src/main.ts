@@ -23,11 +23,14 @@ import { Workers } from './workers.js';
 import { KALIBRE_FILE, WebsiteProofs } from './proofs/website.js';
 import { KALIBRE } from './demo/plan.js';
 import { PrimusProver, registryRecorder } from './proofs/primus.js';
+import { createAgentkeyClient, loadAgentkeyGateConfig } from '@countersign/agentkey-bridge';
 
 const settings = loadSettings();
 const chainId = settings.MONAD_CHAIN_ID;
 const judge = judgeMode(settings); // throws at start if only one of its keys is set
 const checking = checkerMode(settings); // likewise for the checker service's three settings
+const agentkeyConfig = loadAgentkeyGateConfig(); // off unless AGENTKEY_VERIFY_ENABLED
+const agentkeyClient = createAgentkeyClient(agentkeyConfig);
 
 /**
  * Without the checker service (Slice 10) the stand-in checker releases every payment, except that
@@ -242,6 +245,8 @@ console.log(
   `whatsapp ${wa ? `on (${wa.template ? `template ${wa.template.name}` : 'no template: only within 24 hours'})` : 'off'}`,
 );
 
+console.log(`agentkey verify ${agentkeyConfig.enabled ? `on (${agentkeyConfig.baseUrl})` : 'off'}`);
+
 const app = createApp({
   agents,
   websites,
@@ -250,6 +255,9 @@ const app = createApp({
   pause: owner,
   ...(whatsapp && wa
     ? { whatsapp: { notifier: whatsapp, verifyToken: wa.verifyToken, appSecret: wa.appSecret } }
+    : {}),
+  ...(agentkeyClient
+    ? { agentkey: { client: agentkeyClient, bindings: agentkeyConfig.bindings, agents } }
     : {}),
   store,
   chain: monad,
@@ -284,6 +292,14 @@ const app = createApp({
     whatsapp: wa ? { template: wa.template?.name ?? null } : null,
     // Suppliers' website proofs (Slice 15): Primus on or off, and the registry on Monad.
     proofs: { primus: primus !== undefined, registry: deployments.supplierProofs },
+    // Agentkey verify gate (Track 04 bridge); off keeps existing demos working.
+    agentkey: agentkeyConfig.enabled
+      ? {
+          enabled: true,
+          baseUrl: agentkeyConfig.baseUrl ?? null,
+          bindings: agentkeyConfig.bindings.size,
+        }
+      : { enabled: false },
   }),
 });
 const server = serve({ fetch: app.fetch, port: settings.PORT }, (info) => {

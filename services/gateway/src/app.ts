@@ -28,6 +28,11 @@ import type { Advisor } from './advice.js';
 import type { DecisionRecorder } from './decisions.js';
 import { registerWhatsAppRoutes, type WhatsAppRouteDeps } from './api/whatsapp.js';
 import { recoverAgent, type AgentDirectory } from './agents/identity.js';
+import {
+  authorizePaymentAgent,
+  type AgentkeyGate,
+  type AgentkeyProofInput,
+} from './agents/agentkey-gate.js';
 import { supplierNameOf } from './suppliers.js';
 import { registerAgentRoutes } from './api/agents.js';
 import type { PaymentRequestRow } from './db/schema.js';
@@ -37,6 +42,7 @@ import { requestId, runId } from './ids.js';
 import {
   accountParam,
   address,
+  agentkeyVerifyError,
   apiError,
   bytes32,
   checkVerdict,
@@ -79,6 +85,12 @@ export type AppDeps = {
   pause?: PauseDeps;
   /** ERC-8004 agents named on payments (Slice 19); without it, agents show by address only. */
   agents?: AgentDirectory;
+  /**
+   * Optional Agentkey verify gate (Track 04 bridge). When set, POST /v1/payments and /v1/runs
+   * call Agentkey verify before accepting a payment — fail closed; never soft-allow on error.
+   * Off unless AGENTKEY_VERIFY_ENABLED is set at process start.
+   */
+  agentkey?: AgentkeyGate;
   /** WhatsApp (Slice 14); without it its routes do not exist and nothing is sent. */
   whatsapp?: WhatsAppRouteDeps;
   /** Slice 15: suppliers' websites, shown on changed-address holds and checked on payments (D21). */
@@ -171,6 +183,10 @@ const submitPayment = createRoute({
   responses: {
     201: json(created, 'A new request'),
     200: json(created, 'The same invoice was submitted before: the first request'),
+    403: json(
+      agentkeyVerifyError,
+      'Agentkey verify failed (fail closed); payment not created. Only when AGENTKEY_VERIFY_ENABLED.',
+    ),
     ...errors,
   },
 });
@@ -190,7 +206,14 @@ const submitRun = createRoute({
       },
     },
   },
-  responses: { 201: json(runCreated, 'The run and each request’s first status'), ...errors },
+  responses: {
+    201: json(runCreated, 'The run and each request’s first status'),
+    403: json(
+      agentkeyVerifyError,
+      'Agentkey verify failed (fail closed); run not created. Only when AGENTKEY_VERIFY_ENABLED.',
+    ),
+    ...errors,
+  },
 });
 
 const checkPayment = createRoute({
@@ -327,6 +350,19 @@ const health = createRoute({
   },
 });
 
+/** When the Agentkey gate is on, verify before treating the agent as authorized to pay. */
+async function denyUnlessAgentkey(
+  deps: AppDeps,
+  agentAddress: Address | null,
+  agentkey: AgentkeyProofInput | undefined,
+) {
+  if (!deps.agentkey) return null;
+  return authorizePaymentAgent(
+    { ...deps.agentkey, ...(deps.agents ? { agents: deps.agents } : {}) },
+    { agentAddress, ...(agentkey ? { agentkey } : {}) },
+  );
+}
+
 export function createApp(deps: AppDeps) {
   const { store, chain } = deps;
   const publicUrl = (deps.publicUrl ?? 'http://localhost:8787').replace(/\/$/, '');
@@ -433,6 +469,9 @@ export function createApp(deps: AppDeps) {
   app.openapi(submitPayment, async (c) => {
     const body = c.req.valid('json');
     if (!mayUse(c, body.account)) return c.json(wrongAccount, 403);
+    const agentAddress = await agentOf(body.vault, body.payment, body.agentSig);
+    const denied = await denyUnlessAgentkey(deps, agentAddress, body.agentkey);
+    if (denied) return c.json(denied, 403);
     const { request, created: isNew } = await store.createRequest({
       id: requestId(body.account, body.vault, body.payment.invoiceHash as Hex),
       account: body.account,
@@ -442,7 +481,7 @@ export function createApp(deps: AppDeps) {
       amount: BigInt(body.payment.amount),
       deadline: body.payment.deadline,
       agentSig: body.agentSig as Hex,
-      agentAddress: await agentOf(body.vault, body.payment, body.agentSig),
+      agentAddress,
       document: body.document,
     });
     const result = { created: isNew, request: view(request) };
@@ -454,6 +493,12 @@ export function createApp(deps: AppDeps) {
     if (!mayUse(c, account)) return c.json(wrongAccount, 403);
     const ids = payments.map((p) => requestId(account, p.vault, p.payment.invoiceHash as Hex));
     const id = runId(account, ids);
+    // Gate every payment in the run before creating any request (fail closed).
+    for (const p of payments) {
+      const agentAddress = await agentOf(p.vault, p.payment, p.agentSig);
+      const denied = await denyUnlessAgentkey(deps, agentAddress, p.agentkey);
+      if (denied) return c.json(denied, 403);
+    }
     await store.createRun(id, account, payments.length);
     const requests = [];
     for (const [i, p] of payments.entries()) {

@@ -150,6 +150,11 @@ export type Invoice = {
    * text) or `{ html }` (the page). Without a document it can read, the payment waits for the owner.
    */
   document?: unknown;
+  /**
+   * Optional Agentkey ownership proof when the gateway has `AGENTKEY_VERIFY_ENABLED`.
+   * See docs/developers/agentkey.md.
+   */
+  agentkey?: { id?: string; proof: string };
 };
 
 /**

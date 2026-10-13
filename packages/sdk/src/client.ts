@@ -328,6 +328,7 @@ export class Countersign {
       },
       agentSig,
       ...(invoice.document === undefined ? {} : { document: invoice.document }),
+      ...(invoice.agentkey === undefined ? {} : { agentkey: invoice.agentkey }),
     };
   }
 
