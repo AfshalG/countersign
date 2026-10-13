@@ -15,12 +15,13 @@ async function directoryWith(wallet: Address, agentId = 2066n): Promise<AgentDir
   const dir = new AgentDirectory(identity, IDENTITY_REGISTRY_TESTNET, 10143);
   const added = await dir.add(
     {
-      upsertAgent: async (row) => ({
-        agentId: row.agentId,
-        registry: row.registry,
-        wallet: row.wallet,
-        addedAt: new Date(),
-      }),
+      upsertAgent: (row) =>
+        Promise.resolve({
+          agentId: row.agentId,
+          registry: row.registry,
+          wallet: row.wallet,
+          addedAt: new Date(),
+        }),
     },
     agentId,
   );
@@ -30,7 +31,7 @@ async function directoryWith(wallet: Address, agentId = 2066n): Promise<AgentDir
 
 function client(result: VerifyResult) {
   return {
-    verify: async (): Promise<VerifyResult> => result,
+    verify: (): Promise<VerifyResult> => Promise.resolve(result),
   };
 }
 

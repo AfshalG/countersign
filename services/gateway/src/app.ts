@@ -167,6 +167,10 @@ const errors = {
     'An account token for another account (wrong_account), or on a route it may not call',
   ),
 };
+// Payment routes can also refuse with 403 when Agentkey verify fails (only when the gate is on).
+const forbidden = z.union([apiError, agentkeyVerifyError]);
+const forbiddenWithAgentkey =
+  'An account token for another account (wrong_account), or on a route it may not call; or, only when AGENTKEY_VERIFY_ENABLED, Agentkey verify did not return valid (agentkey_verify_failed: fail closed, nothing created)';
 const secured = [{ Bearer: [] }];
 
 const submitPayment = createRoute({
@@ -183,11 +187,9 @@ const submitPayment = createRoute({
   responses: {
     201: json(created, 'A new request'),
     200: json(created, 'The same invoice was submitted before: the first request'),
-    403: json(
-      agentkeyVerifyError,
-      'Agentkey verify failed (fail closed); payment not created. Only when AGENTKEY_VERIFY_ENABLED.',
-    ),
     ...errors,
+    // After `...errors` so it replaces that 403 (a second `403:` key is a type error).
+    403: json(forbidden, forbiddenWithAgentkey),
   },
 });
 
@@ -208,11 +210,8 @@ const submitRun = createRoute({
   },
   responses: {
     201: json(runCreated, 'The run and each request’s first status'),
-    403: json(
-      agentkeyVerifyError,
-      'Agentkey verify failed (fail closed); run not created. Only when AGENTKEY_VERIFY_ENABLED.',
-    ),
     ...errors,
+    403: json(forbidden, forbiddenWithAgentkey),
   },
 });
 

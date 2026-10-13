@@ -37,13 +37,13 @@ export async function assertAuthorizedToPay(
   client: AgentkeyVerifier,
   input: AuthorizeInput,
 ): Promise<AuthorizeOutcome> {
-  if (!input.agentkeyId?.trim()) {
+  if (!input.agentkeyId.trim()) {
     return denied('error', 'missing agentkey id', {
       status: 'error',
       reason: 'missing agentkey id',
     });
   }
-  if (!input.proof?.trim()) {
+  if (!input.proof.trim()) {
     return denied('error', 'missing agentkey proof', {
       status: 'error',
       reason: 'missing agentkey proof',

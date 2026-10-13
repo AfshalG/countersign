@@ -65,9 +65,7 @@ describe('assertAuthorizedToPay (fail closed)', () => {
   it('denies when verify throws (fail closed belt)', async () => {
     const outcome = await assertAuthorizedToPay(
       {
-        verify: async () => {
-          throw new Error('network down');
-        },
+        verify: () => Promise.reject(new Error('network down')),
       },
       { agentkeyId: 'ak_demo', proof: '{}' },
     );
@@ -78,9 +76,9 @@ describe('assertAuthorizedToPay (fail closed)', () => {
     const calls: unknown[] = [];
     const outcome = await assertAuthorizedToPay(
       {
-        verify: async (req) => {
+        verify: (req) => {
           calls.push(req);
-          return { status: 'valid' };
+          return Promise.resolve({ status: 'valid' as const });
         },
       },
       { agentkeyId: '  ', proof: '{}' },
@@ -93,9 +91,9 @@ describe('assertAuthorizedToPay (fail closed)', () => {
     const calls: unknown[] = [];
     const outcome = await assertAuthorizedToPay(
       {
-        verify: async (req) => {
+        verify: (req) => {
           calls.push(req);
-          return { status: 'valid' };
+          return Promise.resolve({ status: 'valid' as const });
         },
       },
       { agentkeyId: 'ak_demo', proof: '' },

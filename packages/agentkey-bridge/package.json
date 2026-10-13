@@ -10,7 +10,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@agentkey/sdk": "github:Rosh2403/AgentKey#main&path:packages/sdk"
+    "@agentkey/sdk": "github:Rosh2403/AgentKey#b5c744b453dba8f840e0b954725f77341bff2376&path:packages/sdk"
   },
   "sideEffects": false
 }

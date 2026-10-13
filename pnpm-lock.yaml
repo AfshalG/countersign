@@ -305,7 +305,7 @@ importers:
   packages/agentkey-bridge:
     dependencies:
       '@agentkey/sdk':
-        specifier: github:Rosh2403/AgentKey#main&path:packages/sdk
+        specifier: github:Rosh2403/AgentKey#b5c744b453dba8f840e0b954725f77341bff2376&path:packages/sdk
         version: git+https://github.com/Rosh2403/AgentKey.git#b5c744b453dba8f840e0b954725f77341bff2376&path:packages/sdk
 
   packages/chain:

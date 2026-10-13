@@ -245,7 +245,9 @@ console.log(
   `whatsapp ${wa ? `on (${wa.template ? `template ${wa.template.name}` : 'no template: only within 24 hours'})` : 'off'}`,
 );
 
-console.log(`agentkey verify ${agentkeyConfig.enabled ? `on (${agentkeyConfig.baseUrl})` : 'off'}`);
+console.log(
+  `agentkey verify ${agentkeyConfig.enabled ? `on (${agentkeyConfig.baseUrl ?? 'no url'})` : 'off'}`,
+);
 
 const app = createApp({
   agents,
