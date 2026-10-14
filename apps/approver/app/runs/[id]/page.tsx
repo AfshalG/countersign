@@ -5,6 +5,8 @@ import { call, GatewayError, problemText } from '../../../lib/gateway';
 import { passkeyProblem, signChallenge } from '../../../lib/passkey';
 import { loadSession } from '../../../lib/session';
 import { Problem } from '../../ui';
+import { Busy } from '../../fx';
+import { Icon } from '../../icons';
 
 /**
  * The run board (Slice 11, FEATURES 5): hundreds of invoices checked live, paid, held by reason,
@@ -84,7 +86,10 @@ export default function RunBoard() {
 
   return (
     <>
-      <p className="small muted">Payment run</p>
+      <p className="eyebrow">
+        {!board.done && <span className="ping" aria-hidden="true" />} Payment run ·{' '}
+        {board.done ? 'done' : 'live'}
+      </p>
       <h1>
         {board.done ? 'Done' : 'Checking'}: {board.decided} of {board.size} decided
       </h1>
@@ -115,15 +120,11 @@ export default function RunBoard() {
           <dd>{seconds(board.elapsedMs)} after intake</dd>
         </dl>
       </section>
-      {busy && (
-        <p className="note ok" aria-live="polite">
-          {busy}
-        </p>
-      )}
+      <Busy text={busy} />
       {note && <p className="note ok">{note}</p>}
       <Problem text={problem} />
       {board.held.map((g) => (
-        <section className="card" key={g.reason}>
+        <section className="card warn" key={g.reason}>
           <h2>
             {g.count} held: {g.text}
           </h2>
@@ -136,7 +137,7 @@ export default function RunBoard() {
             {g.ids.length > 5 && <p className="small muted">and {g.ids.length - 5} more</p>}
           </div>
           <button className="danger" onClick={() => void refuseAll(g.reason)} disabled={!!busy}>
-            Refuse all {g.count} with one Face ID
+            <Icon name="x" /> Refuse all {g.count} with one Face ID
           </button>
         </section>
       ))}

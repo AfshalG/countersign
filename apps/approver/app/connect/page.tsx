@@ -4,6 +4,8 @@ import { call, GatewayError } from '../../lib/gateway';
 import { passkeyProblem, signChallenge } from '../../lib/passkey';
 import { loadSession } from '../../lib/session';
 import { Problem } from '../ui';
+import { Busy } from '../fx';
+import { Icon } from '../icons';
 
 /**
  * Connect (Slice 11, FEATURES 6 and 11): how to give an agent this account (MCP, A2A, the SDK), and
@@ -86,8 +88,18 @@ export default function Connect() {
 
   return (
     <>
+      <p className="eyebrow">
+        <Icon name="plug" /> For developers and judges
+      </p>
       <h1>Connect your agent</h1>
+      <p className="lede">
+        Any agent gets a Countersign account instead of a card or a wallet key. Every payment names
+        the agent that sent it by its ERC-8004 id (2066 is the hosted agent, 2067 judge mode’s).
+      </p>
       <section className="card">
+        <span className="label">
+          <Icon name="plug" /> MCP
+        </span>
         <h2>Claude, Grok, ChatGPT and other MCP apps</h2>
         <p className="small muted">
           Add Countersign as a custom connector and sign in. Six tools: list orders, check, pay, pay
@@ -99,6 +111,9 @@ export default function Connect() {
         </div>
       </section>
       <section className="card">
+        <span className="label">
+          <Icon name="layers" /> A2A
+        </span>
         <h2>Agents on Google’s Agent2Agent (A2A)</h2>
         <p className="small muted">
           A held payment comes back as an `auth-required` task with your approval link.
@@ -108,6 +123,9 @@ export default function Connect() {
         </a>
       </section>
       <section className="card">
+        <span className="label">
+          <Icon name="file" /> SDK
+        </span>
         <h2>Your own agent, in TypeScript</h2>
         <p className="small muted">
           The SDK signs with your agent’s key on your machine.
@@ -120,25 +138,44 @@ export default function Connect() {
           </div>
         )}
         <a href={SDK} target="_blank" rel="noreferrer">
-          SDK 0.3.0
+          SDK 0.4.0 <Icon name="external" />
         </a>
       </section>
       <section className="card">
+        <div className="card-head">
+          <span className="label">
+            <Icon name="inbox" /> WhatsApp
+          </span>
+          <span className="pill">Off: coming soon</span>
+        </div>
         <h2>Approvals on WhatsApp</h2>
         <p className="small muted">
           Held payments and proposed suppliers arrive on WhatsApp with a button that opens the same
-          approval screen; Face ID still signs here.
+          approval screen; Face ID still signs here. Built, and off until Countersign’s WhatsApp
+          number is set up.
         </p>
         <button onClick={() => void whatsapp()} disabled={!account || !!busy}>
           Connect WhatsApp
         </button>
-        {busy && <p className="note ok">{busy}</p>}
+        <Busy text={busy} />
         {link && (
           <a href={link} className="button">
             Open WhatsApp
           </a>
         )}
         <Problem text={problem} />
+      </section>
+      <section className="card">
+        <div className="card-head">
+          <span className="label">
+            <Icon name="shield" /> Agent identity gate
+          </span>
+          <span className="pill">Off by default</span>
+        </div>
+        <p className="small muted">
+          The gateway can also require an AgentKey proof of the agent’s identity before it pays (SDK
+          0.4.0 sends one when asked). It is switched off on this testnet deployment.
+        </p>
       </section>
     </>
   );

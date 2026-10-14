@@ -5,6 +5,8 @@ import { call, GatewayError } from '../../lib/gateway';
 import { passkeyProblem, signChallenge } from '../../lib/passkey';
 import { loadSession } from '../../lib/session';
 import { Address, Problem } from '../ui';
+import { Busy } from '../fx';
+import { Icon } from '../icons';
 
 /**
  * Suppliers and orders (Slice 11, FEATURES 4): each supplier's address on file, its open orders and
@@ -106,12 +108,11 @@ export default function Orders() {
 
   return (
     <>
+      <p className="eyebrow">
+        <Icon name="store" /> Who your agent may pay
+      </p>
       <h1>Suppliers and orders</h1>
-      {busy && (
-        <p className="note ok" aria-live="polite">
-          {busy}
-        </p>
-      )}
+      <Busy text={busy} />
       {note && <p className="note ok">{note}</p>}
       <Problem text={problem} />
       {orders === null ? (
@@ -162,6 +163,12 @@ export default function Orders() {
 
       {orders && orders.length > 0 && (
         <section className="card">
+          <div className="card-head">
+            <span className="label">
+              <Icon name="shield" /> Bank transfers
+            </span>
+            <span className="pill warn">Advice only</span>
+          </div>
           <h2>Put a supplier’s bank account on file</h2>
           <p className="small muted">
             For invoices paid by bank transfer. Countersign cannot stop a bank transfer, so it gives

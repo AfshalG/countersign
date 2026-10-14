@@ -38,6 +38,26 @@ const WORDS: Record<string, string> = {
   nothing_held: 'Nothing in this run is held for that reason any more.',
   invalid_bank: 'The bank details are not valid.',
   unknown_supplier: 'This account has no order with that supplier.',
+  // 13 Oct: every other documented error a screen can meet (FEATURES 1, 2, 7, 8, 9, 11).
+  stale: 'The account changed since this was opened. Open it again.',
+  expired: 'This has expired. Open it again for a fresh one.',
+  not_offered: 'Pay once is not possible here: the account pays only the address on file.',
+  insufficient_funds: 'The account does not hold enough USDC for this.',
+  already_paused: 'The account is already paused.',
+  not_paused: 'The account is not paused.',
+  bad_deadline: 'This was open too long to sign. Open it again.',
+  bad_owners:
+    'That set of owners is not allowed: one to five different passkeys, and thresholds within it.',
+  invalid_public_key: 'That passkey’s public key could not be read.',
+  not_created: 'The account has not been created yet.',
+  not_hosted: 'The demo agent only pays into demo accounts it hosts.',
+  code_expired: 'That WhatsApp code has expired. Make a new one.',
+  code_used: 'That WhatsApp code was already used. Make a new one.',
+  too_many_codes: 'Too many WhatsApp codes just now. Try again in a few minutes.',
+  // 503 when no relayer can pay the network fee (13 Oct: seen as "could not answer"). The owner
+  // never sees gas or MON, so say what it means for them.
+  relayers_low:
+    'Countersign’s testnet service is waiting for a top-up, so nothing was created or paid. Try again in a few minutes.',
 };
 
 /** A gateway error in plain words, for the screen. */

@@ -3,6 +3,8 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { call, GatewayError } from '../../../lib/gateway';
 import { loadSession } from '../../../lib/session';
+import { REASON_TEXT } from '@countersign/shared';
+import { Icon } from '../../icons';
 import { Address, Problem } from '../../ui';
 
 /**
@@ -85,14 +87,22 @@ export default function Record() {
   const failed = record.check.evidence?.findings?.filter((f) => !f.ok) ?? [];
   return (
     <>
-      <p className="small muted">The record</p>
+      <p className="eyebrow">
+        <Icon name="file" /> The record · the proof
+      </p>
       <h1>
         {p.amountUsdc} USDC{p.order?.supplierName ? ` for ${p.order.supplierName}` : ''}
       </h1>
       <section className="card">
         <dl className="kv">
           <dt>Outcome</dt>
-          <dd>{record.check.status}</dd>
+          <dd>
+            <span
+              className={`pill ${record.check.status === 'settled' ? 'ok' : record.check.status === 'held' ? 'warn' : 'bad'}`}
+            >
+              {record.check.status}
+            </span>
+          </dd>
           {record.check.reasonText && (
             <>
               <dt>Why</dt>
@@ -114,8 +124,10 @@ export default function Record() {
         </dl>
       </section>
       {failed.length > 0 && (
-        <section className="card">
-          <h2>What the checker found</h2>
+        <section className="card warn">
+          <span className="label">
+            <Icon name="radar" /> What the checker found
+          </span>
           <ul className="small" style={{ margin: 0, paddingLeft: 18 }}>
             {failed.map((f, i) => (
               <li key={i}>{f.detail}</li>
@@ -124,7 +136,9 @@ export default function Record() {
         </section>
       )}
       <section className="card">
-        <h2>On Monad</h2>
+        <span className="label">
+          <Icon name="layers" /> On Monad
+        </span>
         {record.decision.onChain.map((d) => (
           <p key={d.by} className="small">
             {d.by === 'owner' ? 'The refusal' : 'The checker’s hold'}, with the hash of its
@@ -154,22 +168,29 @@ export default function Record() {
         )}
       </section>
       <section className="card">
-        <h2>What happened</h2>
+        <span className="label">
+          <Icon name="clock" /> What happened
+        </span>
         <ol className="small" style={{ margin: 0, paddingLeft: 18 }}>
           {record.events.map((e, i) => (
             <li key={i}>
               {e.to}
-              {e.reason ? ` (${e.reason})` : ''}, {new Date(e.at).toLocaleTimeString()}
+              {e.reason ? ` (${reasonWords(e.reason)})` : ''}, {new Date(e.at).toLocaleTimeString()}
             </li>
           ))}
         </ol>
       </section>
       <button className="primary" onClick={download}>
-        Download the record
+        <Icon name="download" /> Download the record
       </button>
       <p className="small muted">
         Anyone can check it against Monad: <code>npx countersign-verify</code> on the file.
       </p>
     </>
   );
+}
+
+/** A reason code in plain words (REASON_TEXT, shared with the contracts), the code only if unknown. */
+function reasonWords(code: string): string {
+  return (REASON_TEXT as Record<string, string | undefined>)[code] ?? code.replace(/_/g, ' ');
 }

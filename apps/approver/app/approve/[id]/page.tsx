@@ -5,7 +5,10 @@ import { call, GatewayError } from '../../../lib/gateway';
 import { passkeyProblem, signChallenge, type Assertion } from '../../../lib/passkey';
 import { loadSession } from '../../../lib/session';
 import { mustMatch, whatIsPaid } from '../../../lib/verify';
-import { Address, explorer, Problem, Signed } from '../../ui';
+import { formatUsdc } from '@countersign/shared';
+import { AddressCompare, Busy, Decided, HoldButton, Skeleton, Track, type Step } from '../../fx';
+import { Icon } from '../../icons';
+import { Address, explorer, Note, Problem, Proof, Signed, Waiting } from '../../ui';
 
 /**
  * The approval sheet (Slice 11, FEATURES 1 and 2): a held payment (pay once or refuse) or a proposed
@@ -78,6 +81,20 @@ export default function Approve() {
       });
   }, [id, view?.kind]);
 
+  // Keep the screen true while something is moving: a payment settling after Pay once (about a
+  // second), or the supplier's website being proven (a few seconds). Polls stop at a final state.
+  const moving =
+    view?.status === 'released' ||
+    view?.status === 'settling' ||
+    view?.summary.websiteProof?.status === 'checking';
+  useEffect(() => {
+    if (!moving) return;
+    const t = setInterval(() => void load(), 1_500);
+    return () => {
+      clearInterval(t);
+    };
+  }, [moving, load]);
+
   async function decide(action: 'pay_once' | 'refuse' | 'approve') {
     if (!view) return;
     setProblem(null);
@@ -127,66 +144,98 @@ export default function Approve() {
     }
   }
 
-  if (!view) return <Problem text={problem} />;
+  if (!view)
+    return problem ? (
+      <Problem text={problem} />
+    ) : (
+      <section className="card" aria-busy="true" aria-label="Loading">
+        <Skeleton width="35%" />
+        <Skeleton height={54} width="70%" />
+        <Skeleton height={96} />
+      </section>
+    );
   const s = view.summary;
   const open = Object.keys(view.actions).length > 0;
   const failed = findings?.filter((f) => !f.ok) ?? [];
+  const proposal = view.kind === 'proposal';
+  const changed = view.kind === 'payment' && s.payOnce === 'address_not_on_file';
+  const paid = whatIsPaid(view.actions.pay_once?.typedData);
+  const missing =
+    proposal && s.enoughFunds === false ? shortfall(s.amountUsdc, s.accountUsdc) : null;
+  const waitingOn = view.actions.pay_once?.signatures ?? view.actions.approve_order?.signatures;
+  const track = trackOf(view.kind, view.status, s.websiteProof?.status);
 
   return (
     <>
-      <p className="small muted">
-        {view.kind === 'proposal' ? 'Proposed by your agent' : 'Payment'}
+      <a className="back" href="/">
+        <Icon name="back" /> Inbox
+      </a>
+      <p className="eyebrow">
+        {proposal ? 'Proposed by your agent' : `Payment ${view.id.slice(2, 10).toUpperCase()}`}
+        <StatusPill status={view.status} />
       </p>
       <h1>
-        {view.kind === 'proposal'
+        {proposal
           ? `Add ${s.supplierName ?? 'a supplier'}?`
           : view.status === 'held'
             ? 'Held for you'
             : view.title}
       </h1>
-      <p className="amount">{s.amountUsdc} USDC</p>
-
-      {view.kind === 'payment' && s.reasonText && view.status === 'held' && (
-        <p className="note warn">
-          <strong>Why it is held: </strong>
-          {s.reasonText}
+      {s.amountUsdc && (
+        <p className="amount">
+          {s.amountUsdc}
+          <small>USDC</small>
         </p>
       )}
+
+      <section className="card">
+        <Track steps={track.steps} tone={track.tone} />
+      </section>
+
+      {view.kind === 'payment' && s.reasonText && view.status === 'held' && (
+        <Note tone="warn" icon="alert">
+          <strong>Why it is held: </strong>
+          {s.reasonText}
+        </Note>
+      )}
       {view.kind === 'payment' && s.reasonText && view.status === 'blocked' && (
-        <p className="note bad">
+        <Note tone="bad">
           <strong>Blocked: </strong>
           {s.reasonText}
-        </p>
+        </Note>
       )}
 
       {view.differences.length > 0 && (
-        <section className="card">
-          <h2>
-            {view.kind === 'proposal'
-              ? 'The address changes'
-              : 'The address is not the one on file'}
-          </h2>
+        <section className="card bad">
+          <span className="label">
+            <Icon name="scan" />
+            {proposal ? 'The address changes' : 'The address is not the one on file'}
+          </span>
           {view.differences.map((d) => (
-            <div key={d.field} className="list">
-              <div>
-                <p className="small muted">On file (the only address this account pays)</p>
-                <Address value={d.onFile} against={d.onInvoice} />
-              </div>
-              <div>
-                <p className="small muted">
-                  {view.kind === 'proposal' ? 'Proposed' : 'On the invoice'}
-                </p>
-                <Address value={d.onInvoice} against={d.onFile} />
-              </div>
-            </div>
+            <AddressCompare
+              key={d.field}
+              onFile={d.onFile}
+              other={d.onInvoice}
+              otherLabel={proposal ? 'Proposed' : 'On the invoice'}
+            />
           ))}
-          <p className="small muted">The highlighted characters differ.</p>
+          {view.kind === 'payment' && <Proof proof={s.websiteProof} />}
         </section>
       )}
 
-      {view.kind === 'proposal' && (
+      {changed && open && (
+        <Note tone="bad" icon="lock">
+          <strong>There is no “pay anyway”.</strong> This account pays only the supplier’s address
+          on file, even with your Face ID. If the supplier really changed its address, your agent
+          proposes the change for you to approve, and it then waits out a waiting period.
+        </Note>
+      )}
+
+      {proposal && (
         <section className="card">
-          <h2>{s.supplierName}</h2>
+          <span className="label">
+            <Icon name="store" /> {s.supplierName}
+          </span>
           <dl className="kv">
             <dt>Pays</dt>
             <dd>
@@ -205,30 +254,27 @@ export default function Approve() {
             <dt>Your account has</dt>
             <dd>{s.accountUsdc} USDC</dd>
           </dl>
-          {s.websiteProof && (
-            <p
-              className={`note ${s.websiteProof.status === 'verified' ? 'ok' : s.websiteProof.status === 'checking' ? 'warn' : 'bad'}`}
-            >
-              {s.websiteProof.text}
-              {s.websiteProof.txHash && (
-                <>
-                  {' '}
-                  <a href={explorer(s.websiteProof.txHash)} target="_blank" rel="noreferrer">
-                    The proof on Monad
-                  </a>
-                </>
-              )}
-            </p>
+          <Proof proof={s.websiteProof} />
+          {s.changesAddress && (
+            <Note tone="warn" icon="alert">
+              Approving changes this supplier’s address for every order, and new payments to it wait
+              out the waiting period first.
+            </Note>
           )}
           {s.enoughFunds === false && (
-            <p className="note bad">Your account does not hold enough USDC for this order.</p>
+            <Note tone="bad">
+              Your account does not hold enough USDC for this order
+              {missing ? `: ${missing} USDC is missing` : ''}. Only refusing is possible.
+            </Note>
           )}
         </section>
       )}
 
       {view.kind === 'payment' && failed.length > 0 && (
-        <section className="card">
-          <h2>What the checker found</h2>
+        <section className="card warn">
+          <span className="label">
+            <Icon name="radar" /> What the checker found
+          </span>
           <ul className="small" style={{ margin: 0, paddingLeft: 18 }}>
             {failed.map((f, i) => (
               <li key={i}>{f.detail}</li>
@@ -237,46 +283,44 @@ export default function Approve() {
         </section>
       )}
 
-      {busy && (
-        <p className="note ok" aria-live="polite">
-          {busy}
-        </p>
-      )}
-      {done && <p className="note ok">{done}</p>}
+      <Busy text={busy} />
+      {done && !isFinal(view.status) && <Note tone="ok">{done}</Note>}
+      <Waiting
+        signatures={waitingOn}
+        what={proposal ? 'to approve this supplier' : 'to pay this once'}
+      />
       <Problem text={problem} />
 
       {open && (
-        <section className="card">
-          {view.kind === 'payment' && s.payOnce === 'address_not_on_file' && (
-            <p className="small muted">
-              There is no “pay anyway”: this account pays only the supplier’s address on file. If
-              the supplier really changed its address, your agent proposes the change for you to
-              approve.
+        <section className="decide" aria-label="Your decision">
+          {paid && (
+            <p className="small">
+              Pay once sends exactly <strong>{paid.amountUsdc} USDC</strong> to{' '}
+              <Address value={paid.payTo} />, and only there.
             </p>
           )}
-          {(() => {
-            const paid = whatIsPaid(view.actions.pay_once?.typedData);
-            return paid ? (
-              <p className="small">
-                Pay once sends exactly <strong>{paid.amountUsdc} USDC</strong> to{' '}
-                <Address value={paid.payTo} />, and only there.
-              </p>
-            ) : null;
-          })()}
           <div className={`choices${Object.keys(view.actions).length === 1 ? ' one' : ''}`}>
-            {view.actions.pay_once && (
-              <button className="primary" onClick={() => void decide('pay_once')} disabled={!!busy}>
-                Pay once <Signed signatures={view.actions.pay_once.signatures} />
+            {view.actions.refuse && (
+              <button className="danger" onClick={() => void decide('refuse')} disabled={!!busy}>
+                <Icon name="x" /> Refuse
               </button>
+            )}
+            {view.actions.pay_once && (
+              <HoldButton
+                label={
+                  <>
+                    Pay once <Signed signatures={view.actions.pay_once.signatures} />
+                  </>
+                }
+                hint="Hold, then Face ID"
+                onConfirm={() => void decide('pay_once')}
+                disabled={!!busy}
+              />
             )}
             {(view.actions.approve_order ?? view.actions.set_supplier) && (
               <button className="primary" onClick={() => void decide('approve')} disabled={!!busy}>
-                Approve <Signed signatures={view.actions.approve_order?.signatures} />
-              </button>
-            )}
-            {view.actions.refuse && (
-              <button className="danger" onClick={() => void decide('refuse')} disabled={!!busy}>
-                Refuse
+                <Icon name="fingerprint" /> Approve{' '}
+                <Signed signatures={view.actions.approve_order?.signatures} />
               </button>
             )}
           </div>
@@ -288,23 +332,114 @@ export default function Approve() {
         </section>
       )}
 
-      {!open && view.status !== 'held' && view.status !== 'pending' && (
+      {!open && isFinal(view.status) && (
+        <Decided
+          tone={view.status === 'settled' || view.status === 'approved' ? 'ok' : 'bad'}
+          title={finalTitle(view.kind, view.status)}
+          detail={done ?? undefined}
+          hash={s.txHash}
+        >
+          <div className="row">
+            {s.txHash && (
+              <a className="button" href={explorer(s.txHash)} target="_blank" rel="noreferrer">
+                <Icon name="external" /> {view.status === 'settled' ? 'Paid on Monad' : 'On Monad'}
+              </a>
+            )}
+            {view.kind === 'payment' && (
+              <a className="button" href={`/record/${view.id}`}>
+                <Icon name="file" /> The full record
+              </a>
+            )}
+          </div>
+        </Decided>
+      )}
+
+      {!open && !isFinal(view.status) && view.status !== 'held' && view.status !== 'pending' && (
         <section className="card">
-          <p>
-            {view.status === 'settled'
-              ? 'Paid.'
-              : view.status === 'refused'
-                ? 'Refused: nothing was paid.'
-                : `Status: ${view.status}.`}
-          </p>
-          {s.txHash && (
-            <a href={explorer(s.txHash)} target="_blank" rel="noreferrer">
-              The payment on Monad
-            </a>
-          )}
-          {view.kind === 'payment' && <a href={`/record/${view.id}`}>The full record</a>}
+          <Note tone="info" icon="layers">
+            {view.status === 'released' || view.status === 'settling'
+              ? 'Paying on Monad: final in about a second.'
+              : `Status: ${view.status}.`}
+          </Note>
         </section>
       )}
     </>
   );
+}
+
+const FINAL = ['settled', 'refused', 'blocked', 'expired', 'failed', 'approved'];
+const isFinal = (status: string) => FINAL.includes(status);
+
+function finalTitle(kind: View['kind'], status: string): string {
+  if (status === 'settled') return 'Paid on Monad';
+  if (status === 'approved') return 'Approved';
+  if (status === 'refused') return kind === 'proposal' ? 'Refused: nothing added' : 'Refused';
+  if (status === 'blocked') return 'Blocked by the contract';
+  if (status === 'expired') return 'Expired before anyone decided';
+  return 'Not paid';
+}
+
+function StatusPill({ status }: { status: string }) {
+  const tone =
+    status === 'held' || status === 'pending'
+      ? 'warn'
+      : status === 'settled' || status === 'approved'
+        ? 'ok'
+        : status === 'refused' || status === 'blocked' || status === 'failed'
+          ? 'bad'
+          : 'accent';
+  return <span className={`pill ${tone}`}>{status.replace('_', ' ')}</span>;
+}
+
+/** Where it is, as pipeline steps. Names the stages in plain words; no invented timings. */
+function trackOf(
+  kind: View['kind'],
+  status: string,
+  proof: string | undefined,
+): { steps: Step[]; tone: 'accent' | 'warn' | 'ok' | 'bad' } {
+  const d = (label: string): Step => ({ label, state: 'done' });
+  const a = (label: string): Step => ({ label, state: 'active' });
+  const t = (label: string): Step => ({ label, state: 'todo' });
+  if (kind === 'proposal') {
+    if (status === 'approved')
+      return { steps: [d('Proposed'), d('Website'), d('You'), d('Live')], tone: 'ok' };
+    if (status === 'pending')
+      return proof === 'checking'
+        ? { steps: [d('Proposed'), a('Website'), t('You'), t('Live')], tone: 'accent' }
+        : { steps: [d('Proposed'), d('Website'), a('You'), t('Live')], tone: 'warn' };
+    return { steps: [d('Proposed'), d(status === 'refused' ? 'Refused' : 'Closed')], tone: 'bad' };
+  }
+  switch (status) {
+    case 'held':
+      return {
+        steps: [d('Requested'), d('Checked'), a('Held'), t('You'), t('Final')],
+        tone: 'warn',
+      };
+    case 'released':
+    case 'settling':
+      return {
+        steps: [d('Requested'), d('Checked'), d('Held'), d('You'), a('Final')],
+        tone: 'accent',
+      };
+    case 'settled':
+      return { steps: [d('Requested'), d('Checked'), d('Held'), d('You'), d('Final')], tone: 'ok' };
+    case 'refused':
+      return { steps: [d('Requested'), d('Checked'), d('Held'), d('Refused')], tone: 'bad' };
+    case 'blocked':
+      return { steps: [d('Requested'), d('Checked'), d('Blocked')], tone: 'bad' };
+    default:
+      return { steps: [d('Requested'), d('Checked'), d('Held'), d(status)], tone: 'bad' };
+  }
+}
+
+/** What is missing for an order, in USDC, computed in base units (never floats). */
+function shortfall(need?: string, have?: string): string | null {
+  const units = (v?: string) => {
+    if (!v || !/^\d+(\.\d{1,6})?$/.test(v)) return null;
+    const [whole = '0', frac = ''] = v.split('.');
+    return BigInt(whole) * 1_000_000n + BigInt(frac.padEnd(6, '0'));
+  };
+  const n = units(need);
+  const h = units(have);
+  return n !== null && h !== null && n > h ? formatUsdc(n - h) : null;
 }

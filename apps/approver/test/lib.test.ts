@@ -48,6 +48,39 @@ describe('what went wrong, in plain words', () => {
       /PayToNotOnFile/,
     );
   });
+
+  it('words every documented error the screens can meet, never the bare code (13 Oct)', () => {
+    // FEATURES 1, 2, 7, 8, 9 and 11: each of these reaches a screen as a problem line.
+    const codes = [
+      'stale',
+      'expired',
+      'not_offered',
+      'insufficient_funds',
+      'already_paused',
+      'not_paused',
+      'bad_deadline',
+      'bad_owners',
+      'invalid_public_key',
+      'not_created',
+      'not_hosted',
+      'code_expired',
+      'code_used',
+      'too_many_codes',
+    ];
+    for (const error of codes) {
+      // The gateway's message here is just the code: a known error must not fall back to it.
+      const text = problemText(409, { error, message: error });
+      expect(text, error).not.toBe(error);
+      expect(text, error).not.toMatch(/\b[a-z]+_[a-z_]+\b/);
+      expect(text, error).toMatch(/\.$/);
+    }
+    expect(problemText(409, { error: 'stale' })).toMatch(/open it again/i);
+    // The gateway's relayers out of funds: a 503 that must not read as a generic fault, nor
+    // mention gas or MON (owners never see either).
+    const low = problemText(503, { error: 'relayers_low', message: 'need MON' });
+    expect(low).toMatch(/nothing was created or paid/i);
+    expect(low).not.toMatch(/MON|gas/);
+  });
 });
 
 describe('signing exactly what is shown (9 Oct)', () => {
