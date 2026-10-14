@@ -5,6 +5,8 @@ import { createPasskey, passkeyProblem, signChallenge } from '../../lib/passkey'
 import { loadSession } from '../../lib/session';
 import { mustMatch } from '../../lib/verify';
 import { Problem, Signed } from '../ui';
+import { Busy } from '../fx';
+import { Icon } from '../icons';
 
 /**
  * The account (Slice 11): the stop button (FEATURES 9) and several approvers (FEATURES 8, D36).
@@ -178,17 +180,25 @@ export default function Account() {
 
   return (
     <>
+      <p className="eyebrow">
+        <Icon name="user" /> Owner controls
+      </p>
       <h1>Your account</h1>
       <p className="small muted addr">{account}</p>
-      {busy && (
-        <p className="note ok" aria-live="polite">
-          {busy}
-        </p>
-      )}
+      <Busy text={busy} />
       {note && <p className="note ok">{note}</p>}
       <Problem text={problem} />
 
-      <section className="card">
+      <section className={`card stop${state.paused ? ' paused' : ''}`}>
+        <div className="card-head">
+          <span className="label">
+            <Icon name={state.paused ? 'pause' : 'bolt'} /> The stop button
+          </span>
+          <span className={`pill ${state.paused ? 'bad' : 'ok'}`}>
+            <span className={state.paused ? '' : 'ping'} aria-hidden="true" />
+            {state.paused ? 'Paused' : 'Running'}
+          </span>
+        </div>
         <h2>{state.paused ? 'Paused: no payment leaves this account' : 'Payments are running'}</h2>
         <p className="small muted">
           {state.paused
@@ -196,19 +206,30 @@ export default function Account() {
             : 'Any one owner can stop every payment at once.'}
         </p>
         {state.actions.pause && (
-          <button className="danger" onClick={() => void toggle('pause')} disabled={!!busy}>
-            Stop every payment
+          <button
+            className="danger big-stop"
+            onClick={() => void toggle('pause')}
+            disabled={!!busy}
+          >
+            <Icon name="pause" /> Stop every payment
           </button>
         )}
         {state.actions.unpause && (
-          <button className="primary" onClick={() => void toggle('unpause')} disabled={!!busy}>
-            Unpause <Signed signatures={state.actions.unpause.signatures} />
+          <button
+            className="primary big-stop"
+            onClick={() => void toggle('unpause')}
+            disabled={!!busy}
+          >
+            <Icon name="play" /> Unpause <Signed signatures={state.actions.unpause.signatures} />
           </button>
         )}
       </section>
 
       <section className="card">
-        <h2>Approvers</h2>
+        <span className="label">
+          <Icon name="users" /> Approvers
+        </span>
+        <h2>Who must sign</h2>
         <p className="small muted">
           {n} owner{n === 1 ? '' : 's'}. Adding a supplier or an order, changing owners and
           unpausing need {state.manage}; paying a held payment once needs {state.release}. Any one
@@ -263,8 +284,10 @@ export default function Account() {
       </section>
 
       {state.ownerChanges.length > 0 && (
-        <section className="card">
-          <h2>Waiting for another owner</h2>
+        <section className="card warn">
+          <span className="label">
+            <Icon name="users" /> Waiting for another owner
+          </span>
           {state.ownerChanges.map((c) => (
             <div key={c.challenge} className="item">
               <span className="small">{c.summary}</span>
