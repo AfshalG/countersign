@@ -92,7 +92,7 @@ describe('the API reference', () => {
     const text = await res.text();
     expect(text).toMatch(/^# Countersign\n\n> /);
     expect(text).toContain(
-      'npm i https://github.com/AfshalG/countersign/releases/download/sdk-v0.3.0/countersign-sdk-0.3.0.tgz',
+      'npm i https://github.com/AfshalG/countersign/releases/download/sdk-v0.4.0/countersign-sdk-0.4.0.tgz',
     );
     expect(text).toContain('/openapi.json');
     expect(text).toContain('https://countersign-mcp.vercel.app/api/mcp');

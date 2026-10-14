@@ -3,7 +3,7 @@
 Give an AI agent a Countersign account. The account is a contract on Monad that pays only the suppliers the owner approved, at their addresses on file, within approved orders. Your agent pays inside those rules with no click; anything else is held for the owner, with the reason in plain words and a link.
 
 ```bash
-npm i https://github.com/AfshalG/countersign/releases/download/sdk-v0.3.0/countersign-sdk-0.3.0.tgz
+npm i https://github.com/AfshalG/countersign/releases/download/sdk-v0.4.0/countersign-sdk-0.4.0.tgz
 npx countersign-test-account > .env   # your own testnet account, agent key and token (Node)
 ```
 
