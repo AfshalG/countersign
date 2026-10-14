@@ -47,6 +47,20 @@ export const payment = z
   })
   .openapi('Payment');
 
+/** Optional Agentkey ownership proof when `AGENTKEY_VERIFY_ENABLED` is on. */
+export const agentkeyProof = z
+  .object({
+    id: z.string().min(1).optional().openapi({
+      description:
+        'Agentkey agent id (ak_…). Optional when AGENTKEY_BINDINGS maps this ERC-8004 agent.',
+    }),
+    proof: z
+      .string()
+      .min(1)
+      .openapi({ description: 'JSON ownership proof for Agentkey POST /v1/verify' }),
+  })
+  .openapi('AgentkeyProof');
+
 export const submission = z
   .object({
     vault: address.openapi({ description: "The order's vault" }),
@@ -58,6 +72,10 @@ export const submission = z
       .unknown()
       .optional()
       .openapi({ description: 'What the checker reads: the invoice source or its fields' }),
+    agentkey: agentkeyProof.optional().openapi({
+      description:
+        'Required when AGENTKEY_VERIFY_ENABLED: Agentkey verify must return valid before pay',
+    }),
   })
   .openapi('Submission');
 
@@ -188,6 +206,19 @@ export const checkVerdict = z
     evidence: z.unknown(),
   })
   .openapi('CheckVerdict');
+
+/** 403 when AGENTKEY_VERIFY_ENABLED and Agentkey verify did not return valid (fail closed). */
+export const agentkeyVerifyError = z
+  .object({
+    error: z.literal('agentkey_verify_failed'),
+    status: z.string().openapi({
+      description: 'Agentkey verify status: invalid | unknown | revoked | error',
+    }),
+    reason: z.string(),
+    agentkeyId: z.string().nullable(),
+    erc8004AgentId: z.string().nullable(),
+  })
+  .openapi('AgentkeyVerifyError');
 
 export const apiError = z
   .object({

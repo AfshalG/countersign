@@ -1,0 +1,16 @@
+{
+  "name": "@countersign/agentkey-bridge",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@agentkey/sdk": "github:Rosh2403/AgentKey#b5c744b453dba8f840e0b954725f77341bff2376&path:packages/sdk"
+  },
+  "sideEffects": false
+}

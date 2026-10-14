@@ -34,6 +34,18 @@ const invoiceInput = {
     .describe(
       'The invoice exactly as you read it: all of its text. The checker reads it itself and compares it with the order; without it, or if it differs from the fields above, the payment waits for the owner',
     ),
+  agentkeyProof: z
+    .string()
+    .min(1)
+    .optional()
+    .describe(
+      'When the gateway has AGENTKEY_VERIFY_ENABLED: JSON Agentkey ownership proof. Fail-closed — pay is refused unless Agentkey verify returns valid.',
+    ),
+  agentkeyId: z
+    .string()
+    .min(1)
+    .optional()
+    .describe('Optional Agentkey agent id when AGENTKEY_BINDINGS does not map this ERC-8004 agent'),
 };
 
 /**
@@ -206,6 +218,8 @@ type InvoiceArgs = {
   amount: string | number;
   payTo: string;
   invoiceText?: string | undefined;
+  agentkeyProof?: string | undefined;
+  agentkeyId?: string | undefined;
 };
 
 const payInput = (a: InvoiceArgs) => ({
@@ -215,6 +229,14 @@ const payInput = (a: InvoiceArgs) => ({
     amount: amountText(a.amount),
     payTo: a.payTo as `0x${string}`,
     ...(a.invoiceText === undefined ? {} : { document: { text: a.invoiceText } }),
+    ...(a.agentkeyProof === undefined
+      ? {}
+      : {
+          agentkey: {
+            proof: a.agentkeyProof,
+            ...(a.agentkeyId === undefined ? {} : { id: a.agentkeyId }),
+          },
+        }),
   },
 });
 
