@@ -155,7 +155,8 @@ export function codeChecks(
     );
   }
 
-  // 8. Prices against the quote the owner approved: no line dearer than quoted.
+  // 8. Prices and quantities against the quote the owner approved: no line dearer or
+  // more numerous than quoted (quantity padding at a quoted unit price is a code hold).
   const quote = order.quote ? readInvoice(order.quote) : null;
   const unmatched: InvoiceLine[] = [];
   if (quote && quote.lines.length > 0) {
@@ -165,13 +166,22 @@ export function codeChecks(
         unmatched.push(l);
         continue;
       }
-      const ok = l.unit <= q.unit;
+      const priceOk = l.unit <= q.unit;
       add(
         'price',
-        ok,
-        ok
+        priceOk,
+        priceOk
           ? `"${l.description}" at ${usd(l.unit)}, as quoted`
           : `"${l.description}" at ${usd(l.unit)}; the quote says ${usd(q.unit)}`,
+        'amount_mismatch',
+      );
+      const qtyOk = l.quantity <= q.quantity;
+      add(
+        'quantity',
+        qtyOk,
+        qtyOk
+          ? `"${l.description}" x${String(l.quantity)}, as quoted`
+          : `"${l.description}" x${String(l.quantity)}; the quote says x${String(q.quantity)}`,
         'amount_mismatch',
       );
     }
