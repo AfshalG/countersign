@@ -51,20 +51,21 @@ describe('the checker’s code checks (they alone decide clear, D27)', () => {
   it('holds a quantity above the quote’s at the same unit price (quantity padding)', () => {
     const clean = read('ks-1001');
     const quote = readInvoice({ html: render(documentFor('q-2210', ACCOUNT)) });
-    const q = quote.lines[0];
+    const [q] = quote.lines;
     expect(q).toBeDefined();
-    const quantity = q!.quantity * 10;
-    const unit = q!.unit;
+    if (!q || clean.number === null) throw new Error('quote line and invoice number required');
+    const quantity = q.quantity * 10;
+    const unit = q.unit;
     const amount = unit * BigInt(quantity);
     const padded = {
       ...clean,
-      lines: [{ description: q!.description, quantity, unit, amount }],
+      lines: [{ description: q.description, quantity, unit, amount }],
       total: amount,
     };
     const payment = {
       ...paymentFor('ks-1001'),
       amount,
-      invoiceHash: invoiceHash(KALIBRE_ID, clean.number!),
+      invoiceHash: invoiceHash(KALIBRE_ID, clean.number),
     };
     const r = codeChecks(padded, payment, order);
     expect(r.hold).toBe('amount_mismatch');
