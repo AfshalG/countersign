@@ -13,7 +13,7 @@ import { Problem } from '../ui';
 
 const MCP = 'https://countersign-mcp.vercel.app/api/mcp';
 const CARD = 'https://countersign-mcp.vercel.app/.well-known/agent-card.json';
-const SDK = 'https://github.com/AfshalG/countersign/releases/tag/sdk-v0.3.0';
+const SDK = 'https://github.com/AfshalG/countersign/releases/tag/sdk-v0.4.0';
 
 function Copy({ text }: { text: string }) {
   const [done, setDone] = useState(false);

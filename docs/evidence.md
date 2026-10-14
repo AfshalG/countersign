@@ -57,7 +57,7 @@ The arm where the agent checks itself with a model is being rerun on the same sa
 | Claim | Proof |
 | --- | --- |
 | A checker's hold and an owner's refusal are written on Monad with their evidence hash | the [hold](https://testnet.monadexplorer.com/tx/0x550fec1f0d1ea783a8ecf0834e9490300f552f1bce18290a186ebd1926dcb722) and the [refusal](https://testnet.monadexplorer.com/tx/0x90289bdf1bc7ce8cc42a814a3f1c88a565af7ec77e33c9c2e608fabea0cf3827) of one held invoice |
-| A payment's record checks out against Monad without trusting us | `npx --package=https://github.com/AfshalG/countersign/releases/download/sdk-v0.3.0/countersign-sdk-0.3.0.tgz countersign-verify services/gateway/results/2026-10-08-record-ks-1003.json` |
+| A payment's record checks out against Monad without trusting us | `npx --package=https://github.com/AfshalG/countersign/releases/download/sdk-v0.4.0/countersign-sdk-0.4.0.tgz countersign-verify services/gateway/results/2026-10-08-record-ks-1003.json` |
 | Every payment names its registered agent (ERC-8004) | agent 2066 [registered](https://testnet.monadexplorer.com/tx/0xfa658c16655c9e7504747eac094897969bf802c02294fa7e67e0ed3b7972aba8), its [wallet set](https://testnet.monadexplorer.com/tx/0xc55c9b450d147ebb62bb68fe333ecab69f614b6207dfe8bddbf586256c88b0da); `services/gateway/test/agents.test.ts` |
 
 ## Reproduce a run
